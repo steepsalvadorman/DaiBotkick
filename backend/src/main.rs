@@ -227,7 +227,7 @@ async fn main() {
         .route("/kick_webhook",
             axum::routing::post(kick_webhook).get(kick_webhook_get))
         .with_state(state.clone())
-        .nest_service("/", ServeDir::new(&overlay_dir))
+        .fallback_service(ServeDir::new(&overlay_dir))
         .layer(layer);
 
     let addr = format!("0.0.0.0:{}", state.config.port);

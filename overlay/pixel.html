@@ -117,38 +117,6 @@
             z-index: 20;
         }
 
-        /* ── FOLLOW GOAL ──────────────────────────────────────────── */
-        #follow-goal {
-            padding: 14px 16px 12px;
-            flex-shrink: 0;
-            border-bottom: 2px solid rgba(84,252,25,0.16);
-        }
-        .goal-header {
-            font-size: 9px; color: var(--yellow); margin-bottom: 9px;
-            letter-spacing: 1px; text-shadow: 0 0 8px rgba(255,214,0,0.4);
-        }
-        .goal-track {
-            height: 22px; background: rgba(255,255,255,0.06);
-            position: relative; overflow: hidden;
-        }
-        .goal-fill {
-            height: 100%; width: 0%; background: var(--green);
-            box-shadow: 0 0 10px var(--green); transition: width 1s steps(20);
-            position: relative;
-        }
-        .goal-fill::after {
-            content: ''; position: absolute; inset: 0;
-            background: repeating-linear-gradient(90deg,transparent,transparent 6px,rgba(0,0,0,0.25) 6px,rgba(0,0,0,0.25) 12px);
-        }
-        .goal-label {
-            position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-            font-size: 9px; color: #fff; text-shadow: 0 0 6px #000;
-        }
-        .goal-pct {
-            font-size: 9px; color: var(--green);
-            text-shadow: 0 0 8px var(--green); margin-top: 7px;
-        }
-
         /* ── CHAT ─────────────────────────────────────────────────── */
         #chat-widget {
             flex: 1;
@@ -342,16 +310,6 @@
          LEFT SIDEBAR — meta de seguidores + chat
     ═══════════════════════════════════════════════════════════════ -->
     <div id="left-sidebar">
-
-        <!-- FOLLOW GOAL -->
-        <div id="follow-goal">
-            <div class="goal-header">[ META DE SEGUIDORES ]</div>
-            <div class="goal-track px-border">
-                <div class="goal-fill" id="goal-fill"></div>
-                <span class="goal-label" id="goal-label">-- GOAL</span>
-            </div>
-            <div class="goal-pct" id="goal-pct">▶ -- / -- FOLLOWERS</div>
-        </div>
 
         <!-- CHAT -->
         <div id="chat-widget">
@@ -632,13 +590,8 @@
         document.getElementById('viewers').innerText = data.count;
     });
 
-    socket.on("followGoal", (data) => {
-        const pct = Math.min(100, Math.round((data.current / data.goal) * 100));
-        document.getElementById('goal-fill').style.width  = `${pct}%`;
-        document.getElementById('goal-label').innerText   = `${data.goal} GOAL`;
-        document.getElementById('goal-pct').innerHTML     =
-            `▶ ${data.current} / ${data.goal} <span style="color:rgba(255,255,255,0.3)">FOLLOWERS</span>`;
-        document.getElementById('followers-count').innerText = data.current;
+    socket.on("followersUpdate", (data) => {
+        document.getElementById('followers-count').innerText = data.count ?? '--';
     });
 
     socket.on("speak", (data) => {

@@ -361,7 +361,7 @@ async fn on_event(
             let data = serde_json::from_str::<serde_json::Value>(&raw_data_str(&ev.data)).unwrap_or_default();
             if let Some(count) = data["followersCount"].as_u64().or_else(|| data["followers_count"].as_u64()) {
                 ch.followers.store(count, Ordering::Relaxed);
-                ns_emit(global, &ch.slug, "followGoal", json!({"current": count, "goal": ch.follow_goal}));
+                ns_emit(global, &ch.slug, "followersUpdate", json!({"count": count}));
                 info!("[Kick][{}] Seguidores: {count}", ch.slug);
             }
         }

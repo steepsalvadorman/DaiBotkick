@@ -96,7 +96,7 @@ pub async fn update_channel_ids(pool: &PgPool, slug: &str, broadcaster_id: i64, 
 
 pub async fn save_oauth_state(pool: &PgPool, token: &str, code_verifier: &str) {
     let now = unix_now() as i64;
-    let _ = sqlx::query(
+    if let Err(e) = sqlx::query(
         "INSERT INTO oauth_state (token, code_verifier, created_at) VALUES ($1,$2,$3)
          ON CONFLICT (token) DO UPDATE SET code_verifier=EXCLUDED.code_verifier, created_at=EXCLUDED.created_at",
     )
@@ -104,7 +104,9 @@ pub async fn save_oauth_state(pool: &PgPool, token: &str, code_verifier: &str) {
     .bind(code_verifier)
     .bind(now)
     .execute(pool)
-    .await;
+    .await {
+        tracing::error!("[DB] save_oauth_state falló: {e}");
+    }
 }
 
 pub async fn consume_oauth_state(pool: &PgPool, token: &str) -> Option<String> {

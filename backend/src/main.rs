@@ -175,9 +175,12 @@ async fn main() {
         eprintln!("[FATAL] DATABASE_URL no configurada.");
         std::process::exit(1);
     });
+    let connect_opts = db_url.parse::<sqlx::postgres::PgConnectOptions>()
+        .unwrap_or_else(|e| { eprintln!("[FATAL] DATABASE_URL inválida: {e}"); std::process::exit(1); })
+        .statement_cache_capacity(0); // requerido para PgBouncer (transaction pooler)
     let db = sqlx::postgres::PgPoolOptions::new()
         .max_connections(5)
-        .connect(&db_url)
+        .connect_with(connect_opts)
         .await
         .unwrap_or_else(|e| { eprintln!("[FATAL] No se pudo conectar a PostgreSQL: {e}"); std::process::exit(1); });
 

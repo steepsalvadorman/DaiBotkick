@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=1920">
     <title>DaiBot — Pixel Overlay</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <script src="/sio.js"></script>
@@ -21,6 +21,8 @@
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
+        html, body { margin: 0; padding: 0; overflow: hidden; background: transparent; }
+
         body {
             width: 1920px; height: 1080px;
             background: transparent;
@@ -29,6 +31,7 @@
             user-select: none;
             cursor: none;
             image-rendering: pixelated;
+            transform-origin: top left;
         }
 
         /* ── BG GRID ──────────────────────────────────────────────── */
@@ -352,13 +355,13 @@
             <div class="ticker-inner">
                 ★ Escribe !play + link de YouTube para pedir una canción
                 <span class="ticker-sep">◆</span>
-                ★ Escribe !s / !dalia / !jorge / !alex + texto para TTS
+                ★ Escribe !dai / !dalia / !jorge / !alex + texto para TTS
                 <span class="ticker-sep">◆</span>
                 ★ Síguenos en <span class="kick-channel-url">kick.com/seniordai</span>
                 <span class="ticker-sep">◆</span>
                 ★ Escribe !play + link de YouTube para pedir una canción
                 <span class="ticker-sep">◆</span>
-                ★ Escribe !s / !dalia / !jorge / !alex + texto para TTS
+                ★ Escribe !dai / !dalia / !jorge / !alex + texto para TTS
                 <span class="ticker-sep">◆</span>
                 ★ Síguenos en <span class="kick-channel-url">kick.com/seniordai</span>
                 <span class="ticker-sep">◆</span>
@@ -368,6 +371,18 @@
     </div>
 
     <script>
+    // ── AUTO-SCALE: encaja el overlay en cualquier pantalla ───────
+    (function autoScale() {
+        function fit() {
+            const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+            document.body.style.transform  = `scale(${s})`;
+            document.body.style.marginLeft = Math.max(0, (window.innerWidth  - 1920 * s) / 2) + 'px';
+            document.body.style.marginTop  = Math.max(0, (window.innerHeight - 1080 * s) / 2) + 'px';
+        }
+        fit();
+        window.addEventListener('resize', fit);
+    })();
+
     const VOL_MUSIC_DIR = 0.25;
     const VOL_TTS = 1.0;
 

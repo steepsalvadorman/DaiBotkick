@@ -71,7 +71,7 @@ pub async fn handle(username: &str, content: &str, ch: &Arc<ChannelState>, globa
         }),
         "!comandos" | "!help" | "!ayuda" | "!commands" => global_cmd!("!comandos", {
             sender::send(
-                "📋 Comandos: !play [url] · !s/!dalia/!jorge/!alex [texto] · !quitarme · !misongs · !dado · !8ball [pregunta] · !sorteo · !uptime · !cola · !discord · !redes · !pc · !horario",
+                "📋 Comandos: !play [url] · !dai/!dalia/!jorge/!alex [texto TTS] · !quitarme · !misongs · !dado · !8ball [pregunta] · !sorteo · !uptime · !cola · !discord · !redes · !pc · !horario",
                 ch, global,
             ).await;
         }),
@@ -249,15 +249,15 @@ pub async fn handle(username: &str, content: &str, ch: &Arc<ChannelState>, globa
     let text = rest.trim();
     if text.is_empty() { return; }
     let cmd_low = cmd_word.to_lowercase();
-    let is_tts = cmd_low == "!s"
+    let is_tts = cmd_low == "!dai"
         || cmd_low.strip_prefix('!').map_or(false, |v| tts::edge_tts::is_valid_voice(v));
     if is_tts {
         if !is_owner {
-            let ok = { ch.cooldown.lock().await.check_user(username, "!s", 15) };
+            let ok = { ch.cooldown.lock().await.check_user(username, "!dai", 15) };
             if !ok { return; }
-            ch.cooldown.lock().await.use_user(username, "!s");
+            ch.cooldown.lock().await.use_user(username, "!dai");
         }
-        let voice = if cmd_low == "!s" { "camila".into() }
+        let voice = if cmd_low == "!dai" { "camila".into() }
                     else { cmd_low.trim_start_matches('!').to_string() };
         ch.tts_tx.send(tts::TtsQueueItem { text: text.into(), voice }).ok();
     }
@@ -269,7 +269,7 @@ pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global:
     if is_direct_video(&url) {
         let title = url.split('/').next_back()
             .and_then(|s| s.split('?').next()).unwrap_or("Video").to_string();
-        let msg = format!("▶ @{username} agregó «{}» a la cola", &title[..title.len().min(60)]);
+        let msg = format!("▶ @{username} agregó «{}» a la cola", trunc(&title, 60));
         enqueue(VideoItem { video_id: None, url: Some(url), title, user: username }, ch, global).await;
         sender::send(&msg, ch, global).await;
         return;
@@ -279,7 +279,7 @@ pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global:
         let list_id = url.split("list=").nth(1).unwrap_or("").split('&').next().unwrap_or("");
         if !list_id.starts_with("RD") {
             if let Some((vid, title)) = first_from_playlist(&global.http, &url).await {
-                let msg = format!("▶ @{username} agregó «{}» a la cola", &title[..title.len().min(60)]);
+                let msg = format!("▶ @{username} agregó «{}» a la cola", trunc(&title, 60));
                 enqueue(VideoItem { video_id: Some(vid), url: None, title, user: username }, ch, global).await;
                 sender::send(&msg, ch, global).await;
                 return;
@@ -289,7 +289,7 @@ pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global:
 
     if let Some(vid) = yt_id(&url) {
         let title = yt_title(&global.http, &url).await;
-        let msg = format!("▶ @{username} agregó «{}» a la cola", &title[..title.len().min(60)]);
+        let msg = format!("▶ @{username} agregó «{}» a la cola", trunc(&title, 60));
         enqueue(VideoItem { video_id: Some(vid), url: None, title, user: username }, ch, global).await;
         sender::send(&msg, ch, global).await;
     } else {
@@ -338,6 +338,13 @@ async fn first_from_playlist(http: &reqwest::Client, url: &str) -> Option<(Strin
     let vid   = item["snippet"]["resourceId"]["videoId"].as_str()?.to_string();
     let title = item["snippet"]["title"].as_str().unwrap_or("Video").to_string();
     Some((vid, title))
+}
+
+fn trunc(s: &str, max_chars: usize) -> &str {
+    match s.char_indices().nth(max_chars) {
+        Some((i, _)) => &s[..i],
+        None         => s,
+    }
 }
 
 async fn yt_title(http: &reqwest::Client, url: &str) -> String {

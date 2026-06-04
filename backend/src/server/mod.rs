@@ -1,6 +1,6 @@
 use crate::{commands, state::AppState, tts};
 use socketioxide::extract::SocketRef;
-use std::sync::Arc;
+use std::sync::{atomic::Ordering, Arc};
 use tokio::time::{sleep, Duration};
 use tracing::info;
 
@@ -65,7 +65,7 @@ pub fn setup(io: &socketioxide::SocketIo, global: Arc<AppState>) {
                 async move { info!("Widget desconectado: {} (canal: {slug})", s.id); }
             });
 
-            // Enviar config y cola al conectar
+            // Enviar config, cola y stats actuales al conectar
             let ch2 = ch.clone();
             let s2  = socket.clone();
             tokio::spawn(async move {
@@ -75,6 +75,12 @@ pub fn setup(io: &socketioxide::SocketIo, global: Arc<AppState>) {
                 })).ok();
                 let q = ch2.video_queue.read().await;
                 s2.emit("syncQueue", serde_json::json!({"items": &q.items})).ok();
+                drop(q);
+                // Enviar followers actuales inmediatamente (sin esperar el próximo poll de 60s)
+                let followers = ch2.followers.load(Ordering::Relaxed);
+                if followers > 0 {
+                    s2.emit("followersUpdate", serde_json::json!({ "count": followers })).ok();
+                }
             });
 
             // advanceQueue

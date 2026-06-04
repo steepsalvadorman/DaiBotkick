@@ -131,11 +131,22 @@ pub async fn run(state: Arc<AppState>) {
 async fn connect_once(http: &reqwest::Client, state: &Arc<AppState>) -> Result<(), String> {
     let chan = &state.config.channel_name;
 
-    // Obtener IDs del canal
+    // Obtener IDs del canal — si falla con 401 intentar renovar el token primero
     let token = state.access_token.read().await.clone();
-    let info = api::get_channel_info(http, chan, &token)
-        .await
-        .ok_or_else(|| format!("No se pudo obtener info del canal '{chan}'"))?;
+    let info = match api::get_channel_info(http, chan, &token).await {
+        Some(i) => i,
+        None => {
+            warn!("Kick: token inválido, intentando renovar...");
+            if refresh_access_token(state).await {
+                let new_token = state.access_token.read().await.clone();
+                api::get_channel_info(http, chan, &new_token)
+                    .await
+                    .ok_or_else(|| format!("No se pudo obtener info del canal '{chan}' — corre --login para reautenticar"))?
+            } else {
+                return Err(format!("Token expirado y no se pudo renovar — corre daibot.exe --login"));
+            }
+        }
+    };
 
     info!("Canal '{}' → channel_id={} chatroom_id={}", info.slug, info.channel_id, info.chatroom_id);
 

@@ -1,4 +1,4 @@
-#![cfg_attr(windows, windows_subsystem = "windows")]
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod commands;
 mod config;
@@ -192,7 +192,8 @@ async fn main() {
         .layer(layer);
 
     let addr = format!("0.0.0.0:{}", config.port);
-    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(&addr).await
+        .unwrap_or_else(|e| fatal(&format!("No se pudo abrir el puerto {}: {e}\nCierra cualquier otra instancia de DaiBot e inténtalo de nuevo.", config.port)));
     info!("DaiBot corriendo  → http://localhost:{}", config.port);
     info!("Overlay OBS       → http://localhost:{}/pixel.html", config.port);
 
@@ -269,5 +270,6 @@ $null = $window.ShowDialog()
         let _ = std::fs::remove_file(&tmp);
     });
 
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app).await
+        .unwrap_or_else(|e| fatal(&format!("Error del servidor: {e}")));
 }

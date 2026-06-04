@@ -79,20 +79,20 @@ async fn run_flow() -> Result<(), String> {
         .finish();
     let auth_url = format!("{AUTH_URL}?{query}");
 
-    open_browser(&auth_url);
-
-    // En Windows sin consola mostrar dialog con URL de fallback
+    // En Windows mostrar el diálogo primero — el navegador se abre al dar Aceptar
     #[cfg(windows)]
     msg_dialog(
         &format!(
-            "Se ha abierto tu navegador para iniciar sesión en Kick.\n\
+            "Al hacer clic en Aceptar se abrirá tu navegador para iniciar sesión en Kick.\n\
              Acepta los permisos y vuelve aquí cuando termines.\n\n\
-             Si el navegador NO se abrió, copia esta dirección:\n\n{}",
+             Si el navegador NO se abre, copia esta dirección:\n\n{}",
             auth_url
         ),
         "DaiBot — Conectar con Kick",
         0x40, // MB_ICONINFORMATION
     );
+
+    open_browser(&auth_url);
 
     println!("Abriendo navegador...");
     println!("Si no se abre, copia esta URL:");

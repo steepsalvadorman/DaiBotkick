@@ -48,7 +48,12 @@ pub async fn upsert_channel(pool: &PgPool, row: &ChannelRow) {
            access_token        = EXCLUDED.access_token,
            refresh_token       = EXCLUDED.refresh_token,
            token_expires       = EXCLUDED.token_expires,
-           panel_token         = CASE WHEN channels.panel_token = '' THEN EXCLUDED.panel_token ELSE channels.panel_token END",
+           panel_token         = CASE WHEN channels.panel_token = '' THEN EXCLUDED.panel_token ELSE channels.panel_token END,
+           cmd_discord         = CASE WHEN EXCLUDED.cmd_discord  != '' THEN EXCLUDED.cmd_discord  ELSE channels.cmd_discord  END,
+           cmd_redes           = CASE WHEN EXCLUDED.cmd_redes    != '' THEN EXCLUDED.cmd_redes    ELSE channels.cmd_redes    END,
+           cmd_pc              = CASE WHEN EXCLUDED.cmd_pc       != '' THEN EXCLUDED.cmd_pc       ELSE channels.cmd_pc       END,
+           cmd_horario         = CASE WHEN EXCLUDED.cmd_horario  != '' THEN EXCLUDED.cmd_horario  ELSE channels.cmd_horario  END,
+           follow_goal         = CASE WHEN EXCLUDED.follow_goal  != 100 THEN EXCLUDED.follow_goal ELSE channels.follow_goal  END",
     )
     .bind(&row.slug)
     .bind(row.broadcaster_user_id)

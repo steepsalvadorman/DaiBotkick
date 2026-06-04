@@ -115,8 +115,7 @@ pub async fn token_refresh_loop(ch: Arc<ChannelState>, global: Arc<AppState>, in
 
 // ─── Punto de entrada por canal ───────────────────────────────────────────────
 
-pub async fn run_channel(ch: Arc<ChannelState>, global: Arc<AppState>) {
-    let token_expires = unix_now() + 7200; // se recargará del DB si es necesario
+pub async fn run_channel(ch: Arc<ChannelState>, global: Arc<AppState>, token_expires: u64) {
 
     // Polling de chat (fallback al Pusher)
     let ch2 = ch.clone(); let g2 = global.clone();
@@ -430,14 +429,39 @@ async fn alert_gift_sub(gifter: &str, count: usize, ch: &Arc<ChannelState>, glob
 
 // ─── Pusher auth ──────────────────────────────────────────────────────────────
 
-async fn pusher_auth(_http: &reqwest::Client, socket_id: &str, channel: &str, token: &str) -> Option<String> {
+async fn pusher_auth(http: &reqwest::Client, socket_id: &str, channel: &str, token: &str) -> Option<String> {
     if token.is_empty() { return None; }
+
+    // Intentar con reqwest (puede ser bloqueado por Cloudflare en algunos casos)
+    let body = format!("socket_id={}&channel_name={}", socket_id, channel);
+    if let Ok(resp) = http
+        .post("https://kick.com/broadcasting/auth")
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Origin", "https://kick.com")
+        .header("Referer", "https://kick.com/")
+        .body(body)
+        .send()
+        .await
+    {
+        if resp.status().is_success() {
+            if let Ok(json) = resp.json::<serde_json::Value>().await {
+                if let Some(auth) = json["auth"].as_str() {
+                    info!("[Pusher auth] OK via reqwest");
+                    return Some(auth.to_string());
+                }
+            }
+        }
+    }
+
+    // En Windows: fallback via PowerShell (Schannel TLS fingerprint)
     #[cfg(windows)]
     {
         if let Some(auth) = pusher_auth_via_powershell(socket_id, channel, token).await {
             return Some(auth);
         }
     }
+
     None
 }
 

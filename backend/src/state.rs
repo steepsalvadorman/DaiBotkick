@@ -27,6 +27,7 @@ pub struct GlobalConfig {
 /// Estado de un canal específico (un streamer).
 pub struct ChannelState {
     pub slug:              String,
+    pub token_expires:     u64,
     pub access_token:      Arc<RwLock<String>>,
     pub refresh_token_val: Arc<RwLock<String>>,
     pub channel_id:        Arc<RwLock<Option<u64>>>,

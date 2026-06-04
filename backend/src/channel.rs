@@ -9,6 +9,13 @@ use std::sync::{atomic::AtomicU64, Arc};
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tracing::info;
 
+fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
 /// Inicializa un canal: crea su ChannelState, registra el namespace Socket.IO,
 /// y arranca los tasks de Kick, TTS y stats.
 pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) {
@@ -19,8 +26,11 @@ pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) {
 
     let (tts_tx, tts_rx) = mpsc::unbounded_channel::<tts::TtsQueueItem>();
 
+    let token_expires = if row.token_expires > 0 { row.token_expires as u64 } else { unix_now() + 7200 };
+
     let ch = Arc::new(ChannelState {
         slug:              slug.clone(),
+        token_expires,
         access_token:      Arc::new(RwLock::new(row.access_token.clone())),
         refresh_token_val: Arc::new(RwLock::new(row.refresh_token.clone())),
         channel_id:        Arc::new(RwLock::new(row.broadcaster_user_id.map(|v| v as u64))),
@@ -62,10 +72,11 @@ pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) {
     });
 
     // Kick: WebSocket + EventSub
-    let ch2     = ch.clone();
-    let global2 = global.clone();
+    let ch2      = ch.clone();
+    let global2  = global.clone();
+    let tok_exp  = token_expires;
     tokio::spawn(async move {
-        kick::run_channel(ch2, global2).await;
+        kick::run_channel(ch2, global2, tok_exp).await;
     });
 
     // Stats (CPU/RAM/followGoal por canal)

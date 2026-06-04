@@ -124,16 +124,15 @@ pub async fn handle_callback(
         + expires_in) as i64;
 
     // Obtener info del canal
-    let chan_json: serde_json::Value = st.http
+    let chan_json: serde_json::Value = match st.http
         .get("https://api.kick.com/public/v1/channels?me=true")
         .header("Authorization", format!("Bearer {access_token}"))
         .send()
         .await
-        .ok()
-        .and_then(|r| tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(r.json()).ok()
-        }))
-        .unwrap_or_default();
+    {
+        Ok(r)  => r.json().await.unwrap_or_default(),
+        Err(e) => { warn!("[Auth] Error obteniendo info del canal: {e}"); return err_page("Error obteniendo info del canal"); }
+    };
 
     let ch = chan_json["data"].as_array()
         .and_then(|a| a.first())

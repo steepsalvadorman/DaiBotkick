@@ -250,8 +250,23 @@ fn set_key(content: String, key: &str, value: &str) -> String {
 // ── OAuth: callback HTTP ──────────────────────────────────────────────────────
 
 async fn wait_callback(expected_state: &str) -> Result<String, String> {
-    let listener = TcpListener::bind("127.0.0.1:3001").await.map_err(|e| {
-        format!("No se pudo escuchar en puerto 3001: {e}")
+    // Si el puerto 3001 está ocupado por un intento anterior, liberarlo primero
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command",
+                "Get-NetTCPConnection -LocalPort 3001 -ErrorAction SilentlyContinue \
+                 | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"])
+            .creation_flags(0x08000000)
+            .output();
+        // Dar un momento para que el SO libere el puerto
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+
+    let listener = TcpListener::bind("127.0.0.1:3001").await.map_err(|_| {
+        "El puerto 3001 está ocupado por otro programa.\n\
+         Cierra cualquier otra instancia de DaiBot e inténtalo de nuevo.".to_string()
     })?;
 
     println!("Esperando autorización en el navegador...");
@@ -286,7 +301,11 @@ async fn wait_callback(expected_state: &str) -> Result<String, String> {
 
         let state_recv = params.get("state").map(|v| v.as_ref()).unwrap_or("");
         if state_recv != expected_state {
-            html_reply(&mut socket, "<h2>Estado inválido</h2>").await;
+            html_reply(&mut socket,
+                "<h2 style='color:#ff4444'>Enlace caducado</h2>\
+                 <p>Este enlace de inicio de sesi&oacute;n ya no es v&aacute;lido.</p>\
+                 <p>Cierra esta pesta&ntilde;a y vuelve a abrir DaiBot para intentarlo de nuevo.</p>",
+            ).await;
             continue;
         }
 

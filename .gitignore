@@ -11,6 +11,7 @@ node_modules/
 installer/output/
 installer/python_portable/
 installer/icon.ico
+installer/ngrok.exe
 
 # ── Runtime / datos generados ─────────────────────────────────────────────
 data/queue.json
@@ -25,3 +26,6 @@ Thumbs.db
 .vscode/settings.json
 *.swp
 *.swo
+
+# ── Claude Code (memoria local, no versionar) ─────────────────────────────
+.claude/

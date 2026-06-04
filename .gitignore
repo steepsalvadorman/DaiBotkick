@@ -4,6 +4,9 @@
 # ── Rust build ────────────────────────────────────────────────────────────
 backend/target/
 
+# ── Node.js ────────────────────────────────────────────────────────────────
+node_modules/
+
 # ── Installer (artefactos generados por build.ps1) ────────────────────────
 installer/output/
 installer/python_portable/

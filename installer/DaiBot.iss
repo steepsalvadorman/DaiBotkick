@@ -132,6 +132,16 @@ begin
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#AppExe}',
        '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 
+  // Aviso sobre SmartScreen
+  MsgBox(
+    'NOTA: Windows puede mostrar una advertencia de seguridad.' + #13#10#13#10 +
+    'Si aparece la pantalla azul "Windows protegió su PC":' + #13#10 +
+    '  1. Haz clic en "Más información"' + #13#10 +
+    '  2. Luego haz clic en "Ejecutar de todas formas"' + #13#10#13#10 +
+    'Esto ocurre porque el instalador es nuevo y Windows' + #13#10 +
+    'aún no lo reconoce. No es un virus.',
+    mbInformation, MB_OK);
+
   MsgBox(
     'Bienvenido a DaiBot' + #13#10#13#10 +
     'Esto es lo que se va a instalar en tu computadora:' + #13#10#13#10 +

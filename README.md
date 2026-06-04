@@ -25,10 +25,14 @@ Bot de streaming para Kick.com distribuible como instalador de Windows. Gestiona
 ## Instalación (usuarios finales)
 
 1. Descarga `DaiBot.exe` desde Releases
-2. Ejecútalo — no requiere permisos de administrador
-3. Al terminar, haz doble clic en el icono del Escritorio
-4. Se abrirá tu navegador para iniciar sesión en Kick
-5. Listo — el bot se configura solo
+2. Si aparece la pantalla azul **"Windows protegió su PC"**:
+   - Haz clic en **"Más información"**
+   - Luego en **"Ejecutar de todas formas"**
+   > Esto ocurre porque el instalador es nuevo y Windows aún no lo reconoce. No es un virus.
+3. Ejecútalo — no requiere permisos de administrador
+4. Al terminar, haz doble clic en el icono del Escritorio
+5. Se abrirá tu navegador para iniciar sesión en Kick
+6. Listo — el bot se configura solo
 
 **No necesitas instalar** Rust, Python, Node.js ni nada adicional. Todo viene incluido en el instalador.
 

@@ -74,7 +74,7 @@ pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) {
     });
 
     // Stats (CPU/RAM/followGoal por canal)
-    stats::start_channel(global.io.clone(), ch.clone());
+    stats::start_channel(global.io.clone(), ch.clone(), global.clone());
 
     info!("[Channel] Iniciado: {slug}");
 }

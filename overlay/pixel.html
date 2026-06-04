@@ -53,20 +53,6 @@
             background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.55) 100%);
         }
 
-        /* ── UNLOCK SCREEN ────────────────────────────────────────── */
-        #unlock-screen {
-            position: fixed; inset: 0; z-index: 9999;
-            cursor: pointer;
-            background: rgba(6,0,16,0.92);
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center; gap: 20px;
-            transition: opacity 0.4s ease;
-            font-family: var(--font);
-        }
-        #unlock-screen .u-icon  { font-size: 56px; animation: blink-dot 1s step-end infinite; }
-        #unlock-screen .u-title { font-size: 16px; color: var(--green); text-shadow: 0 0 20px var(--green); letter-spacing: 4px; }
-        #unlock-screen .u-sub   { font-size: 9px; color: rgba(255,255,255,0.35); letter-spacing: 2px; }
-
         /* ── PIXEL BORDER ─────────────────────────────────────────── */
         .px-border {
             border: 3px solid var(--green);
@@ -81,7 +67,7 @@
 
         /* ── TOP BAR ──────────────────────────────────────────────── */
         #topbar {
-            position: absolute; top: 0; left: 0; right: 0; height: 52px;
+            position: absolute; top: 0; left: 0; right: 0; height: 56px;
             background: linear-gradient(90deg, var(--dark) 0%, rgba(84,252,25,0.08) 30%, rgba(84,252,25,0.08) 70%, var(--dark) 100%);
             border-bottom: 3px solid var(--green);
             box-shadow: 0 0 24px rgba(84,252,25,0.25);
@@ -91,120 +77,166 @@
         .topbar-left, .topbar-right { display: flex; align-items: center; gap: 28px; }
         .topbar-center { position: absolute; left: 50%; transform: translateX(-50%); }
         .stat-chip { display: flex; align-items: center; gap: 10px; }
-        .stat-chip .label { font-size: 9px; color: var(--cyan); font-family: var(--font); text-shadow: 0 0 6px rgba(0,240,255,0.3); }
-        .stat-chip .val   { font-size: 13px; color: var(--green); text-shadow: 0 0 10px var(--green); font-family: var(--font); }
+        .stat-chip .label { font-size: 9px; color: var(--cyan); text-shadow: 0 0 6px rgba(0,240,255,0.3); }
+        .stat-chip .val   { font-size: 13px; color: var(--green); text-shadow: 0 0 10px var(--green); }
         .live-badge {
             display: flex; align-items: center; gap: 8px;
-            background: var(--red); padding: 4px 12px;
-            font-size: 9px; font-family: var(--font); color: #fff; letter-spacing: 2px;
+            background: var(--red); padding: 5px 14px;
+            font-size: 10px; color: #fff; letter-spacing: 2px;
             clip-path: polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%);
             box-shadow: 0 0 16px rgba(255,42,109,0.6);
             animation: live-glow 1.5s ease-in-out infinite alternate;
         }
-        .live-dot { width: 8px; height: 8px; background: #fff; border-radius: 50%; animation: blink-dot 1s step-end infinite; }
+        .live-dot { width: 9px; height: 9px; background: #fff; border-radius: 50%; animation: blink-dot 1s step-end infinite; }
         .stream-title {
-            font-size: 15px; color: #fff; letter-spacing: 3px;
-            font-family: var(--font);
+            font-size: 16px; color: #fff; letter-spacing: 3px;
             animation: title-flicker 6s ease-in-out infinite;
         }
         .stream-title .accent { color: var(--green); text-shadow: 0 0 10px var(--green), 0 0 30px var(--green); }
         .glitch { position: relative; }
-        .glitch::before, .glitch::after { content: attr(data-text); position: absolute; top: 0; left: 0; font-size: inherit; letter-spacing: inherit; font-family: var(--font); }
+        .glitch::before, .glitch::after { content: attr(data-text); position: absolute; top: 0; left: 0; font-size: inherit; letter-spacing: inherit; }
         .glitch::before { color: var(--cyan); animation: glitch-1 3.5s infinite; clip-path: polygon(0 25%,100% 25%,100% 50%,0 50%); }
         .glitch::after  { color: var(--red);  animation: glitch-2 3.5s infinite; clip-path: polygon(0 60%,100% 60%,100% 80%,0 80%); }
 
-        /* ── SIDE STRIPS ──────────────────────────────────────────── */
-        .side-strip { position: absolute; top: 60px; bottom: 56px; width: 6px; display: flex; flex-direction: column; }
-        .side-strip-left  { left: 20px; }
+        /* ── RIGHT SIDE STRIP ─────────────────────────────────────── */
+        .side-strip { position: absolute; top: 64px; bottom: 56px; width: 6px; display: flex; flex-direction: column; }
         .side-strip-right { right: 20px; }
         .strip-block { flex: 1; opacity: 0.6; animation: strip-anim 2s step-end infinite; }
 
+        /* ══════════════════════════════════════════════════════════
+           LEFT SIDEBAR — solo chat
+        ══════════════════════════════════════════════════════════ */
+        #left-sidebar {
+            position: absolute;
+            top: 56px; left: 0; bottom: 48px;
+            width: 440px;
+            background: rgba(6, 0, 16, 0.80);
+            border-right: 3px solid var(--green);
+            box-shadow: 6px 0 28px rgba(84,252,25,0.18);
+            display: flex; flex-direction: column;
+            z-index: 20;
+        }
+
         /* ── FOLLOW GOAL ──────────────────────────────────────────── */
-        #follow-goal { position: absolute; top: 68px; left: 50px; width: 340px; z-index: 20; }
-        .goal-header { font-size: 10px; color: var(--yellow); margin-bottom: 8px; letter-spacing: 2px; text-shadow: 0 0 8px rgba(255,214,0,0.4); }
-        .goal-track  { height: 22px; background: rgba(255,255,255,0.06); position: relative; overflow: hidden; }
-        .goal-fill   {
+        #follow-goal {
+            padding: 14px 16px 12px;
+            flex-shrink: 0;
+            border-bottom: 2px solid rgba(84,252,25,0.16);
+        }
+        .goal-header {
+            font-size: 9px; color: var(--yellow); margin-bottom: 9px;
+            letter-spacing: 1px; text-shadow: 0 0 8px rgba(255,214,0,0.4);
+        }
+        .goal-track {
+            height: 22px; background: rgba(255,255,255,0.06);
+            position: relative; overflow: hidden;
+        }
+        .goal-fill {
             height: 100%; width: 0%; background: var(--green);
-            box-shadow: 0 0 10px var(--green); transition: width 1s steps(20); position: relative;
+            box-shadow: 0 0 10px var(--green); transition: width 1s steps(20);
+            position: relative;
         }
         .goal-fill::after {
             content: ''; position: absolute; inset: 0;
-            background: repeating-linear-gradient(90deg, transparent, transparent 6px, rgba(0,0,0,0.25) 6px, rgba(0,0,0,0.25) 12px);
+            background: repeating-linear-gradient(90deg,transparent,transparent 6px,rgba(0,0,0,0.25) 6px,rgba(0,0,0,0.25) 12px);
         }
-        .goal-label { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 9px; color: #fff; text-shadow: 0 0 6px #000; }
-        .goal-pct   { font-size: 10px; color: var(--green); text-shadow: 0 0 8px var(--green); margin-top: 6px; }
+        .goal-label {
+            position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+            font-size: 9px; color: #fff; text-shadow: 0 0 6px #000;
+        }
+        .goal-pct {
+            font-size: 9px; color: var(--green);
+            text-shadow: 0 0 8px var(--green); margin-top: 7px;
+        }
 
-        /* ── CAM FRAME ────────────────────────────────────────────── */
-        #cam-frame {
-            position: absolute; bottom: 125px; left: 50px;
-            width: 400px; height: 225px;
-            background: rgba(0,0,0,0.6); z-index: 20;
-            animation: cam-pulse 3s ease-in-out infinite;
+        /* ── CHAT ─────────────────────────────────────────────────── */
+        #chat-widget {
+            flex: 1;
+            display: flex; flex-direction: column;
+            overflow: hidden; min-height: 0;
         }
-        .corner { position: absolute; width: 24px; height: 24px; }
-        .corner-tl { top:-6px; left:-6px;   border-top:6px solid #fff; border-left:6px solid #fff; }
-        .corner-tr { top:-6px; right:-6px;  border-top:6px solid #fff; border-right:6px solid #fff; }
-        .corner-bl { bottom:-6px; left:-6px;  border-bottom:6px solid #fff; border-left:6px solid #fff; }
-        .corner-br { bottom:-6px; right:-6px; border-bottom:6px solid #fff; border-right:6px solid #fff; }
-        .cam-label {
-            position: absolute; top: -38px; left: 0;
-            font-size: 10px; color: var(--green); text-shadow: 0 0 6px var(--green);
-            display: flex; align-items: center; gap: 8px;
-            animation: blink-label 2s step-end infinite;
+        .chat-header {
+            background: var(--green); color: var(--dark);
+            font-size: 10px; padding: 10px 16px;
+            display: flex; align-items: center; gap: 10px;
+            letter-spacing: 2px; flex-shrink: 0;
         }
-        .cam-stats { position: absolute; bottom: -52px; left: 0; right: 0; display: flex; flex-direction: column; gap: 6px; }
-        .stat-bar-row { display: flex; align-items: center; gap: 8px; font-size: 9px; color: rgba(255,255,255,0.7); font-family: var(--font); }
-        .bar-track { flex:1; height:10px; background:rgba(255,255,255,0.06); border:2px solid rgba(255,255,255,0.12); position:relative; overflow:hidden; }
-        .bar-fill  { height:100%; transition:width 0.5s steps(10); position:relative; }
-        .bar-fill::after { content:''; position:absolute; inset:0; background:repeating-linear-gradient(90deg,transparent,transparent 4px,rgba(0,0,0,0.3) 4px,rgba(0,0,0,0.3) 8px); }
-        .bar-hp   { background:var(--green);  box-shadow:0 0 8px var(--green);  width:0%; }
-        .bar-mana { background:var(--cyan);   box-shadow:0 0 8px var(--cyan);   width:0%; }
-        .bar-xp   { background:var(--yellow); box-shadow:0 0 8px var(--yellow); width:0%; }
+        .chat-body {
+            flex: 1; overflow: hidden;
+            display: flex; flex-direction: column;
+            justify-content: flex-end;
+            padding: 14px 14px 10px; gap: 10px;
+            min-height: 0;
+        }
+        .msg {
+            display: flex; flex-direction: column; gap: 5px;
+            animation: msg-in 0.2s steps(4) forwards;
+            flex-shrink: 0;
+        }
+        .msg-user {
+            font-size: 10px; color: var(--green);
+            text-shadow: 0 0 6px var(--green);
+        }
+        .msg-text {
+            font-size: 10px; color: rgba(255,255,255,0.88);
+            line-height: 1.7;
+            background: rgba(255,255,255,0.04);
+            border-left: 3px solid var(--green-dim);
+            padding: 6px 10px;
+            word-break: break-word;
+        }
 
-        /* ── MEDIA WIDGET (reproductor) ───────────────────────────── */
+        /* ══════════════════════════════════════════════════════════
+           MEDIA WIDGET — top right
+        ══════════════════════════════════════════════════════════ */
         #media-widget {
             position: absolute;
-            top: 68px; right: 50px;
-            width: 420px;
+            top: 72px; right: 48px;
+            width: 480px;
             background: rgba(6,0,16,0.95);
             border-radius: 4px;
             z-index: 20;
             transition: opacity 0.5s ease, transform 0.5s ease;
         }
         #video-container {
-            width: 100%; height: 236px; /* 16:9 exacto */
+            width: 100%; height: 270px;
             background: #000; position: relative; overflow: hidden;
         }
         #youtube-player, #direct-video {
             width: 100%; height: 100%; display: block;
         }
         #direct-video { display: none; }
-
         .media-info {
             background: #000;
             border-left: 6px solid var(--green);
-            padding: 12px 16px;
+            padding: 14px 18px;
         }
-        .media-label { font-size: 8px; color: var(--green); letter-spacing: 2px; margin-bottom: 8px; text-shadow: 0 0 8px rgba(84,252,25,0.4); }
+        .media-label {
+            font-size: 8px; color: var(--green); letter-spacing: 2px;
+            margin-bottom: 9px; text-shadow: 0 0 8px rgba(84,252,25,0.4);
+        }
         #video-title {
             font-size: 11px; color: #fff;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-            margin-bottom: 12px;
-            line-height: 1.4;
+            margin-bottom: 12px; line-height: 1.4;
         }
-        .media-meta { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 10px; }
+        .media-meta {
+            display: flex; justify-content: space-between; align-items: center;
+            border-top: 1px solid rgba(255,255,255,0.08); padding-top: 10px;
+        }
         .requester-box { display: flex; flex-direction: column; gap: 5px; }
-        .requester-label { font-size: 8px; color: var(--cyan); letter-spacing: 1px; text-shadow: 0 0 6px rgba(0,240,255,0.4); }
+        .requester-label {
+            font-size: 8px; color: var(--cyan); letter-spacing: 1px;
+            text-shadow: 0 0 6px rgba(0,240,255,0.4);
+        }
         #video-requester { font-size: 12px; color: var(--yellow); text-shadow: 0 0 10px var(--yellow); }
         #queue-indicator {
-            display: none;
-            font-size: 8px; font-family: var(--font);
-            background: var(--green); color: #000;
-            padding: 4px 10px;
+            display: none; font-size: 8px;
+            background: var(--green); color: #000; padding: 4px 10px;
         }
         #video-title.scrolling {
             text-overflow: clip;
-            mask-image: linear-gradient(90deg, transparent 0%, black 5%, black 95%, transparent 100%);
+            mask-image: linear-gradient(90deg,transparent 0%,black 5%,black 95%,transparent 100%);
         }
         .title-inner { display: inline-block; }
         .title-inner.marquee { animation: title-marquee 25s linear infinite; }
@@ -215,40 +247,26 @@
 
         /* ── ALERT BOX ────────────────────────────────────────────── */
         #alert-box {
-            position: absolute; top: 140px; left: 50%;
+            position: absolute; top: 150px;
+            left: calc(50% + 220px);
             transform: translateX(-50%) translateY(-20px);
             background: var(--panel); min-width: 520px;
             opacity: 0; pointer-events: none; z-index: 80;
             transition: opacity 0.1s steps(3), transform 0.15s steps(4);
         }
-        #alert-box.show { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
+        #alert-box.show {
+            opacity: 1; pointer-events: auto;
+            transform: translateX(-50%) translateY(0);
+        }
         .alert-header {
             background: var(--yellow); color: var(--dark);
             font-size: 9px; padding: 8px 18px; letter-spacing: 2px;
             clip-path: polygon(0 0,calc(100% - 12px) 0,100% 100%,0 100%);
         }
-        .alert-body { padding: 18px 22px; font-size: 12px; color: #fff; text-shadow: 0 0 10px var(--yellow),2px 2px 0 #000; text-align: center; }
-
-        /* ── CHAT ─────────────────────────────────────────────────── */
-        #chat-widget {
-            position: absolute; bottom: 80px; right: 50px;
-            width: 420px; height: 300px;
-            background: var(--panel); z-index: 20;
-            display: flex; flex-direction: column; overflow: hidden;
+        .alert-body {
+            padding: 18px 22px; font-size: 12px; color: #fff;
+            text-shadow: 0 0 10px var(--yellow),2px 2px 0 #000; text-align: center;
         }
-        .chat-header {
-            background: var(--green); color: var(--dark);
-            font-size: 8px; padding: 8px 14px;
-            display: flex; align-items: center; gap: 8px; letter-spacing: 2px;
-            clip-path: polygon(0 0,100% 0,100% 100%,12px 100%);
-        }
-        .chat-body { flex:1; overflow:hidden; display:flex; flex-direction:column; justify-content:flex-end; padding:12px 14px; gap:8px; }
-        .msg { display:flex; flex-direction:column; gap:4px; animation: msg-in 0.2s steps(4) forwards; }
-        .msg-user { font-size: 8px; color: var(--green); text-shadow: 0 0 6px var(--green); }
-        .msg-text { font-size: 8px; color: rgba(255,255,255,0.85); line-height:1.6; background:rgba(255,255,255,0.04); border-left:3px solid var(--green-dim); padding:5px 8px; }
-
-        /* ── KICK WATERMARK ───────────────────────────────────────── */
-        .kick-mark { position:absolute; top:508px; right:50px; font-size:10px; color:var(--green); text-shadow:0 0 12px var(--green); letter-spacing:3px; opacity:0.7; z-index:20; }
 
         /* ── BOTTOM BAR ───────────────────────────────────────────── */
         #bottombar {
@@ -259,27 +277,32 @@
             display: flex; align-items: center; justify-content: space-between;
             padding: 0 40px; z-index: 50;
         }
-        .ticker { font-size:11px; color:#fff; text-shadow:0 0 6px rgba(255,255,255,0.4); letter-spacing:2px; white-space:nowrap; overflow:hidden; flex:1; mask-image:linear-gradient(90deg,transparent 0%,black 5%,black 95%,transparent 100%); }
-        .ticker-inner { display:inline-block; animation:ticker-scroll 30s linear infinite; white-space:nowrap; }
-        .ticker-sep   { color:var(--green); margin:0 20px; }
-        .rainbow-bar  { width:200px; height:10px; background:linear-gradient(90deg,var(--red),var(--yellow),var(--green),var(--cyan),var(--purple)); background-size:300% 100%; box-shadow:0 0 12px rgba(84,252,25,0.4); animation:rainbow-shift 3s linear infinite; }
+        .ticker {
+            font-size: 11px; color: #fff;
+            text-shadow: 0 0 6px rgba(255,255,255,0.4);
+            letter-spacing: 2px; white-space: nowrap; overflow: hidden; flex: 1;
+            mask-image: linear-gradient(90deg,transparent 0%,black 5%,black 95%,transparent 100%);
+        }
+        .ticker-inner { display: inline-block; animation: ticker-scroll 30s linear infinite; white-space: nowrap; }
+        .ticker-sep   { color: var(--green); margin: 0 20px; }
+        .rainbow-bar  {
+            width: 200px; height: 10px;
+            background: linear-gradient(90deg,var(--red),var(--yellow),var(--green),var(--cyan),var(--purple));
+            background-size: 300% 100%;
+            box-shadow: 0 0 12px rgba(84,252,25,0.4);
+            animation: rainbow-shift 3s linear infinite;
+        }
 
         /* ── KEYFRAMES ────────────────────────────────────────────── */
         @keyframes blink-dot    { 0%,100%{opacity:1} 50%{opacity:0} }
-        @keyframes blink-label  { 0%,90%,100%{opacity:1} 95%{opacity:0} }
         @keyframes live-glow    { from{box-shadow:0 0 10px rgba(255,42,109,0.4)} to{box-shadow:0 0 26px rgba(255,42,109,0.9)} }
         @keyframes title-flicker{ 0%,92%,96%,100%{opacity:1} 93%,95%{opacity:0.6} 94%{opacity:0.85} }
         @keyframes glitch-1     { 0%,85%,100%{transform:none;opacity:0} 86%{transform:translate(-3px,1px);opacity:0.7} 88%{transform:translate(3px,-1px);opacity:0.7} 90%{transform:none;opacity:0} }
         @keyframes glitch-2     { 0%,87%,100%{transform:none;opacity:0} 88%{transform:translate(3px,2px);opacity:0.6} 90%{transform:translate(-2px,-2px);opacity:0.6} 92%{transform:none;opacity:0} }
-        @keyframes msg-in       { from{opacity:0;transform:translateX(8px)} to{opacity:1;transform:translateX(0)} }
+        @keyframes msg-in       { from{opacity:0;transform:translateX(-10px)} to{opacity:1;transform:translateX(0)} }
         @keyframes ticker-scroll{ from{transform:translateX(0)} to{transform:translateX(-50%)} }
         @keyframes rainbow-shift{ from{background-position:0% 50%} to{background-position:300% 50%} }
         @keyframes strip-anim   { 0%{background:var(--green)} 33%{background:var(--cyan)} 66%{background:var(--purple)} }
-        @keyframes cam-pulse    {
-            0%,100%{ box-shadow:0 0 0 3px var(--dark),0 0 0 5px var(--green),0 0 20px rgba(84,252,25,0.3); border:3px solid var(--green); }
-            50%    { box-shadow:0 0 0 3px var(--dark),0 0 0 5px var(--green),0 0 40px rgba(84,252,25,0.65); border:3px solid var(--green); }
-        }
-        @keyframes slideIn { from{opacity:0;transform:translateX(-20px)} to{opacity:1;transform:translateX(0)} }
     </style>
 </head>
 <body>
@@ -287,7 +310,6 @@
     <div class="bg-grid"></div>
     <div class="scanlines"></div>
     <div class="crt-vignette"></div>
-
 
     <!-- TOP BAR -->
     <div id="topbar">
@@ -302,21 +324,11 @@
             </div>
         </div>
         <div class="topbar-right">
-            <div class="stat-chip"><span class="label">CPU</span><span class="val" id="cpu-load">--%</span></div>
-            <div class="stat-chip"><span class="label">RAM</span><span class="val" id="ram-usage">--%</span></div>
-            <div class="stat-chip"><span class="label">LIMA</span><span class="val" id="weather-temp">--°C</span></div>
+            <div class="stat-chip"><span class="label">SEGUIDORES</span><span class="val" id="followers-count">--</span></div>
         </div>
     </div>
 
-    <!-- SIDE STRIPS -->
-    <div class="side-strip side-strip-left">
-        <div class="strip-block" style="animation-delay:0s;background:var(--green)"></div>
-        <div class="strip-block" style="animation-delay:0.3s;background:var(--cyan)"></div>
-        <div class="strip-block" style="animation-delay:0.6s;background:var(--purple)"></div>
-        <div class="strip-block" style="animation-delay:0.2s;background:var(--green)"></div>
-        <div class="strip-block" style="animation-delay:0.5s;background:var(--cyan)"></div>
-        <div class="strip-block" style="animation-delay:0.1s;background:var(--yellow)"></div>
-    </div>
+    <!-- RIGHT SIDE STRIP -->
     <div class="side-strip side-strip-right">
         <div class="strip-block" style="animation-delay:0.4s;background:var(--purple)"></div>
         <div class="strip-block" style="animation-delay:0.1s;background:var(--green)"></div>
@@ -326,18 +338,28 @@
         <div class="strip-block" style="animation-delay:0.2s;background:var(--purple)"></div>
     </div>
 
-    <!-- FOLLOW GOAL -->
-    <div id="follow-goal">
-        <div class="goal-header">[ META DE SEGUIDORES ]</div>
-        <div class="goal-track px-border">
-            <div class="goal-fill" id="goal-fill"></div>
-            <span class="goal-label" id="goal-label">-- GOAL</span>
-        </div>
-        <div class="goal-pct" id="goal-pct">▶ -- / -- FOLLOWERS</div>
-    </div>
+    <!-- ══════════════════════════════════════════════════════════════
+         LEFT SIDEBAR — meta de seguidores + chat
+    ═══════════════════════════════════════════════════════════════ -->
+    <div id="left-sidebar">
 
-    <!-- KICK WATERMARK -->
-    <div class="kick-mark">[ KICK.COM ]</div>
+        <!-- FOLLOW GOAL -->
+        <div id="follow-goal">
+            <div class="goal-header">[ META DE SEGUIDORES ]</div>
+            <div class="goal-track px-border">
+                <div class="goal-fill" id="goal-fill"></div>
+                <span class="goal-label" id="goal-label">-- GOAL</span>
+            </div>
+            <div class="goal-pct" id="goal-pct">▶ -- / -- FOLLOWERS</div>
+        </div>
+
+        <!-- CHAT -->
+        <div id="chat-widget">
+            <div class="chat-header"><span>▶</span> CHAT EN VIVO</div>
+            <div class="chat-body" id="chat-messages"></div>
+        </div>
+
+    </div>
 
     <!-- ALERT BOX -->
     <div id="alert-box" class="px-border-purple">
@@ -345,39 +367,9 @@
         <div class="alert-body" id="alert-text"></div>
     </div>
 
-    <!-- CAM FRAME -->
-    <div id="cam-frame">
-        <div class="corner corner-tl"></div>
-        <div class="corner corner-tr"></div>
-        <div class="corner corner-bl"></div>
-        <div class="corner corner-br"></div>
-        <div class="cam-label">
-            <span style="color:var(--red);animation:blink-dot 1s step-end infinite;">●</span>EN VIVO
-        </div>
-        <div class="cam-stats">
-            <div class="stat-bar-row">
-                <span>HP</span>
-                <div class="bar-track"><div class="bar-fill bar-hp" id="bar-hp"></div></div>
-                <span id="hp-val">--%</span>
-            </div>
-            <div class="stat-bar-row">
-                <span>MP</span>
-                <div class="bar-track"><div class="bar-fill bar-mana" id="bar-mana"></div></div>
-                <span id="mp-val">--%</span>
-            </div>
-            <div class="stat-bar-row">
-                <span>XP</span>
-                <div class="bar-track"><div class="bar-fill bar-xp" id="bar-xp"></div></div>
-                <span id="xp-val">--%</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- ══ MEDIA WIDGET ═══════════════════════════════════════════════
-         Posicionado encima del chat, a la derecha.
-         visibility:hidden en vez de display:none para que el iframe
-         siga emitiendo audio aunque el widget no sea visible.
-    ════════════════════════════════════════════════════════════════ -->
+    <!-- ══════════════════════════════════════════════════════════════
+         MEDIA WIDGET — aparece solo cuando hay video en cola
+    ═══════════════════════════════════════════════════════════════ -->
     <div id="media-widget" class="px-border" style="opacity:0;transform:scale(0.9);visibility:hidden;">
         <div id="video-container">
             <div id="youtube-player"></div>
@@ -396,27 +388,21 @@
         </div>
     </div>
 
-    <!-- CHAT -->
-    <div id="chat-widget" class="px-border">
-        <div class="chat-header"><span>▶</span> CHAT EN VIVO</div>
-        <div class="chat-body" id="chat-messages"></div>
-    </div>
-
     <!-- BOTTOM BAR -->
     <div id="bottombar">
         <div class="ticker">
             <div class="ticker-inner">
                 ★ Escribe !play + link de YouTube para pedir una canción
                 <span class="ticker-sep">◆</span>
-                ★ Escribe !s + texto para que hable el bot
+                ★ Escribe !s / !dalia / !jorge / !alex + texto para TTS
                 <span class="ticker-sep">◆</span>
-                ★ Síguenos en <span class="kick-channel-url">kick.com/daibot</span>
+                ★ Síguenos en <span class="kick-channel-url">kick.com/seniordai</span>
                 <span class="ticker-sep">◆</span>
                 ★ Escribe !play + link de YouTube para pedir una canción
                 <span class="ticker-sep">◆</span>
-                ★ Escribe !s + texto para que hable el bot
+                ★ Escribe !s / !dalia / !jorge / !alex + texto para TTS
                 <span class="ticker-sep">◆</span>
-                ★ Síguenos en <span class="kick-channel-url">kick.com/daibot</span>
+                ★ Síguenos en <span class="kick-channel-url">kick.com/seniordai</span>
                 <span class="ticker-sep">◆</span>
             </div>
         </div>
@@ -430,20 +416,17 @@
     const _ch = new URLSearchParams(location.search).get('ch') || '';
     const socket = _ch ? io({ query: { ch: _ch } }) : io();
 
-    // Personalización: el bot envía el nombre del canal al conectar
     socket.on("config", (cfg) => {
         const name    = (cfg.channel_name || "DaiBot").toUpperCase();
-        const kickUrl = cfg.kick_url || ("kick.com/" + (cfg.channel_name || "daibot"));
+        const kickUrl = cfg.kick_url || ("kick.com/" + (cfg.channel_name || "seniordai"));
 
         document.title = `${cfg.channel_name} — Pixel Overlay`;
 
         const titleEl = document.getElementById("stream-title-display");
         if (titleEl) {
             titleEl.setAttribute("data-text", name);
-            // Mitad izquierda en color acento, mitad derecha en blanco
             const mid = Math.ceil(name.length / 2);
-            titleEl.innerHTML =
-                `<span class="accent">${name.slice(0, mid)}</span>${name.slice(mid)}`;
+            titleEl.innerHTML = `<span class="accent">${name.slice(0, mid)}</span>${name.slice(mid)}`;
         }
 
         document.querySelectorAll(".kick-channel-url").forEach(el => {
@@ -452,7 +435,6 @@
     });
 
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    let audioUnlocked  = true;
     audioContext.resume();
 
     const mediaWidget      = document.getElementById("media-widget");
@@ -468,8 +450,6 @@
     let ytMsgHandler   = null;
 
     socket.on("syncQueue", (data) => {
-        // El servidor envía {items: [...]} para evitar el desempaquetado
-        // de Socket.IO que convierte Vec<T> en múltiples argumentos
         localQueue = data?.items || [];
         updateBadge();
         if (localQueue.length === 0) {
@@ -482,7 +462,6 @@
             playHead();
         } else if (youtubePlayerDiv.children.length === 0 &&
                    !(directVideo.src && !directVideo.paused)) {
-            // isPlaying=true pero nada reproduciéndose realmente → recuperar
             isPlaying = false;
             playHead();
         }
@@ -493,14 +472,13 @@
     socket.on("toggleVideo", (data) => {
         isVideoVisible = data.showVideo;
         if (!isVideoVisible) {
-            // Ocultamos visualmente pero mantenemos el iframe vivo para el audio
             mediaWidget.style.visibility = "hidden";
             mediaWidget.style.opacity    = "0";
         } else {
             mediaWidget.style.visibility = "visible";
             requestAnimationFrame(() => {
-                mediaWidget.style.opacity    = "1";
-                mediaWidget.style.transform  = "scale(1)";
+                mediaWidget.style.opacity   = "1";
+                mediaWidget.style.transform = "scale(1)";
             });
         }
     });
@@ -538,7 +516,6 @@
         const iframe = document.createElement("iframe");
         iframe.style.cssText = "width:100%;height:100%;border:none;display:block;";
         iframe.allow = "autoplay; encrypted-media";
-        // mute=1 garantiza autoplay en OBS CEF; se desmutea vía postMessage cuando el player esté listo
         iframe.src = `https://www.youtube.com/embed/${encodeURIComponent(videoId)}` +
             `?autoplay=1&mute=1&controls=0&rel=0&modestbranding=1&enablejsapi=1` +
             `&origin=${location.origin}`;
@@ -546,33 +523,30 @@
 
         let unmuted = false;
         const doUnmute = () => {
-            if (unmuted) return;
-            unmuted = true;
+            if (unmuted) return; unmuted = true;
             try {
-                iframe.contentWindow.postMessage(JSON.stringify({event:"command",func:"unMute",   args:""}),   "*");
+                iframe.contentWindow.postMessage(JSON.stringify({event:"command",func:"unMute",   args:""}),"*");
                 iframe.contentWindow.postMessage(JSON.stringify({event:"command",func:"setVolume",args:[100]}),"*");
-                iframe.contentWindow.postMessage(JSON.stringify({event:"command",func:"playVideo",args:""}),   "*");
+                iframe.contentWindow.postMessage(JSON.stringify({event:"command",func:"playVideo",args:""}),"*");
             } catch {}
         };
 
-        // Fallback: desmutear cuando el iframe termine de cargar
         iframe.addEventListener("load", () => setTimeout(doUnmute, 500));
 
-        // Detectar eventos del player YouTube vía postMessage
         if (ytMsgHandler) window.removeEventListener("message", ytMsgHandler);
         ytMsgHandler = (e) => {
             if (!String(e.origin).includes("youtube")) return;
             try {
                 const d = JSON.parse(e.data);
-                if (d.event === "onReady") doUnmute();                         // player listo → desmutear
-                if (d.event === "onStateChange" && d.info === 0) finishCurrent(); // video terminó
+                if (d.event === "onReady") doUnmute();
+                if (d.event === "onStateChange" && d.info === 0) finishCurrent();
                 if (d.event === "onError") finishCurrent();
             } catch {}
         };
         window.addEventListener("message", ytMsgHandler);
 
         clearTimeout(loadingTimeout);
-        loadingTimeout = setTimeout(finishCurrent, 600000); // 10min máximo
+        loadingTimeout = setTimeout(finishCurrent, 600000);
     }
 
     function playDirect(url) {
@@ -594,27 +568,30 @@
         if (videoRequesterEl) videoRequesterEl.innerText = data.user || "Anónimo";
         if (isVideoVisible) {
             mediaWidget.style.visibility = "visible";
-            requestAnimationFrame(() => { mediaWidget.style.opacity = "1"; mediaWidget.style.transform = "scale(1)"; });
+            requestAnimationFrame(() => {
+                mediaWidget.style.opacity   = "1";
+                mediaWidget.style.transform = "scale(1)";
+            });
         }
     }
 
     function hideWidget() {
         mediaWidget.style.opacity = "0"; mediaWidget.style.transform = "scale(0.9)";
-        // Usar visibility:hidden en vez de display:none para que el iframe
-        // siga procesando audio en OBS cuando !voff está activo
         setTimeout(() => { if (localQueue.length === 0) mediaWidget.style.visibility = "hidden"; }, 500);
     }
 
     function updateBadge() {
         const b = document.getElementById("queue-indicator");
         if (!b) return;
-        if (localQueue.length > 1) { b.style.display = "inline-block"; b.innerText = `+${localQueue.length - 1} EN COLA`; }
-        else b.style.display = "none";
+        if (localQueue.length > 1) {
+            b.style.display = "inline-block";
+            b.innerText = `+${localQueue.length - 1} EN COLA`;
+        } else {
+            b.style.display = "none";
+        }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // UPTIME
-    // ═══════════════════════════════════════════════════════════════
+    // ── UPTIME ────────────────────────────────────────────────────
     const startTime = Date.now();
     setInterval(() => {
         const e = Date.now() - startTime;
@@ -624,47 +601,7 @@
         document.getElementById('uptime').innerText = `${h}:${m}:${s}`;
     }, 1000);
 
-    // ═══════════════════════════════════════════════════════════════
-    // GLITCH CAM
-    // ═══════════════════════════════════════════════════════════════
-    const camFrame = document.getElementById('cam-frame');
-    setInterval(() => {
-        if (Math.random() > 0.96) {
-            camFrame.style.transform = `translate(${(Math.random()*6-3).toFixed(0)}px,${(Math.random()*4-2).toFixed(0)}px)`;
-            setTimeout(() => camFrame.style.transform = 'none', 60);
-        }
-    }, 120);
-
-    // ═══════════════════════════════════════════════════════════════
-    // WEATHER
-    // ═══════════════════════════════════════════════════════════════
-    async function updateWeather() {
-        try {
-            const res  = await fetch('https://wttr.in/Lima?format=j1');
-            const data = await res.json();
-            document.getElementById('weather-temp').innerText = `${data.current_condition[0].temp_C}°C`;
-        } catch(e) {}
-    }
-    updateWeather();
-    setInterval(updateWeather, 900000);
-
-    // ═══════════════════════════════════════════════════════════════
-    // SOCKET EVENTS
-    // ═══════════════════════════════════════════════════════════════
-    socket.on("sysStats", (data) => {
-        document.getElementById('cpu-load').innerText  = `${data.cpu}%`;
-        document.getElementById('ram-usage').innerText = `${Math.round(data.ram)}%`;
-        const hp = Math.max(0, 100 - Math.min(100, data.cpu));
-        const mp = Math.max(0, 100 - Math.min(100, Math.round(data.ram)));
-        const xp = Math.min(100, Math.round(data.ram));
-        document.getElementById('bar-hp').style.width   = `${hp}%`;
-        document.getElementById('bar-mana').style.width = `${mp}%`;
-        document.getElementById('bar-xp').style.width   = `${xp}%`;
-        document.getElementById('hp-val').innerText  = `${hp}%`;
-        document.getElementById('mp-val').innerText  = `${mp}%`;
-        document.getElementById('xp-val').innerText  = `${xp}%`;
-    });
-
+    // ── SOCKET EVENTS ─────────────────────────────────────────────
     socket.on("chatMessage", (data) => {
         const body = document.getElementById("chat-messages");
         const div  = document.createElement("div");
@@ -674,13 +611,21 @@
             <div class="msg-text">${data.content}</div>
         `;
         body.appendChild(div);
-        if (body.children.length > 6) body.removeChild(body.firstChild);
+        if (body.children.length > 12) body.removeChild(body.firstChild);
+    });
+
+    socket.on("kickAlert", (data) => {
+        const box = document.getElementById('alert-box');
+        document.getElementById('alert-text').innerText = data.message || data.text || '¡Nueva alerta!';
+        box.classList.add('show');
+        setTimeout(() => box.classList.remove('show'), 6000);
     });
 
     socket.on("alert", (data) => {
+        const box = document.getElementById('alert-box');
         document.getElementById('alert-text').innerText = data.text || '¡Nueva alerta!';
-        document.getElementById('alert-box').classList.add('show');
-        setTimeout(() => document.getElementById('alert-box').classList.remove('show'), 5000);
+        box.classList.add('show');
+        setTimeout(() => box.classList.remove('show'), 6000);
     });
 
     socket.on("viewerCount", (data) => {
@@ -689,9 +634,11 @@
 
     socket.on("followGoal", (data) => {
         const pct = Math.min(100, Math.round((data.current / data.goal) * 100));
-        document.getElementById('goal-fill').style.width = `${pct}%`;
-        document.getElementById('goal-label').innerText  = `${data.goal} GOAL`;
-        document.getElementById('goal-pct').innerHTML    = `▶ ${data.current} / ${data.goal} <span style="color:rgba(255,255,255,0.3)">FOLLOWERS</span>`;
+        document.getElementById('goal-fill').style.width  = `${pct}%`;
+        document.getElementById('goal-label').innerText   = `${data.goal} GOAL`;
+        document.getElementById('goal-pct').innerHTML     =
+            `▶ ${data.current} / ${data.goal} <span style="color:rgba(255,255,255,0.3)">FOLLOWERS</span>`;
+        document.getElementById('followers-count').innerText = data.current;
     });
 
     socket.on("speak", (data) => {
@@ -699,7 +646,6 @@
         const ttsAudio = new Audio("data:audio/mp3;base64," + data.audioBase64);
         ttsAudio.volume = VOL_TTS;
         ttsAudio.play().catch(() => {
-            // Si autoplay está bloqueado, intentar con Web Audio API como fallback
             fetch("data:audio/mp3;base64," + data.audioBase64)
                 .then(r => r.arrayBuffer())
                 .then(buf => audioContext.decodeAudioData(buf))

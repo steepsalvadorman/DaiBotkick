@@ -32,6 +32,8 @@ Bot de streaming para Kick.com distribuible como instalador de Windows. Gestiona
 
 **No necesitas instalar** Rust, Python, Node.js ni nada adicional. Todo viene incluido en el instalador.
 
+> El overlay principal es `http://localhost:3000/pixel.html` — agrégalo como Browser Source en OBS.
+
 ---
 
 ## Configurar OBS
@@ -196,6 +198,9 @@ DaiBotkick/
 
 **El bot no se conecta al chat**
 → Usa el acceso directo "Configurar OAuth" del Menú Inicio para renovar el token
+
+**¿Dónde está el panel de control?**
+→ Aún no existe — el bot se controla desde los comandos del chat
 
 **No se escucha el TTS**
 → Verifica que "Controlar audio vía OBS" esté marcado en la browser source

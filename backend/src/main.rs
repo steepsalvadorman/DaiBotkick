@@ -194,7 +194,7 @@ async fn main() {
     let addr = format!("0.0.0.0:{}", config.port);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     info!("DaiBot corriendo  → http://localhost:{}", config.port);
-    info!("Panel de control  → http://localhost:{}/panel.html", config.port);
+    info!("Overlay OBS       → http://localhost:{}/pixel.html", config.port);
 
     // Popup gaming (WPF nativo, en thread aparte para no bloquear el servidor)
     #[cfg(windows)]

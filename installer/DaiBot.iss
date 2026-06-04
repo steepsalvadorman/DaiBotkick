@@ -80,8 +80,6 @@ Name: "{app}\data\tts_cache"
 Name: "{group}\{#AppName}";         Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; IconFilename: "{app}\daibot.ico"; Comment: "Inicia DaiBot"
 ; Configurar OAuth (primer uso)
 Name: "{group}\Configurar OAuth";   Filename: "{app}\{#AppExe}"; Parameters: "--login"; WorkingDir: "{app}"; IconFilename: "{app}\daibot.ico"; Comment: "Autentica DaiBot con tu cuenta de Kick"
-; Panel de control (se abre en el navegador)
-Name: "{group}\Panel de Control";   Filename: "http://localhost:3000/panel.html"; Comment: "Abre el panel de control del bot"
 ; Comandos del chat
 Name: "{group}\Comandos del Chat";  Filename: "{app}\comandos.html"; Comment: "Lista de comandos disponibles"
 ; Desinstalar
@@ -189,9 +187,6 @@ begin
          'OVERLAY EN OBS:' + #13#10 +
          '  Fuente de Navegador (Browser Source):' + #13#10 +
          '  URL: http://localhost:3000/pixel.html' + #13#10 +
-         '  Ancho: 1920  Alto: 1080' + #13#10#13#10 +
-
-         'PANEL DE CONTROL:' + #13#10 +
-         '  http://localhost:3000/panel.html',
+         '  Ancho: 1920  Alto: 1080',
          mbInformation, MB_OK);
 end;

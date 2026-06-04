@@ -10,8 +10,12 @@ $Root = Split-Path $PSScriptRoot -Parent
 # 1. Compilar el bot en modo release
 Write-Host "Compilando DaiBot..." -ForegroundColor Cyan
 Push-Location "$Root\backend"
+# cargo escribe a stderr normalmente; suspender Stop para no fallar por eso
+$ErrorActionPreference = "Continue"
 cargo build --release
-if ($LASTEXITCODE -ne 0) { Write-Error "cargo build --release fallo"; exit 1 }
+$cargoExit = $LASTEXITCODE
+$ErrorActionPreference = "Stop"
+if ($cargoExit -ne 0) { Write-Error "cargo build --release fallo"; exit 1 }
 Pop-Location
 Write-Host "OK: $Root\backend\target\release\daibot.exe" -ForegroundColor Green
 

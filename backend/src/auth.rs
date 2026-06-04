@@ -206,9 +206,6 @@ pub async fn handle_callback(
 
   <p class="dim">⚠️ Guarda el panel token — solo se muestra una vez.</p>
 
-  <h3>Actualizar tu webhook en Kick:</h3>
-  <code>{base}/kick_webhook</code>
-  <p class="dim">Ve a kick.com/settings/developer → tu app → Enable webhooks → pon esta URL.</p>
 </body>
 </html>"#, slug=slug, base=base, panel_token=panel_token))
 }

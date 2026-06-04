@@ -71,6 +71,9 @@ Source: "icon.ico"; DestDir: "{app}"; DestName: "daibot.ico"; Flags: ignoreversi
 ; Python portable + edge-tts (ya incluido, el usuario no instala nada)
 Source: "python_portable\*"; DestDir: "{app}\python"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 
+; ngrok — túnel para webhooks de Kick (se lanza automáticamente)
+Source: "ngrok.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+
 [Dirs]
 Name: "{app}\data"
 Name: "{app}\data\tts_cache"
@@ -184,6 +187,7 @@ begin
   SetEnvKey(EnvDst, 'OVERLAY_DIR',   'overlay');
   SetEnvKey(EnvDst, 'QUEUE_FILE',    'data/queue.json');
   SetEnvKey(EnvDst, 'TTS_CACHE_DIR', 'data/tts_cache');
+  SetEnvKey(EnvDst, 'NGROK_DOMAIN',  'tapping-giggly-pacify.ngrok-free.dev');
 
   // ── 3. Instrucciones finales ───────────────────────────────────────────────
   MsgBox('Instalacion completada.' + #13#10#13#10 +

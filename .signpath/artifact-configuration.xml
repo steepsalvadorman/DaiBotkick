@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  Configuracion de artefacto para SignPath Foundation.
+  Despues de que aprueben tu solicitud, importa este archivo en:
+  app.signpath.io > Tu proyecto > Artifact Configurations
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <msi-installer-file>
+    <pe-file>
+      <authenticode-sign />
+    </pe-file>
+  </msi-installer-file>
+</artifact-configuration>

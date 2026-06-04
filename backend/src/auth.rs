@@ -201,13 +201,8 @@ pub async fn handle_callback(
   <h3>Overlay para OBS (Browser Source):</h3>
   <code>{base}/pixel.html?ch={slug}</code>
 
-  <h3>Panel de control:</h3>
-  <code>{base}/panel?ch={slug}&amp;token={panel_token}</code>
-
-  <p class="dim">⚠️ Guarda el panel token — solo se muestra una vez.</p>
-
 </body>
-</html>"#, slug=slug, base=base, panel_token=panel_token))
+</html>"#, slug=slug, base=base))
 }
 
 fn url_encode(s: &str) -> String {

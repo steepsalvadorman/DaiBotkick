@@ -117,10 +117,6 @@ pub async fn token_refresh_loop(ch: Arc<ChannelState>, global: Arc<AppState>, in
 
 pub async fn run_channel(ch: Arc<ChannelState>, global: Arc<AppState>, token_expires: u64) {
 
-    // Polling de chat (fallback al Pusher)
-    let ch2 = ch.clone(); let g2 = global.clone();
-    tokio::spawn(async move { poll_chat_loop(ch2, g2).await; });
-
     // Auto-renovación de token
     let ch3 = ch.clone(); let g3 = global.clone();
     tokio::spawn(async move { token_refresh_loop(ch3, g3, token_expires).await; });
@@ -272,7 +268,7 @@ async fn connect_once(ch: &Arc<ChannelState>, global: &Arc<AppState>) -> Result<
             private_chat
         }
         None => {
-            warn!("[Kick][{}] Auth Pusher falló — fallback a canal público", ch.slug);
+            debug!("[Kick][{}] Auth Pusher falló — usando canal público", ch.slug);
             subscribe(&mut tx, &public_chat, None).await?;
             public_chat
         }
@@ -484,67 +480,6 @@ try{$r=Invoke-RestMethod -Uri 'https://kick.com/broadcasting/auth' -Method POST 
     }).await.ok()?.ok()?;
     let out = String::from_utf8_lossy(&result.stdout).trim().to_string();
     if out.is_empty() || !out.contains(':') { None } else { Some(out) }
-}
-
-// ─── Polling de chat (fallback) ───────────────────────────────────────────────
-
-async fn poll_chat_loop(ch: Arc<ChannelState>, global: Arc<AppState>) {
-    let chatroom_id = loop {
-        let id = *ch.chatroom_id.read().await;
-        if let Some(id) = id { break id; }
-        sleep(Duration::from_secs(2)).await;
-    };
-
-    let candidates = [
-        format!("https://api.kick.com/public/v1/chatrooms/{chatroom_id}/messages"),
-        format!("https://api.kick.com/public/v1/channels/{chatroom_id}/messages"),
-    ];
-    let mut active_url: Option<String> = None;
-    for url in &candidates {
-        let token = ch.access_token.read().await.clone();
-        match global.http.get(url).header("Authorization", format!("Bearer {token}")).send().await {
-            Ok(r) if r.status().is_success() => { active_url = Some(url.clone()); break; }
-            Ok(r) => { info!("[Poll][{}] {url} → {}", ch.slug, r.status()); }
-            Err(e) => warn!("[Poll][{}] {url} → {e}", ch.slug),
-        }
-    }
-    let Some(url) = active_url else {
-        warn!("[Poll][{}] Sin endpoint de mensajes — solo Pusher activo", ch.slug);
-        return;
-    };
-
-    let mut last_id: Option<String> = None;
-    loop {
-        sleep(Duration::from_secs(1)).await;
-        let token = ch.access_token.read().await.clone();
-        let resp = match global.http.get(&url).header("Authorization", format!("Bearer {token}")).send().await {
-            Ok(r)  => r,
-            Err(e) => { warn!("[Poll] Red: {e}"); continue; }
-        };
-        if !resp.status().is_success() { continue; }
-        let json: serde_json::Value = match resp.json().await {
-            Ok(j)  => j,
-            Err(e) => { warn!("[Poll] JSON: {e}"); continue; }
-        };
-        let msgs = json.get("data").and_then(|d| d.as_array())
-            .or_else(|| json.as_array()).cloned().unwrap_or_default();
-
-        for msg in msgs.iter().rev() {
-            let id = msg.get("id").and_then(|v| v.as_str()).map(|s| s.to_string())
-                .or_else(|| msg["id"].as_u64().map(|n| n.to_string()));
-            if id.as_deref() == last_id.as_deref() { break; }
-            let username = msg["sender"]["username"].as_str().or_else(|| msg["username"].as_str()).unwrap_or("?").to_string();
-            let content  = msg["content"].as_str().unwrap_or("").trim().to_string();
-            if content.is_empty() { continue; }
-            info!("[CHAT-Poll][{}] {username}: {content}", ch.slug);
-            ns_emit(&global, &ch.slug, "chatMessage", json!({"user": &username, "content": &content}));
-            commands::handle(&username, &content, &ch, &global).await;
-        }
-        if let Some(first) = msgs.first() {
-            last_id = first.get("id").and_then(|v| v.as_str()).map(|s| s.to_string())
-                .or_else(|| first["id"].as_u64().map(|n| n.to_string()));
-        }
-    }
 }
 
 fn raw_data_str(data: &Option<serde_json::Value>) -> String {

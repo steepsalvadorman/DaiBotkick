@@ -25,6 +25,7 @@ pub struct Config {
     pub overlay_dir: String,
     pub queue_file: String,
     pub tts_cache_dir: String,
+    pub ngrok_domain: String,
 }
 
 impl Config {
@@ -66,6 +67,7 @@ impl Config {
             overlay_dir: env::var("OVERLAY_DIR").unwrap_or_else(|_| "../overlay".into()),
             queue_file: env::var("QUEUE_FILE").unwrap_or_else(|_| "../data/queue.json".into()),
             tts_cache_dir: env::var("TTS_CACHE_DIR").unwrap_or_else(|_| "../data/tts_cache".into()),
+            ngrok_domain: env::var("NGROK_DOMAIN").unwrap_or_default(),
         })
     }
 }

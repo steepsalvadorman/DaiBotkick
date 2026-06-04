@@ -1,91 +1,64 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
+mod auth;
+mod channel;
 mod commands;
 mod config;
 mod cooldown;
+mod db;
 mod kick;
 mod login;
 mod queue;
 mod server;
+mod state;
 mod stats;
 mod tts;
 
-use config::Config;
-use queue::VideoQueue;
-use socketioxide::SocketIo;
-use std::sync::{
-    atomic::AtomicU64,
-    Arc,
+use axum::{
+    body::Bytes,
+    extract::{Query, State},
+    http::{HeaderMap, StatusCode},
 };
-use tokio::sync::{mpsc, Mutex, RwLock};
+use dashmap::DashMap;
+use socketioxide::SocketIo;
+use state::{AppState, GlobalConfig};
+use std::{collections::HashMap, sync::Arc};
 use tower_http::services::ServeDir;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
-pub struct SorteoState {
-    pub open:         bool,
-    pub participants: Vec<String>,
-}
-
-pub struct AppState {
-    pub config:       Config,
-    pub video_queue:  Arc<RwLock<VideoQueue>>,
-    pub io:           SocketIo,
-    pub tts_tx:       mpsc::UnboundedSender<tts::TtsQueueItem>,
-    pub http:         reqwest::Client,
-    /// channel_id del canal (broadcaster_user_id para la API oficial de chat)
-    pub channel_id:   Arc<RwLock<Option<u64>>>,
-    /// chatroom_id del canal (para la API legacy y Pusher)
-    pub chatroom_id:  Arc<RwLock<Option<u64>>>,
-    /// Contador de seguidores actualizado por Pusher en tiempo real
-    pub followers:    Arc<AtomicU64>,
-    /// Token OAuth activo (se puede renovar sin reiniciar)
-    pub access_token:      Arc<RwLock<String>>,
-    pub refresh_token_val: Arc<RwLock<String>>,
-    /// Evita doble-avance cuando varios overlays envían advanceQueue a la vez
-    pub last_advance: Arc<Mutex<Option<std::time::Instant>>>,
-    /// Momento en que arrancó el bot (para !uptime)
-    pub start_time:   std::time::Instant,
-    /// Estado del sorteo activo
-    pub sorteo:       Arc<Mutex<SorteoState>>,
-    /// Anti-spam: cooldowns por usuario y globales
-    pub cooldown:     Arc<Mutex<cooldown::CooldownManager>>,
-}
-
 // ─── Webhook de Kick (EventSub) ───────────────────────────────────────────────
 
 async fn kick_webhook_get(
-    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
-) -> (axum::http::StatusCode, String) {
-    // WebSub / hub.challenge verification (GET con query param)
+    Query(params): Query<HashMap<String, String>>,
+) -> (StatusCode, String) {
     if let Some(ch) = params.get("hub.challenge").or_else(|| params.get("challenge")) {
         info!("[Webhook] Verificación GET OK");
-        return (axum::http::StatusCode::OK, ch.clone());
+        return (StatusCode::OK, ch.clone());
     }
-    info!("[Webhook] GET recibido: {:?}", params);
-    (axum::http::StatusCode::OK, "ok".into())
+    (StatusCode::OK, "ok".into())
 }
 
 async fn kick_webhook(
-    axum::extract::State(state): axum::extract::State<Arc<AppState>>,
-    headers: axum::http::HeaderMap,
-    body: axum::body::Bytes,
-) -> (axum::http::StatusCode, String) {
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> (StatusCode, String) {
     let body_str = String::from_utf8_lossy(&body);
     info!("[Webhook] ← {:.500}", body_str);
 
     let json: serde_json::Value = match serde_json::from_slice(&body) {
         Ok(j)  => j,
-        Err(_) => return (axum::http::StatusCode::OK, "ok".into()),
+        Err(_) => return (StatusCode::OK, "ok".into()),
     };
 
-    // Kick envía un challenge cuando verificas el webhook — hay que responderlo
+    // Challenge de verificación
     if let Some(ch) = json.get("challenge").and_then(|c| c.as_str()) {
         info!("[Webhook] Verificación OK");
-        return (axum::http::StatusCode::OK, ch.to_string());
+        return (StatusCode::OK, ch.to_string());
     }
 
-    // Determinar el tipo de evento (puede venir en header o en el body)
+    // Determinar tipo de evento
     let event_type = headers.get("Kick-Event-Type")
         .or_else(|| headers.get("Kick-Eventsub-Message-Type"))
         .and_then(|v| v.to_str().ok())
@@ -96,82 +69,205 @@ async fn kick_webhook(
 
     info!("[Webhook] event={event_type}");
 
-    // Los eventos suelen llegar en "event" o en la raíz
+    // Rutear al canal correcto por broadcaster_user_id
+    let broadcaster_id = json["event"]["broadcaster_user_id"].as_u64()
+        .or_else(|| json["broadcaster_user_id"].as_u64())
+        .or_else(|| json["data"]["broadcaster_user_id"].as_u64());
+
+    let ch_arc = broadcaster_id
+        .and_then(|bid| state.user_id_to_slug.get(&bid).map(|s| s.clone()))
+        .and_then(|slug| state.channels.get(&slug).map(|c| c.clone()));
+
+    let Some(ch) = ch_arc else {
+        info!("[Webhook] Canal no encontrado para broadcaster_id={:?}", broadcaster_id);
+        return (StatusCode::OK, "ok".into());
+    };
+
     let ev = json.get("event").unwrap_or(&json);
 
     if event_type.contains("chat") || event_type.contains("message") {
         let username = ev["sender"]["username"].as_str()
             .or_else(|| ev["sender"]["slug"].as_str())
             .unwrap_or("?").to_string();
-        let content  = ev["content"].as_str()
+        let content = ev["content"].as_str()
             .or_else(|| ev["message"]["content"].as_str())
             .unwrap_or("").trim().to_string();
-
         if !content.is_empty() {
-            info!("[CHAT-WH] {username}: {content}");
-            state.io.emit("chatMessage", serde_json::json!({ "user": &username, "content": &content })).ok();
-            commands::handle(&username, &content, &state).await;
+            info!("[CHAT-WH][{}] {username}: {content}", ch.slug);
+            server::ns_emit(&state, &ch.slug, "chatMessage",
+                serde_json::json!({"user": &username, "content": &content}));
+            commands::handle(&username, &content, &ch, &state).await;
         }
-
     } else if event_type.contains("follow") {
         let username = ev["follower"]["username"].as_str()
             .or_else(|| ev["username"].as_str())
             .unwrap_or("alguien").to_string();
-        info!("[Webhook] Follow: {username}");
-        state.tts_tx.send(tts::TtsQueueItem {
+        info!("[Webhook][{}] Follow: {username}", ch.slug);
+        ch.tts_tx.send(tts::TtsQueueItem {
             text:  format!("¡Gracias por el follow, {username}!"),
             voice: "dalia".into(),
         }).ok();
-        state.io.emit("kickAlert", serde_json::json!({
-            "type": "follow", "username": &username,
-            "message": format!("¡Gracias por el follow, {username}!"),
-        })).ok();
-
+        server::ns_emit(&state, &ch.slug, "kickAlert",
+            serde_json::json!({"type":"follow","username":&username}));
     } else if event_type.contains("subscription") || event_type.contains("sub") {
         let username = ev["subscriber"]["username"].as_str()
             .or_else(|| ev["user"]["username"].as_str())
             .unwrap_or("alguien");
         let months = ev["months"].as_u64().unwrap_or(1);
-        info!("[Webhook] Sub: {username} ({months} mes(es))");
-        let msg = if months > 1 {
-            format!("¡{username} se resuscribió por {months} meses!")
-        } else {
-            format!("¡{username} se suscribió al canal!")
-        };
-        state.tts_tx.send(tts::TtsQueueItem { text: msg.clone(), voice: "dalia".into() }).ok();
-        state.io.emit("kickAlert", serde_json::json!({
-            "type": "sub", "username": username, "months": months, "message": msg,
-        })).ok();
-
-    } else {
-        tracing::debug!("[Webhook] Evento no manejado: {event_type}");
+        info!("[Webhook][{}] Sub: {username} ({months}m)", ch.slug);
+        let msg = if months > 1 { format!("¡{username} se resuscribió por {months} meses!") }
+                  else { format!("¡{username} se suscribió al canal!") };
+        ch.tts_tx.send(tts::TtsQueueItem { text: msg.clone(), voice: "dalia".into() }).ok();
+        server::ns_emit(&state, &ch.slug, "kickAlert",
+            serde_json::json!({"type":"sub","username":username,"months":months,"message":msg}));
     }
 
-    (axum::http::StatusCode::OK, "ok".into())
+    (StatusCode::OK, "ok".into())
+}
+
+// ─── Entrypoint ───────────────────────────────────────────────────────────────
+
+#[tokio::main]
+async fn main() {
+    // Modo login local (para desarrollo)
+    if std::env::args().any(|a| a == "--login") {
+        #[cfg(windows)]
+        unsafe {
+            extern "system" { fn AllocConsole() -> i32; }
+            AllocConsole();
+        }
+        login::run_and_exit().await;
+        return;
+    }
+
+    // Cargar .env (solo para desarrollo local)
+    if let Some(path) = find_dotenv_path() {
+        let _ = dotenvy::from_path(&path);
+    } else {
+        let _ = dotenvy::dotenv();
+    }
+
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .init();
+
+    // Configuración global (solo credenciales de la app, no del canal)
+    let config = GlobalConfig {
+        client_id:     std::env::var("KICK_CLIENT_ID").unwrap_or_default(),
+        client_secret: std::env::var("KICK_CLIENT_SECRET").unwrap_or_default(),
+        port:          std::env::var("PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(3000),
+        overlay_dir:   std::env::var("OVERLAY_DIR").unwrap_or_else(|_| "../overlay".into()),
+        base_url:      std::env::var("BASE_URL")
+            .or_else(|_| std::env::var("RENDER_EXTERNAL_URL"))
+            .unwrap_or_else(|_| "http://localhost:3000".into()),
+        tts_cache_dir: std::env::var("TTS_CACHE_DIR").unwrap_or_else(|_| "/tmp/tts_cache".into()),
+    };
+
+    if config.client_id.is_empty() || config.client_secret.is_empty() {
+        eprintln!("[FATAL] Faltan KICK_CLIENT_ID o KICK_CLIENT_SECRET.");
+        std::process::exit(1);
+    }
+
+    // Base de datos PostgreSQL
+    let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
+        eprintln!("[FATAL] DATABASE_URL no configurada.");
+        std::process::exit(1);
+    });
+    let db = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&db_url)
+        .await
+        .unwrap_or_else(|e| { eprintln!("[FATAL] No se pudo conectar a PostgreSQL: {e}"); std::process::exit(1); });
+
+    // Ejecutar migraciones
+    db::run_migrations(&db).await;
+    info!("Base de datos lista");
+
+    // Socket.IO
+    let (layer, io_inner) = SocketIo::new_layer();
+
+    // HTTP client
+    let http = reqwest::Client::builder()
+        .user_agent("DaiBot/1.0")
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .expect("reqwest client");
+
+    // Estado global
+    let state = Arc::new(AppState {
+        config,
+        http,
+        io: io_inner,
+        db,
+        channels:        Arc::new(DashMap::new()),
+        user_id_to_slug: Arc::new(DashMap::new()),
+    });
+
+    // Registrar el namespace Socket.IO único (rooms por canal)
+    server::setup(&state.io.clone(), state.clone());
+
+    // Cargar todos los canales registrados
+    let registered = db::load_all_channels(&state.db).await;
+    info!("Canales registrados: {}", registered.len());
+    for row in registered {
+        channel::start_channel(row, state.clone()).await;
+    }
+
+    // Overlay
+    let overlay_dir = resolve_overlay_dir(&state.config.overlay_dir);
+    info!("Overlay: {}", overlay_dir.display());
+
+    // Router
+    let app = axum::Router::new()
+        .route("/", axum::routing::get(auth::start_oauth))
+        .route("/auth/kick", axum::routing::get(auth::redirect_to_kick))
+        .route("/auth/callback", axum::routing::get(auth::handle_callback))
+        .route("/kick_webhook",
+            axum::routing::post(kick_webhook).get(kick_webhook_get))
+        .with_state(state.clone())
+        .nest_service("/", ServeDir::new(&overlay_dir))
+        .layer(layer);
+
+    let addr = format!("0.0.0.0:{}", state.config.port);
+
+    // Liberar puerto si hay instancia anterior (solo Windows, desarrollo)
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", &format!(
+                "Get-NetTCPConnection -LocalPort {} -ErrorAction SilentlyContinue \
+                 | ForEach-Object {{ Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }}",
+                state.config.port
+            )])
+            .creation_flags(0x08000000)
+            .output();
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+
+    let listener = tokio::net::TcpListener::bind(&addr).await
+        .unwrap_or_else(|e| { eprintln!("[FATAL] Puerto {}: {e}", state.config.port); std::process::exit(1); });
+
+    info!("DaiBot corriendo  → http://localhost:{}", state.config.port);
+    info!("Registro          → http://localhost:{}/", state.config.port);
+
+    axum::serve(listener, app).await
+        .unwrap_or_else(|e| { eprintln!("[FATAL] Servidor: {e}"); std::process::exit(1); });
 }
 
 fn resolve_overlay_dir(configured: &str) -> std::path::PathBuf {
     let p = std::path::Path::new(configured);
-    if p.is_absolute() && p.exists() {
-        return p.to_path_buf();
-    }
-
-    // Intentar relativo al exe
+    if p.is_absolute() && p.exists() { return p.to_path_buf(); }
     if let Ok(exe) = std::env::current_exe() {
         let candidate = exe.parent().map(|d| d.join(configured)).unwrap_or_default();
-        if candidate.exists() {
-            return candidate;
-        }
-        // Subir por los ancestros del exe buscando la carpeta overlay
+        if candidate.exists() { return candidate; }
         for ancestor in exe.ancestors().skip(1) {
-            let candidate = ancestor.join("overlay");
-            if candidate.join("pixel.html").exists() {
-                return candidate;
-            }
+            let c = ancestor.join("overlay");
+            if c.join("pixel.html").exists() { return c; }
         }
     }
-
-    // Fallback: working dir
     p.to_path_buf()
 }
 
@@ -179,9 +275,7 @@ pub(crate) fn find_dotenv_path() -> Option<std::path::PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
         for ancestor in exe.ancestors().skip(1) {
             let candidate = ancestor.join(".env");
-            if candidate.exists() {
-                return Some(candidate);
-            }
+            if candidate.exists() { return Some(candidate); }
         }
     }
     let p = std::path::Path::new(".env");
@@ -197,243 +291,6 @@ pub(crate) fn load_dotenv() {
 }
 
 pub(crate) fn fatal(msg: &str) -> ! {
-    #[cfg(windows)]
-    {
-        extern "system" {
-            fn MessageBoxW(hwnd: *mut std::ffi::c_void, text: *const u16, caption: *const u16, utype: u32) -> i32;
-        }
-        let text: Vec<u16> = msg.encode_utf16().chain(std::iter::once(0)).collect();
-        let cap: Vec<u16>  = "DaiBot".encode_utf16().chain(std::iter::once(0)).collect();
-        unsafe { MessageBoxW(std::ptr::null_mut(), text.as_ptr(), cap.as_ptr(), 0x10); }
-    }
-    #[cfg(not(windows))]
     eprintln!("\n[FATAL] {msg}\n");
     std::process::exit(1);
-}
-
-#[tokio::main]
-async fn main() {
-    if std::env::args().any(|a| a == "--login") {
-        // Abrir consola visible para el flujo OAuth (sin ella no hay stdin/stdout)
-        #[cfg(windows)]
-        unsafe {
-            extern "system" { fn AllocConsole() -> i32; }
-            AllocConsole();
-        }
-        login::run_and_exit().await;
-        return;
-    }
-
-    load_dotenv();
-
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
-        .init();
-
-    // Si no hay credenciales es el primer arranque → login automático
-    if let Err(_) = Config::from_env() {
-        login::run_first_time().await;
-        load_dotenv(); // recargar .env con los tokens recién guardados
-    }
-
-    let config = Config::from_env().unwrap_or_else(|e| fatal(&e));
-
-    // Limpiar la cola al arrancar para evitar videos stale de sesiones anteriores
-    let _ = std::fs::write(&config.queue_file, "[]");
-    let video_queue = Arc::new(RwLock::new(VideoQueue::load(&config.queue_file)));
-    let (layer, io) = SocketIo::new_layer();
-
-    let tts_svc = Arc::new(tts::TtsService::new(&config.tts_cache_dir));
-    let (tts_tx, tts_rx) = mpsc::unbounded_channel::<tts::TtsQueueItem>();
-    tts::spawn_processor(tts_svc, tts_rx, io.clone());
-
-    let state = Arc::new(AppState {
-        access_token:      Arc::new(RwLock::new(config.access_token.clone())),
-        refresh_token_val: Arc::new(RwLock::new(config.refresh_token.clone())),
-        config: config.clone(),
-        video_queue,
-        io: io.clone(),
-        tts_tx,
-        http: reqwest::Client::builder()
-            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
-            .build()
-            .unwrap(),
-        channel_id:   Arc::new(RwLock::new(None)),
-        chatroom_id:  Arc::new(RwLock::new(None)),
-        followers:    Arc::new(AtomicU64::new(config.current_followers)),
-        last_advance: Arc::new(Mutex::new(None)),
-        start_time:   std::time::Instant::now(),
-        sorteo:       Arc::new(Mutex::new(SorteoState { open: false, participants: Vec::new() })),
-        cooldown:     Arc::new(Mutex::new(cooldown::CooldownManager::new())),
-    });
-
-    // Renovar token automáticamente antes de que expire
-    tokio::spawn(kick::token_refresh_loop(state.clone(), config.token_expires));
-
-    server::setup(&io, state.clone());
-    stats::start(io.clone(), state.clone());
-    tokio::spawn(kick::run(state.clone()));
-
-    // Resolver overlay_dir: primero relativo al exe, luego buscar subiendo si no existe
-    let overlay_dir = resolve_overlay_dir(&config.overlay_dir);
-    info!("Sirviendo overlay desde: {}", overlay_dir.display());
-
-    let app = axum::Router::new()
-        .route("/kick_webhook", axum::routing::post(kick_webhook).get(kick_webhook_get))
-        .with_state(state.clone())
-        .nest_service("/", ServeDir::new(&overlay_dir))
-        .layer(layer);
-
-    // Liberar el puerto si una instancia anterior quedó corriendo
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        let _ = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-Command", &format!(
-                "Get-NetTCPConnection -LocalPort {} -ErrorAction SilentlyContinue \
-                 | ForEach-Object {{ Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }}",
-                config.port
-            )])
-            .creation_flags(0x08000000)
-            .output();
-        std::thread::sleep(std::time::Duration::from_millis(500));
-    }
-
-    // Leer NGROK_DOMAIN directamente del .env
-    let ngrok_domain: String = find_dotenv_path()
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|s| {
-            s.lines()
-                .find(|l| l.trim_start().starts_with("NGROK_DOMAIN="))
-                .map(|l| l.trim_start().trim_start_matches("NGROK_DOMAIN=")
-                           .trim_matches('"').trim().to_string())
-        })
-        .unwrap_or_default();
-
-    let addr = format!("0.0.0.0:{}", config.port);
-    let listener = tokio::net::TcpListener::bind(&addr).await
-        .unwrap_or_else(|e| fatal(&format!("No se pudo abrir el puerto {}: {e}\nCierra cualquier otra instancia de DaiBot e inténtalo de nuevo.", config.port)));
-    info!("DaiBot corriendo  → http://localhost:{}", config.port);
-    info!("Overlay OBS       → http://localhost:{}/pixel.html", config.port);
-
-    // Lanzar ngrok AHORA que el listener ya está listo — así cuando Kick envíe
-    // el challenge de verificación, el servidor ya acepta conexiones.
-    if !ngrok_domain.is_empty() {
-        let domain_clone = ngrok_domain.clone();
-        let port_str = config.port.to_string();
-        tokio::spawn(async move {
-            // Matar instancia anterior
-            #[cfg(windows)]
-            {
-                use std::os::windows::process::CommandExt;
-                let _ = std::process::Command::new("taskkill")
-                    .args(["/F", "/IM", "ngrok.exe"])
-                    .creation_flags(0x08000000).output();
-            }
-            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-            // Buscar ngrok: junto al exe (installer), en PATH, o en WinGet
-            let exe_dir = std::env::current_exe().ok()
-                .and_then(|p| p.parent().map(|d| d.to_path_buf()))
-                .unwrap_or_default();
-            let candidates = [
-                exe_dir.join("ngrok.exe").to_string_lossy().into_owned(),
-                "ngrok".to_string(),
-                format!("{}\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe\\ngrok.exe",
-                    std::env::var("USERPROFILE").unwrap_or_default()),
-            ];
-            #[cfg(windows)]
-            {
-                use std::os::windows::process::CommandExt;
-                for exe in &candidates {
-                    if std::process::Command::new(exe)
-                        .args(["http", &format!("--domain={domain_clone}"), &port_str])
-                        .creation_flags(0x08000000).spawn().is_ok()
-                    {
-                        info!("ngrok iniciado → https://{domain_clone}");
-                        info!("Webhook listo — ve a Kick Developer Portal y guarda para verificar");
-                        break;
-                    }
-                }
-            }
-        });
-    }
-
-    // Popup gaming (WPF nativo, en thread aparte para no bloquear el servidor)
-    #[cfg(windows)]
-    std::thread::spawn(|| {
-        let script = r##"
-Add-Type -AssemblyName PresentationFramework
-Add-Type -AssemblyName PresentationCore
-Add-Type -AssemblyName WindowsBase
-
-[xml]$xaml = @"
-<Window
-    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="DaiBot" Width="480" Height="260"
-    WindowStyle="None" AllowsTransparency="True"
-    Background="Transparent" WindowStartupLocation="CenterScreen"
-    Topmost="True" ResizeMode="NoResize">
-  <Border Background="#060010" BorderBrush="#53FC18" BorderThickness="2" Padding="40,28">
-    <Border.Effect>
-      <DropShadowEffect Color="#53FC18" BlurRadius="32" ShadowDepth="0" Opacity="0.55"/>
-    </Border.Effect>
-    <StackPanel>
-      <TextBlock Text="[ D A I B O T ]"
-                 Foreground="#53FC18" FontSize="22" FontWeight="Black"
-                 HorizontalAlignment="Center" FontFamily="Consolas">
-        <TextBlock.Effect>
-          <DropShadowEffect Color="#53FC18" BlurRadius="14" ShadowDepth="0" Opacity="0.9"/>
-        </TextBlock.Effect>
-      </TextBlock>
-      <Rectangle Height="1" Fill="#53FC18" Margin="0,16,0,8"/>
-      <TextBlock Text="&gt;&gt; STATUS: ONLINE" Foreground="#53FC18" FontSize="10"
-                 FontFamily="Consolas" HorizontalAlignment="Center" Opacity="0.75"/>
-      <Rectangle Height="1" Fill="#53FC18" Margin="0,8,0,16" Opacity="0.4"/>
-      <TextBlock Text="Todo listo para Karkagarla en lefordi"
-                 Foreground="#DDDDDD" FontSize="12" HorizontalAlignment="Center"
-                 FontFamily="Consolas" TextWrapping="Wrap" TextAlignment="Center"
-                 MaxWidth="370" LineHeight="20"/>
-      <Rectangle Height="1" Fill="#53FC18" Margin="0,18,0,16" Opacity="0.3"/>
-      <Button x:Name="OkBtn" Content="[  OK  ]" HorizontalAlignment="Center"
-              Background="#53FC18" Foreground="#060010" FontWeight="Black" FontSize="11"
-              FontFamily="Consolas" Padding="28,8" BorderThickness="0" Cursor="Hand"/>
-    </StackPanel>
-  </Border>
-</Window>
-"@
-
-$reader = [System.Xml.XmlReader]::Create([System.IO.StringReader]::new($xaml.OuterXml))
-$window = [System.Windows.Markup.XamlReader]::Load($reader)
-
-$window.FindName('OkBtn').Add_Click({ $window.Close() })
-
-# Cerrar automaticamente en 8 segundos
-$timer = New-Object System.Windows.Threading.DispatcherTimer
-$timer.Interval = [System.TimeSpan]::FromSeconds(8)
-$timer.Add_Tick({ $window.Close(); $timer.Stop() })
-$timer.Start()
-
-$null = $window.ShowDialog()
-"##;
-        let tmp = std::env::temp_dir().join("daibot_notify.ps1");
-        // BOM UTF-8 obligatorio para PowerShell 5.1 (sin él lee como Windows-1252)
-        let mut content = vec![0xEF_u8, 0xBB, 0xBF];
-        content.extend_from_slice(script.as_bytes());
-        let _ = std::fs::write(&tmp, &content);
-        use std::os::windows::process::CommandExt;
-        let _ = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
-                   tmp.to_str().unwrap_or("")])
-            .creation_flags(0x08000000)
-            .spawn()
-            .and_then(|mut c| c.wait());
-        let _ = std::fs::remove_file(&tmp);
-    });
-
-    axum::serve(listener, app).await
-        .unwrap_or_else(|e| fatal(&format!("Error del servidor: {e}")));
 }

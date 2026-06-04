@@ -4,7 +4,9 @@
 //   Servidor → "nextVideo"    (skip manual del owner)
 //   Overlay  → "advanceQueue" (video terminado)
 
-const socket = io();
+// Canal: leer de ?ch=slug en la URL
+const _ch = new URLSearchParams(location.search).get('ch') || '';
+const socket = _ch ? io({ query: { ch: _ch } }) : io();
 
 // ── AudioContext (debe ir ANTES de cualquier uso) ─────────────────────────────
 const audioContext   = new (window.AudioContext || window.webkitAudioContext)();

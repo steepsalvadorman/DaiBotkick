@@ -427,7 +427,8 @@
     const VOL_MUSIC_DIR = 0.25;
     const VOL_TTS = 1.0;
 
-    const socket = io();
+    const _ch = new URLSearchParams(location.search).get('ch') || '';
+    const socket = _ch ? io({ query: { ch: _ch } }) : io();
 
     // Personalización: el bot envía el nombre del canal al conectar
     socket.on("config", (cfg) => {

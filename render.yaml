@@ -3,61 +3,36 @@ services:
     name: daibot
     runtime: docker
     dockerfilePath: ./Dockerfile
-    # plan: starter  # $7/mes — siempre encendido (recomendado para un bot)
-    # plan: free      # gratis — se duerme tras 15 min de inactividad
-    plan: starter
+    plan: starter  # $7/mes — siempre encendido
 
     envVars:
-      # ── Canal ─────────────────────────────────────────────────────────────
-      - key: CHANNEL_NAME
-        value: seniordai
-
-      # ── OAuth de Kick — pon estos valores en el dashboard de Render ───────
+      # Credenciales de la app OAuth de Kick (kick.com/settings/developer)
       - key: KICK_CLIENT_ID
-        sync: false   # escribe el valor manualmente en Render dashboard
+        sync: false
       - key: KICK_CLIENT_SECRET
         sync: false
-      - key: KICK_ACCESS_TOKEN
+
+      # URL pública del servicio (Render la provee automáticamente)
+      # Si no funciona auto-detect, ponla manualmente: https://daibot.onrender.com
+      - key: BASE_URL
         sync: false
-      - key: KICK_REFRESH_TOKEN
-        sync: false
-      - key: KICK_TOKEN_EXPIRES
-        sync: false
 
-      # ── Comandos del chat ─────────────────────────────────────────────────
-      - key: CMD_DISCORD
-        value: https://discord.gg/tu-link
-      - key: CMD_REDES
-        value: "Twitch: twitch.tv/seniordai | YouTube: youtube.com/@seniordai | TikTok: @seniordai"
-      - key: CMD_PC
-        value: "CPU: Ryzen 5 5600X | GPU: RTX 3060 | RAM: 16GB DDR4 | Monitor: 1080p 144Hz"
-      - key: CMD_HORARIO
-        value: "Lunes, Miercoles y Viernes 8pm - 12am (hora Lima)"
+      # Conectar con la base de datos PostgreSQL de Render
+      - key: DATABASE_URL
+        fromDatabase:
+          name: daibot-db
+          property: connectionString
 
-      # ── Panel de control ──────────────────────────────────────────────────
-      - key: PANEL_TOKEN
-        sync: false   # elige un token seguro y escríbelo en Render dashboard
-
-      # ── Metas ─────────────────────────────────────────────────────────────
-      - key: FOLLOW_GOAL
-        value: "100"
-      - key: CURRENT_FOLLOWERS
-        value: "0"
-
-      # ── Pusher ────────────────────────────────────────────────────────────
-      - key: PUSHER_HOST
-        value: ws-us2.pusher.com
-
-      # ── Rutas (ya definidas en el Dockerfile) ─────────────────────────────
+      # Rutas internas del contenedor
       - key: OVERLAY_DIR
         value: /app/overlay
-      - key: QUEUE_FILE
-        value: /app/data/queue.json
       - key: TTS_CACHE_DIR
         value: /tmp/tts_cache
 
-    # Disco persistente para la cola de videos (opcional — plan pago)
-    # disk:
-    #   name: daibot-data
-    #   mountPath: /app/data
-    #   sizeGB: 1
+      # Pusher
+      - key: PUSHER_HOST
+        value: ws-us2.pusher.com
+
+databases:
+  - name: daibot-db
+    plan: free   # PostgreSQL gratis (90 días, luego $7/mes)

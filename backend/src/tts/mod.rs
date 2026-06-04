@@ -12,7 +12,7 @@ use tokio::sync::mpsc;
 use tracing::{info, warn};
 
 pub struct TtsQueueItem {
-    pub text: String,
+    pub text:  String,
     pub voice: String,
 }
 
@@ -33,43 +33,35 @@ impl TtsService {
         self.cache_dir.join(format!("{:016x}.mp3", h.finish()))
     }
 
-    /// Devuelve audio MP3 en base64, usando caché si existe.
     pub async fn generate(&self, text: &str, voice: &str) -> Option<String> {
         let cache = self.cache_path(voice, text);
-
-        // Caché hit
         if let Ok(bytes) = fs::read(&cache) {
             info!("[TTS] Caché: \"{:.40}\"", text);
             return Some(B64.encode(&bytes));
         }
-
-        // Sintetizar con Edge TTS nativo
         match edge_tts::synthesize(text, voice).await {
             Ok(bytes) => {
                 let _ = fs::write(&cache, &bytes);
-                info!("[TTS OK] Edge TTS: \"{:.40}\"", text);
+                info!("[TTS OK] \"{:.40}\"", text);
                 Some(B64.encode(&bytes))
             }
-            Err(e) => {
-                warn!("[TTS ERR] {e}");
-                None
-            }
+            Err(e) => { warn!("[TTS ERR] {e}"); None }
         }
     }
 }
 
-/// Arranca el procesador de cola TTS en un tokio::spawn.
-/// Los items llegan por `rx` y el resultado se emite como Socket.IO `speak`.
-pub fn spawn_processor(
+/// Arranca el procesador TTS para un canal. Emite a la room del canal.
+pub async fn spawn_processor(
     service: Arc<TtsService>,
-    mut rx: mpsc::UnboundedReceiver<TtsQueueItem>,
-    io: socketioxide::SocketIo,
+    mut rx:  mpsc::UnboundedReceiver<TtsQueueItem>,
+    io:      socketioxide::SocketIo,
+    slug:    String,
 ) {
-    tokio::spawn(async move {
-        while let Some(item) = rx.recv().await {
-            if let Some(b64) = service.generate(&item.text, &item.voice).await {
-                io.emit("speak", serde_json::json!({ "audioBase64": b64 })).ok();
-            }
+    while let Some(item) = rx.recv().await {
+        if let Some(b64) = service.generate(&item.text, &item.voice).await {
+            io.to(slug.clone())
+              .emit("speak", serde_json::json!({ "audioBase64": b64 }))
+              .ok();
         }
-    });
+    }
 }

@@ -27,3 +27,5 @@ chrono          = "0.4"
 url             = "2"
 rand            = "0.8"
 sha2            = "0.10"
+sqlx            = { version = "0.8", features = ["runtime-tokio", "postgres", "macros"] }
+dashmap         = "6"

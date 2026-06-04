@@ -1,7 +1,7 @@
 pub mod api;
 pub mod sender;
 
-use crate::{commands, tts, AppState};
+use crate::{commands, db, server::ns_emit, state::{AppState, ChannelState}, tts};
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use serde_json::json;
@@ -10,103 +10,13 @@ use tokio::time::{sleep, Duration};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{debug, error, info, warn};
 
-// ─── Auto-refresh de tokens OAuth ─────────────────────────────────────────────
-
-fn unix_now() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
-}
-
-/// Intenta renovar el access_token con el refresh_token.
-/// Devuelve true si tuvo éxito.
-pub async fn refresh_access_token(state: &Arc<AppState>) -> bool {
-    let client_id     = &state.config.client_id;
-    let client_secret = &state.config.client_secret;
-    let refresh_tok   = state.refresh_token_val.read().await.clone();
-
-    if client_id.is_empty() || client_secret.is_empty() || refresh_tok.is_empty() {
-        warn!("[OAuth] No se puede renovar: faltan client_id/secret/refresh_token en .env");
-        return false;
-    }
-
-    let params = [
-        ("grant_type",    "refresh_token"),
-        ("refresh_token", refresh_tok.as_str()),
-        ("client_id",     client_id.as_str()),
-        ("client_secret", client_secret.as_str()),
-    ];
-
-    let resp = state.http
-        .post("https://id.kick.com/oauth/token")
-        .form(&params)
-        .send()
-        .await;
-
-    let r = match resp {
-        Ok(r) => r,
-        Err(e) => { error!("[OAuth] Error de red al renovar token: {e}"); return false; }
-    };
-
-    if !r.status().is_success() {
-        error!("[OAuth] Refresh falló: {}", r.status());
-        return false;
-    }
-
-    let data: serde_json::Value = match r.json().await {
-        Ok(d) => d,
-        Err(e) => { error!("[OAuth] Respuesta de refresh no válida: {e}"); return false; }
-    };
-
-    let Some(new_access) = data["access_token"].as_str() else {
-        error!("[OAuth] Respuesta sin access_token: {data}");
-        return false;
-    };
-    let new_refresh   = data["refresh_token"].as_str().unwrap_or(&refresh_tok);
-    let expires_in    = data["expires_in"].as_u64().unwrap_or(7200);
-
-    *state.access_token.write().await      = new_access.to_string();
-    *state.refresh_token_val.write().await = new_refresh.to_string();
-
-    info!("[OAuth] Token renovado correctamente, expira en {expires_in}s");
-    true
-}
-
-/// Tarea de fondo: renueva el token 10 minutos antes de que expire.
-pub async fn token_refresh_loop(state: Arc<AppState>, initial_expires: u64) {
-    let mut expires = initial_expires;
-    loop {
-        let now = unix_now();
-        // Dormir hasta 10 minutos antes de la expiración (mínimo 60s)
-        let sleep_secs = if expires > now + 610 {
-            expires - now - 600
-        } else {
-            60
-        };
-        sleep(Duration::from_secs(sleep_secs)).await;
-
-        info!("[OAuth] Renovando token proactivamente...");
-        if refresh_access_token(&state).await {
-            // Actualizar el tiempo de expiración para el próximo ciclo
-            expires = unix_now() + 7200;
-        }
-        // Si falla, reintentar en 60s
-    }
-}
-
-// Key primaria en us2 (conecta pero no entrega mensajes sin auth)
-// También intentamos otros clusters con la key alternativa
 const PUSHER_KEY_PRIMARY: &str = "32cbd69e4b950bf97679";
-const PUSHER_KEY_ALT: &str     = "eb1d5f283081a78b932c";
-
-// Lista de (host, key) a probar en orden hasta que uno funcione
+const PUSHER_KEY_ALT:     &str = "eb1d5f283081a78b932c";
 const PUSHER_ENDPOINTS: &[(&str, &str)] = &[
     ("ws-us2.pusher.com",  PUSHER_KEY_PRIMARY),
     ("ws-eu.pusher.com",   PUSHER_KEY_ALT),
     ("ws-mt1.pusher.com",  PUSHER_KEY_ALT),
     ("ws-ap1.pusher.com",  PUSHER_KEY_ALT),
-    ("ws-ap3.pusher.com",  PUSHER_KEY_ALT),
     ("ws-us3.pusher.com",  PUSHER_KEY_ALT),
     ("ws-sa1.pusher.com",  PUSHER_KEY_ALT),
 ];
@@ -126,48 +36,122 @@ struct KickChatMsg {
 }
 
 #[derive(Deserialize)]
-struct KickSender {
-    username: String,
+struct KickSender { username: String }
+
+fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
 }
 
-pub async fn run(state: Arc<AppState>) {
-    let http = state.http.clone();
+// ─── Token refresh ────────────────────────────────────────────────────────────
 
-    // Lanzar polling de chat como respaldo al Pusher
-    let poll_state = state.clone();
-    tokio::spawn(async move {
-        poll_chat_loop(poll_state).await;
-    });
+pub async fn refresh_access_token(ch: &Arc<ChannelState>, global: &Arc<AppState>) -> bool {
+    let client_id     = &global.config.client_id;
+    let client_secret = &global.config.client_secret;
+    let refresh_tok   = ch.refresh_token_val.read().await.clone();
 
-    // Suscribir a eventos de Kick vía EventSub
-    let sub_state = state.clone();
+    if client_id.is_empty() || client_secret.is_empty() || refresh_tok.is_empty() {
+        warn!("[OAuth][{}] Faltan credenciales para renovar token", ch.slug);
+        return false;
+    }
+
+    let resp = global.http
+        .post("https://id.kick.com/oauth/token")
+        .form(&[
+            ("grant_type",    "refresh_token"),
+            ("refresh_token", refresh_tok.as_str()),
+            ("client_id",     client_id.as_str()),
+            ("client_secret", client_secret.as_str()),
+        ])
+        .send()
+        .await;
+
+    let r = match resp {
+        Ok(r) => r,
+        Err(e) => { error!("[OAuth][{}] Red: {e}", ch.slug); return false; }
+    };
+
+    if !r.status().is_success() {
+        error!("[OAuth][{}] Refresh falló: {}", ch.slug, r.status());
+        return false;
+    }
+
+    let data: serde_json::Value = match r.json().await {
+        Ok(d)  => d,
+        Err(e) => { error!("[OAuth][{}] JSON inválido: {e}", ch.slug); return false; }
+    };
+
+    let Some(new_access) = data["access_token"].as_str() else {
+        error!("[OAuth][{}] Sin access_token: {data}", ch.slug);
+        return false;
+    };
+    let new_refresh  = data["refresh_token"].as_str().unwrap_or(&refresh_tok);
+    let expires_in   = data["expires_in"].as_u64().unwrap_or(7200);
+    let new_expires  = (unix_now() + expires_in) as i64;
+
+    *ch.access_token.write().await      = new_access.to_string();
+    *ch.refresh_token_val.write().await = new_refresh.to_string();
+    db::update_tokens(&global.db, &ch.slug, new_access, new_refresh, new_expires).await;
+
+    info!("[OAuth][{}] Token renovado, expira en {expires_in}s", ch.slug);
+    true
+}
+
+pub async fn token_refresh_loop(ch: Arc<ChannelState>, global: Arc<AppState>, initial_expires: u64) {
+    let mut expires = initial_expires;
+    loop {
+        let now = unix_now();
+        let sleep_secs = if expires > now + 610 { expires - now - 600 } else { 60 };
+        sleep(Duration::from_secs(sleep_secs)).await;
+
+        info!("[OAuth][{}] Renovando token proactivamente...", ch.slug);
+        if refresh_access_token(&ch, &global).await {
+            expires = unix_now() + 7200;
+        }
+    }
+}
+
+// ─── Punto de entrada por canal ───────────────────────────────────────────────
+
+pub async fn run_channel(ch: Arc<ChannelState>, global: Arc<AppState>) {
+    let token_expires = unix_now() + 7200; // se recargará del DB si es necesario
+
+    // Polling de chat (fallback al Pusher)
+    let ch2 = ch.clone(); let g2 = global.clone();
+    tokio::spawn(async move { poll_chat_loop(ch2, g2).await; });
+
+    // Auto-renovación de token
+    let ch3 = ch.clone(); let g3 = global.clone();
+    tokio::spawn(async move { token_refresh_loop(ch3, g3, token_expires).await; });
+
+    // EventSub subscriptions (3s delay para que el servidor esté listo)
+    let ch4 = ch.clone(); let g4 = global.clone();
     tokio::spawn(async move {
+        sleep(Duration::from_secs(5)).await;
         let broadcaster_id = loop {
-            let id = *sub_state.channel_id.read().await;
+            let id = *ch4.channel_id.read().await;
             if let Some(id) = id { break id; }
             sleep(Duration::from_secs(2)).await;
         };
-        // Pequeño delay para que ngrok esté activo
-        sleep(Duration::from_secs(3)).await;
-        subscribe_kick_events(&sub_state, broadcaster_id).await;
+        subscribe_kick_events(&ch4, &g4, broadcaster_id).await;
     });
 
     loop {
-        match connect_once(&http, &state).await {
-            Ok(_)  => warn!("Kick: conexión cerrada, reconectando en 5s…"),
-            Err(e) => error!("Kick: {e} — reconectando en 5s…"),
+        match connect_once(&ch, &global).await {
+            Ok(_)  => warn!("[Kick][{}] Conexión cerrada — reconectando en 5s…", ch.slug),
+            Err(e) => error!("[Kick][{}] {e} — reconectando en 5s…", ch.slug),
         }
         sleep(Duration::from_secs(5)).await;
     }
 }
 
+// ─── Suscripciones EventSub ───────────────────────────────────────────────────
 
-/// Suscribe a eventos de Kick via EventSub API.
-async fn subscribe_kick_events(state: &Arc<AppState>, broadcaster_user_id: u64) {
-    let token = state.access_token.read().await.clone();
-    let url = "https://api.kick.com/public/v1/events/subscriptions";
-
-    let body = serde_json::json!({
+async fn subscribe_kick_events(ch: &Arc<ChannelState>, global: &Arc<AppState>, broadcaster_user_id: u64) {
+    let token = ch.access_token.read().await.clone();
+    let body = json!({
         "events": [
             { "name": "chat.message.sent",          "version": 1 },
             { "name": "channel.followed",            "version": 1 },
@@ -179,8 +163,8 @@ async fn subscribe_kick_events(state: &Arc<AppState>, broadcaster_user_id: u64) 
         "broadcaster_user_id": broadcaster_user_id
     });
 
-    match state.http
-        .post(url)
+    match global.http
+        .post("https://api.kick.com/public/v1/events/subscriptions")
         .header("Authorization", format!("Bearer {token}"))
         .json(&body)
         .send()
@@ -190,149 +174,50 @@ async fn subscribe_kick_events(state: &Arc<AppState>, broadcaster_user_id: u64) 
             let status = r.status();
             let text   = r.text().await.unwrap_or_default();
             if status.is_success() {
-                info!("[EventSub] Suscripciones creadas: {text:.300}");
+                info!("[EventSub][{}] Suscripciones creadas", ch.slug);
             } else {
-                warn!("[EventSub] Error {status}: {text:.300}");
+                warn!("[EventSub][{}] {status}: {text:.200}", ch.slug);
             }
         }
-        Err(e) => warn!("[EventSub] Error de red: {e}"),
+        Err(e) => warn!("[EventSub][{}] Error: {e}", ch.slug),
     }
 }
 
-/// Polling de mensajes de chat vía API pública como respaldo al Pusher.
-/// Prueba varios endpoints hasta encontrar uno que funcione.
-async fn poll_chat_loop(state: Arc<AppState>) {
-    // Esperar a que el chatroom_id esté disponible
-    let chatroom_id = loop {
-        {
-            let id = state.chatroom_id.read().await;
-            if let Some(id) = *id { break id; }
-        }
-        sleep(Duration::from_secs(2)).await;
-    };
+// ─── Conexión Pusher ──────────────────────────────────────────────────────────
 
-    let candidates = [
-        format!("https://api.kick.com/public/v1/chatrooms/{chatroom_id}/messages"),
-        format!("https://api.kick.com/public/v1/channels/{chatroom_id}/messages"),
-    ];
-
-    info!("[Poll] Buscando endpoint de mensajes para chatroom {chatroom_id}...");
-
-    // Descubrir qué URL funciona
-    let mut active_url: Option<String> = None;
-    for url in &candidates {
-        let token = state.access_token.read().await.clone();
-        match state.http.get(url)
-            .header("Authorization", format!("Bearer {token}"))
-            .send().await
-        {
-            Ok(r) => {
-                let status = r.status();
-                let body   = r.text().await.unwrap_or_default();
-                if status.is_success() {
-                    info!("[Poll] Endpoint OK: {url} → {body:.200}");
-                    active_url = Some(url.clone());
-                    break;
-                } else {
-                    info!("[Poll] {url} → {status}: {body:.200}");
-                }
-            }
-            Err(e) => warn!("[Poll] {url} → red: {e}"),
-        }
-    }
-
-    let Some(url) = active_url else {
-        warn!("[Poll] Ningún endpoint de mensajes disponible en la API pública — solo Pusher activo");
-        return;
-    };
-
-    info!("[Poll] Usando {url} (intervalo 1s)");
-    let mut last_id: Option<String> = None;
-
-    loop {
-        sleep(Duration::from_secs(1)).await;
-
-        let token = state.access_token.read().await.clone();
-        let resp = match state.http.get(&url)
-            .header("Authorization", format!("Bearer {token}"))
-            .send().await
-        {
-            Ok(r)  => r,
-            Err(e) => { warn!("[Poll] Error de red: {e}"); continue; }
-        };
-
-        if !resp.status().is_success() { continue; }
-
-        let json: serde_json::Value = match resp.json().await {
-            Ok(j)  => j,
-            Err(e) => { warn!("[Poll] JSON inválido: {e}"); continue; }
-        };
-
-        // Procesar mensajes nuevos (array en data o en la raíz)
-        let msgs = json.get("data")
-            .and_then(|d| d.as_array())
-            .or_else(|| json.as_array())
-            .cloned()
-            .unwrap_or_default();
-
-        for msg in msgs.iter().rev() {
-            let id = msg.get("id")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string())
-                .or_else(|| msg["id"].as_u64().map(|n| n.to_string()));
-
-            if id.as_deref() == last_id.as_deref() { break; }
-
-            let username = msg["sender"]["username"].as_str()
-                .or_else(|| msg["username"].as_str())
-                .unwrap_or("?")
-                .to_string();
-            let content = msg["content"].as_str().unwrap_or("").trim().to_string();
-
-            if content.is_empty() { continue; }
-
-            info!("[CHAT-Poll] {username}: {content}");
-            state.io.emit("chatMessage", serde_json::json!({ "user": &username, "content": &content })).ok();
-            commands::handle(&username, &content, &state).await;
-        }
-
-        if let Some(first) = msgs.first() {
-            last_id = first.get("id")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string())
-                .or_else(|| first["id"].as_u64().map(|n| n.to_string()));
-        }
-    }
-}
-
-async fn connect_once(http: &reqwest::Client, state: &Arc<AppState>) -> Result<(), String> {
-    let chan = &state.config.channel_name;
-
-    // Obtener IDs del canal — si falla con 401 intentar renovar el token primero
-    let token = state.access_token.read().await.clone();
-    let info = match api::get_channel_info(http, chan, &token).await {
+async fn connect_once(ch: &Arc<ChannelState>, global: &Arc<AppState>) -> Result<(), String> {
+    let token = ch.access_token.read().await.clone();
+    let info = match api::get_channel_info(&global.http, &ch.slug, &token).await {
         Some(i) => i,
         None => {
-            warn!("Kick: token inválido, intentando renovar...");
-            if refresh_access_token(state).await {
-                let new_token = state.access_token.read().await.clone();
-                api::get_channel_info(http, chan, &new_token)
+            warn!("[Kick][{}] Token inválido, renovando...", ch.slug);
+            if refresh_access_token(ch, global).await {
+                let new_tok = ch.access_token.read().await.clone();
+                api::get_channel_info(&global.http, &ch.slug, &new_tok)
                     .await
-                    .ok_or_else(|| format!("No se pudo obtener info del canal '{chan}' — corre --login para reautenticar"))?
+                    .ok_or_else(|| format!("No se pudo obtener info del canal '{}'", ch.slug))?
             } else {
-                return Err(format!("Token expirado y no se pudo renovar — corre daibot.exe --login"));
+                return Err(format!("Token expirado para '{}'", ch.slug));
             }
         }
     };
 
-    info!("Canal '{}' → channel_id={} chatroom_id={}", info.slug, info.channel_id, info.chatroom_id);
+    info!("[Kick] Canal '{}' → channel_id={} chatroom_id={}", info.slug, info.channel_id, info.chatroom_id);
+    *ch.channel_id.write().await  = Some(info.channel_id);
+    *ch.chatroom_id.write().await = Some(info.chatroom_id);
 
-    // Guardar IDs en AppState para el sender
-    *state.channel_id.write().await  = Some(info.channel_id);
-    *state.chatroom_id.write().await = Some(info.chatroom_id);
+    // Actualizar IDs en DB
+    db::update_channel_ids(
+        &global.db,
+        &ch.slug,
+        info.channel_id  as i64,
+        info.chatroom_id as i64,
+    ).await;
 
-    // Conectar probando cada endpoint (host+key) hasta encontrar uno que devuelva
-    // connection_established. Si PUSHER_HOST está en .env, usarlo directamente.
+    // Actualizar el mapa broadcaster_id → slug
+    global.user_id_to_slug.insert(info.channel_id, ch.slug.clone());
+
+    // Conectar al Pusher correcto
     let override_host = std::env::var("PUSHER_HOST").ok();
     let endpoints_to_try: Vec<(&str, &str)> = if let Some(ref h) = override_host {
         vec![(h.as_str(), PUSHER_KEY_PRIMARY)]
@@ -340,19 +225,12 @@ async fn connect_once(http: &reqwest::Client, state: &Arc<AppState>) -> Result<(
         PUSHER_ENDPOINTS.to_vec()
     };
 
-    let mut found: Option<(
-        futures_util::stream::SplitSink<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>, Message>,
-        futures_util::stream::SplitStream<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>>,
-        String, // socket_id
-    )> = None;
-
+    let mut found = None;
     for (pusher_host, pusher_key) in &endpoints_to_try {
         let ws_url = format!(
-            "wss://{pusher_host}/app/{pusher_key}\
-             ?protocol=7&client=js&version=8.5.0&flash=false"
+            "wss://{pusher_host}/app/{pusher_key}?protocol=7&client=js&version=8.5.0&flash=false"
         );
-        info!("Probando WebSocket: {pusher_host} (key={}...)", &pusher_key[..8]);
-
+        info!("[Kick][{}] Probando WebSocket: {pusher_host}", ch.slug);
         let request = {
             use tokio_tungstenite::tungstenite::client::IntoClientRequest;
             let mut r = ws_url.as_str().into_client_request()
@@ -363,73 +241,60 @@ async fn connect_once(http: &reqwest::Client, state: &Arc<AppState>) -> Result<(
             );
             r
         };
-
         let ws = match connect_async(request).await {
             Ok((ws, _)) => ws,
-            Err(e) => { warn!("  {pusher_host}: error de red: {e}"); continue; }
+            Err(e) => { warn!("  {pusher_host}: {e}"); continue; }
         };
         let (tx, mut rx) = ws.split();
-
         match wait_for_socket_id(&mut rx).await {
             Some(sid) => {
                 info!("  ✓ Conectado a {pusher_host} socket_id={sid}");
                 found = Some((tx, rx, sid));
                 break;
             }
-            None => {
-                info!("  ✗ {pusher_host}: no devolvió connection_established");
-                continue;
-            }
+            None => continue,
         }
     }
 
     let (mut tx, mut rx, socket_id) = found
-        .ok_or_else(|| "Ningún endpoint de Pusher respondió correctamente".to_string())?;
+        .ok_or_else(|| "Ningún endpoint de Pusher respondió".to_string())?;
 
-    info!("Pusher socket_id={socket_id}");
+    info!("[Kick][{}] Pusher socket_id={socket_id}", ch.slug);
 
-    // ── Chat: intentar canal privado (autenticado) primero, luego el público ──
-    // Kick dejó de entregar mensajes en el canal público sin auth. El canal
-    // privado requiere un auth token de Kick obtenido con el access_token OAuth.
-    let token = state.access_token.read().await.clone();
+    // Canal privado con auth, fallback a público
     let private_chat = format!("private-chatrooms.{}.v2", info.chatroom_id);
     let public_chat  = format!("chatrooms.{}.v2", info.chatroom_id);
+    let token2 = ch.access_token.read().await.clone();
 
-    let chat_channel = match pusher_auth(http, &socket_id, &private_chat, &token).await {
+    let chat_channel = match pusher_auth(&global.http, &socket_id, &private_chat, &token2).await {
         Some(auth) => {
-            info!("Auth Pusher OK — usando canal privado {private_chat}");
+            info!("[Kick][{}] Auth Pusher OK — canal privado", ch.slug);
             subscribe(&mut tx, &private_chat, Some(&auth)).await?;
             private_chat
         }
         None => {
-            warn!("Auth Pusher falló — fallback a canal público {public_chat}");
+            warn!("[Kick][{}] Auth Pusher falló — fallback a canal público", ch.slug);
             subscribe(&mut tx, &public_chat, None).await?;
             public_chat
         }
     };
-    info!("Suscrito a {chat_channel}");
+    info!("[Kick][{}] Suscrito a {chat_channel}", ch.slug);
 
-    // ── Eventos del canal (follows, subs, stream live/offline) ───────────────
     let events_channel = format!("channel.{}", info.slug);
     subscribe(&mut tx, &events_channel, None).await?;
-    info!("Suscrito a {events_channel}");
+    info!("[Kick][{}] Suscrito a {events_channel}", ch.slug);
 
-    // ── Loop de mensajes ──────────────────────────────────────────────────────
     while let Some(msg) = rx.next().await {
         match msg {
-            Ok(Message::Text(raw)) => {
-                on_event(&raw, &mut tx, state, &info.slug).await;
-            }
-            Ok(Message::Ping(d))      => { tx.send(Message::Pong(d)).await.ok(); }
-            Ok(Message::Close(_))     => { warn!("Pusher cerró la conexión"); break; }
-            Err(e)                    => return Err(format!("WS: {e}")),
-            _                         => {}
+            Ok(Message::Text(raw))  => { on_event(&raw, &mut tx, ch, global).await; }
+            Ok(Message::Ping(d))    => { tx.send(Message::Pong(d)).await.ok(); }
+            Ok(Message::Close(_))   => { warn!("[Kick][{}] Pusher cerró la conexión", ch.slug); break; }
+            Err(e)                  => return Err(format!("WS: {e}")),
+            _                       => {}
         }
     }
     Ok(())
 }
-
-// ─── Helpers de suscripción ───────────────────────────────────────────────────
 
 async fn subscribe(
     tx: &mut (impl SinkExt<Message, Error = tokio_tungstenite::tungstenite::Error> + Unpin),
@@ -449,11 +314,7 @@ async fn wait_for_socket_id(
     while let Some(msg) = rx.next().await {
         match msg {
             Ok(Message::Text(raw)) => {
-                debug!("[Pusher] ← {raw}");
-                let Ok(ev) = serde_json::from_str::<PusherEvent>(&raw) else {
-                    warn!("[Pusher] Mensaje no-JSON durante handshake: {raw}");
-                    continue
-                };
+                let Ok(ev) = serde_json::from_str::<PusherEvent>(&raw) else { continue };
                 match ev.event.as_str() {
                     "pusher:connection_established" => {
                         let data_str = match &ev.data {
@@ -464,307 +325,203 @@ async fn wait_for_socket_id(
                         let conn: serde_json::Value = serde_json::from_str(&data_str).ok()?;
                         return conn["socket_id"].as_str().map(|s| s.to_string());
                     }
-                    "pusher:error" => {
-                        error!("[Pusher] Error del servidor: {raw}");
-                        return None;
-                    }
-                    other => debug!("[Pusher] Evento durante handshake: {other}"),
+                    "pusher:error" => { error!("[Pusher] Error: {raw}"); return None; }
+                    _ => {}
                 }
             }
-            Ok(Message::Close(frame)) => {
-                warn!("[Pusher] Conexión cerrada durante handshake: {:?}", frame);
-                return None;
-            }
-            Ok(other) => debug!("[Pusher] Mensaje no-texto durante handshake: {:?}", other),
-            Err(e)    => { warn!("[Pusher] Error WS en handshake: {e}"); return None; }
+            Ok(Message::Close(_)) => return None,
+            Err(e) => { warn!("[Pusher] WS error en handshake: {e}"); return None; }
+            _ => {}
         }
     }
-    warn!("[Pusher] Stream terminó sin recibir connection_established");
     None
 }
 
-
-// ─── Manejador de eventos Pusher ──────────────────────────────────────────────
+// ─── Manejador de eventos ─────────────────────────────────────────────────────
 
 async fn on_event(
-    raw:   &str,
-    tx:    &mut (impl SinkExt<Message, Error = tokio_tungstenite::tungstenite::Error> + Unpin),
-    state: &Arc<AppState>,
-    slug:  &str,
+    raw:    &str,
+    tx:     &mut (impl SinkExt<Message, Error = tokio_tungstenite::tungstenite::Error> + Unpin),
+    ch:     &Arc<ChannelState>,
+    global: &Arc<AppState>,
 ) {
     let Ok(ev) = serde_json::from_str::<PusherEvent>(raw) else {
         debug!("[Pusher] JSON no parseable: {raw}");
         return;
     };
 
-    // Log de todos los eventos que llegan (visible con RUST_LOG=debug)
-    debug!("[Pusher] evento={} data={:?}", ev.event, ev.data);
-
     match ev.event.as_str() {
-
-        // ── Protocolo Pusher ─────────────────────────────────────────────────
         "pusher:ping" => {
-            tx.send(Message::Text(
-                json!({"event":"pusher:pong","data":{}}).to_string()
-            )).await.ok();
+            tx.send(Message::Text(json!({"event":"pusher:pong","data":{}}).to_string())).await.ok();
         }
-
-        // ── Chat ─────────────────────────────────────────────────────────────
         "App\\Events\\ChatMessageEvent" => {
             let data_str = raw_data_str(&ev.data);
-            let Ok(msg) = serde_json::from_str::<KickChatMsg>(&data_str) else {
-                warn!("[Kick] ChatMessageEvent no parseable — data cruda: {data_str}");
-                return;
-            };
-
+            let Ok(msg) = serde_json::from_str::<KickChatMsg>(&data_str) else { return };
             let username = msg.sender.username.clone();
             let content  = msg.content.trim().to_string();
-
-            state.io.emit("chatMessage", json!({ "user": &username, "content": &content })).ok();
-            commands::handle(&username, &content, state).await;
+            ns_emit(global, &ch.slug, "chatMessage", json!({"user": &username, "content": &content}));
+            commands::handle(&username, &content, ch, global).await;
         }
-
-        // ── Seguidores actualizados en tiempo real (elimina polling 60s) ─────
         "App\\Events\\FollowersUpdated" => {
-            let data = serde_json::from_str::<serde_json::Value>(&raw_data_str(&ev.data))
-                .unwrap_or_default();
-
-            if let Some(count) = data["followersCount"].as_u64()
-                .or_else(|| data["followers_count"].as_u64())
-            {
-                state.followers.store(count, Ordering::Relaxed);
-                state.io.emit("followGoal", json!({
-                    "current": count,
-                    "goal":    state.config.follow_goal,
-                })).ok();
-                info!("[Kick] Seguidores actualizados: {count}");
+            let data = serde_json::from_str::<serde_json::Value>(&raw_data_str(&ev.data)).unwrap_or_default();
+            if let Some(count) = data["followersCount"].as_u64().or_else(|| data["followers_count"].as_u64()) {
+                ch.followers.store(count, Ordering::Relaxed);
+                ns_emit(global, &ch.slug, "followGoal", json!({"current": count, "goal": ch.follow_goal}));
+                info!("[Kick][{}] Seguidores: {count}", ch.slug);
             }
         }
-
-        // ── Nuevo follow ─────────────────────────────────────────────────────
         "App\\Events\\FollowEvent" => {
-            let data = serde_json::from_str::<serde_json::Value>(&raw_data_str(&ev.data))
-                .unwrap_or_default();
-            let username = data["user_username"].as_str()
-                .or_else(|| data["username"].as_str())
-                .unwrap_or("alguien");
-
-            info!("[Kick] Nuevo follow: {username}");
-            alert_follow(username, slug, state).await;
+            let data = serde_json::from_str::<serde_json::Value>(&raw_data_str(&ev.data)).unwrap_or_default();
+            let username = data["user_username"].as_str().or_else(|| data["username"].as_str()).unwrap_or("alguien");
+            info!("[Kick][{}] Follow: {username}", ch.slug);
+            alert_follow(username, ch, global).await;
         }
-
-        // ── Nueva suscripción ────────────────────────────────────────────────
         "App\\Events\\SubscriptionEvent" => {
-            let data = serde_json::from_str::<serde_json::Value>(&raw_data_str(&ev.data))
-                .unwrap_or_default();
-
-            // El username puede estar en varias rutas según el tipo de sub
-            let username = data["subscription"]["username"].as_str()
-                .or_else(|| data["username"].as_str())
-                .unwrap_or("alguien");
-            let months = data["subscription"]["month"].as_u64().unwrap_or(1);
-            let gifted = data["subscription"]["gifted"].as_bool().unwrap_or(false);
-
-            info!("[Kick] Suscripción: {username} ({months} mes(es), gifted={gifted})");
-            alert_sub(username, months, gifted, slug, state).await;
+            let data = serde_json::from_str::<serde_json::Value>(&raw_data_str(&ev.data)).unwrap_or_default();
+            let username = data["subscription"]["username"].as_str().or_else(|| data["username"].as_str()).unwrap_or("alguien");
+            let months   = data["subscription"]["month"].as_u64().unwrap_or(1);
+            let gifted   = data["subscription"]["gifted"].as_bool().unwrap_or(false);
+            info!("[Kick][{}] Sub: {username} ({months}m, gifted={gifted})", ch.slug);
+            alert_sub(username, months, gifted, ch, global).await;
         }
-
-        // ── Subs regaladas ────────────────────────────────────────────────────
         "App\\Events\\LuckyUsersWhoGotGiftSubscriptionsEvent" => {
-            let data = serde_json::from_str::<serde_json::Value>(&raw_data_str(&ev.data))
-                .unwrap_or_default();
-            let gifter = data["gifted_by"].as_str().unwrap_or("alguien");
-            let count  = data["usernames"].as_array().map(|a| a.len()).unwrap_or(1);
-
-            info!("[Kick] Gift subs: {gifter} regaló {count} subs");
-            alert_gift_sub(gifter, count, state).await;
+            let data    = serde_json::from_str::<serde_json::Value>(&raw_data_str(&ev.data)).unwrap_or_default();
+            let gifter  = data["gifted_by"].as_str().unwrap_or("alguien");
+            let count   = data["usernames"].as_array().map(|a| a.len()).unwrap_or(1);
+            info!("[Kick][{}] Gift subs: {gifter} regaló {count}", ch.slug);
+            alert_gift_sub(gifter, count, ch, global).await;
         }
-
-        // ── Stream live/offline ───────────────────────────────────────────────
         "App\\Events\\StreamerIsLive" => {
-            info!("[Kick] Stream EN VIVO");
-            state.io.emit("streamStatus", json!({ "live": true })).ok();
+            info!("[Kick][{}] EN VIVO", ch.slug);
+            ns_emit(global, &ch.slug, "streamStatus", json!({"live": true}));
         }
         "App\\Events\\StreamerIsOffline" => {
-            info!("[Kick] Stream OFFLINE");
-            state.io.emit("streamStatus", json!({ "live": false })).ok();
+            info!("[Kick][{}] OFFLINE", ch.slug);
+            ns_emit(global, &ch.slug, "streamStatus", json!({"live": false}));
         }
-
-        // Eventos de protocolo (subscription_succeeded, etc.) — ignorar
         other if other.starts_with("pusher") || other.contains("subscription_succeeded") => {}
-
-        other => {
-            tracing::debug!("[Pusher] Evento no manejado: {other}");
-        }
+        other => { debug!("[Pusher][{}] Evento: {other}", ch.slug); }
     }
 }
 
 // ─── Alertas ──────────────────────────────────────────────────────────────────
 
-async fn alert_follow(username: &str, _slug: &str, state: &Arc<AppState>) {
+async fn alert_follow(username: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
     let msg = format!("¡Gracias por el follow, {username}!");
-
-    // TTS
-    state.tts_tx.send(tts::TtsQueueItem {
-        text:  msg.clone(),
-        voice: "dalia".into(),
-    }).ok();
-
-    // Overlay alert
-    state.io.emit("kickAlert", json!({
-        "type":     "follow",
-        "username": username,
-        "message":  msg,
-    })).ok();
+    ch.tts_tx.send(tts::TtsQueueItem { text: msg.clone(), voice: "dalia".into() }).ok();
+    ns_emit(global, &ch.slug, "kickAlert", json!({"type":"follow","username":username,"message":msg}));
 }
 
-async fn alert_sub(username: &str, months: u64, gifted: bool, _slug: &str, state: &Arc<AppState>) {
-    let msg = if gifted {
-        format!("¡{username} recibió una suscripción de regalo!")
-    } else if months > 1 {
-        format!("¡{username} se resuscribió por {months} meses!")
-    } else {
-        format!("¡{username} se suscribió al canal!")
-    };
-
-    state.tts_tx.send(tts::TtsQueueItem {
-        text:  msg.clone(),
-        voice: "dalia".into(),
-    }).ok();
-
-    state.io.emit("kickAlert", json!({
-        "type":     "sub",
-        "username": username,
-        "months":   months,
-        "gifted":   gifted,
-        "message":  msg,
-    })).ok();
-
-    // Mensaje en el chat
-    sender::send(&format!("🎉 ¡Gracias por la sub, @{username}!"), state).await;
+async fn alert_sub(username: &str, months: u64, gifted: bool, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
+    let msg = if gifted { format!("¡{username} recibió una sub de regalo!")
+    } else if months > 1 { format!("¡{username} se resuscribió por {months} meses!")
+    } else { format!("¡{username} se suscribió al canal!") };
+    ch.tts_tx.send(tts::TtsQueueItem { text: msg.clone(), voice: "dalia".into() }).ok();
+    ns_emit(global, &ch.slug, "kickAlert", json!({"type":"sub","username":username,"months":months,"gifted":gifted,"message":&msg}));
+    sender::send(&format!("🎉 ¡Gracias por la sub, @{username}!"), ch, global).await;
 }
 
-async fn alert_gift_sub(gifter: &str, count: usize, state: &Arc<AppState>) {
+async fn alert_gift_sub(gifter: &str, count: usize, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
     let msg = format!("¡{gifter} regaló {count} suscripciones!");
-
-    state.tts_tx.send(tts::TtsQueueItem {
-        text:  msg.clone(),
-        voice: "dalia".into(),
-    }).ok();
-
-    state.io.emit("kickAlert", json!({
-        "type":    "giftsub",
-        "gifter":  gifter,
-        "count":   count,
-        "message": msg,
-    })).ok();
-
-    sender::send(&format!("🎁 ¡{gifter} regaló {count} subs! ¡Gracias!"), state).await;
+    ch.tts_tx.send(tts::TtsQueueItem { text: msg.clone(), voice: "dalia".into() }).ok();
+    ns_emit(global, &ch.slug, "kickAlert", json!({"type":"giftsub","gifter":gifter,"count":count,"message":&msg}));
+    sender::send(&format!("🎁 ¡{gifter} regaló {count} subs! ¡Gracias!"), ch, global).await;
 }
 
-// ─── Autenticación Pusher para canales privados ───────────────────────────────
+// ─── Pusher auth ──────────────────────────────────────────────────────────────
 
-/// Obtiene el auth token de Kick para suscribirse a canales privados de Pusher.
-/// reqwest/rustls tiene un fingerprint TLS que Cloudflare bloquea en kick.com.
-/// PowerShell usa Windows Schannel (mismo TLS que Edge/IE) y pasa el filtro.
-async fn pusher_auth(
-    _http:     &reqwest::Client,
-    socket_id: &str,
-    channel:   &str,
-    token:     &str,
-) -> Option<String> {
+async fn pusher_auth(_http: &reqwest::Client, socket_id: &str, channel: &str, token: &str) -> Option<String> {
     if token.is_empty() { return None; }
-
-    // Primero intentar la API pública (no tiene fingerprint issue)
-    // — mantenemos este intento por si Kick añade el endpoint en el futuro
-    // (actualmente devuelve 404)
-
-    // Usar PowerShell + Windows Schannel para bypass de Cloudflare TLS fingerprint
     #[cfg(windows)]
     {
-        let auth = pusher_auth_via_powershell(socket_id, channel, token).await;
-        if auth.is_some() {
-            return auth;
+        if let Some(auth) = pusher_auth_via_powershell(socket_id, channel, token).await {
+            return Some(auth);
         }
     }
-
     None
 }
 
-/// Llama a kick.com/broadcasting/auth usando PowerShell (Windows Schannel),
-/// que tiene un fingerprint TLS diferente a reqwest/rustls, bypaseando Cloudflare.
 #[cfg(windows)]
-async fn pusher_auth_via_powershell(
-    socket_id: &str,
-    channel:   &str,
-    token:     &str,
-) -> Option<String> {
-    let ps_script = r#"
-$token     = $env:KICK_TOKEN
-$socket_id = $env:KICK_SOCKET_ID
-$channel   = $env:KICK_CHANNEL
-$ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-$headers = @{
-    'Authorization' = "Bearer $token"
-    'Origin'        = 'https://kick.com'
-    'Referer'       = 'https://kick.com/'
-    'Accept'        = 'application/json, text/plain, */*'
-}
-$body = "socket_id=$socket_id&channel_name=$channel"
-try {
-    $resp = Invoke-RestMethod -Uri 'https://kick.com/broadcasting/auth' `
-        -Method POST `
-        -Headers $headers `
-        -ContentType 'application/x-www-form-urlencoded' `
-        -Body $body `
-        -UserAgent $ua
-    if ($resp.auth) { $resp.auth } else { "" }
-} catch {
-    ""
-}
+async fn pusher_auth_via_powershell(socket_id: &str, channel: &str, token: &str) -> Option<String> {
+    let ps = r#"
+$token=$env:KICK_TOKEN;$sid=$env:KICK_SOCKET_ID;$ch=$env:KICK_CHANNEL
+$headers=@{'Authorization'="Bearer $token";'Origin'='https://kick.com';'Referer'='https://kick.com/'}
+$body="socket_id=$sid&channel_name=$ch"
+try{$r=Invoke-RestMethod -Uri 'https://kick.com/broadcasting/auth' -Method POST -Headers $headers -ContentType 'application/x-www-form-urlencoded' -Body $body -UserAgent 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0.0.0';if($r.auth){$r.auth}else{""}}catch{""}
 "#;
-
-    let socket_id = socket_id.to_string();
-    let channel   = channel.to_string();
-    let token     = token.to_string();
-
+    let (sid, ch, tok) = (socket_id.to_string(), channel.to_string(), token.to_string());
     let result = tokio::task::spawn_blocking(move || {
         use std::os::windows::process::CommandExt;
         std::process::Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", ps_script])
-            .env("KICK_TOKEN",     &token)
-            .env("KICK_SOCKET_ID", &socket_id)
-            .env("KICK_CHANNEL",   &channel)
-            .creation_flags(0x08000000) // CREATE_NO_WINDOW
+            .args(["-NoProfile", "-NonInteractive", "-Command", ps])
+            .env("KICK_TOKEN", &tok).env("KICK_SOCKET_ID", &sid).env("KICK_CHANNEL", &ch)
+            .creation_flags(0x08000000)
             .output()
     }).await.ok()?.ok()?;
-
-    let stdout = String::from_utf8_lossy(&result.stdout).trim().to_string();
-    let stderr = String::from_utf8_lossy(&result.stderr).trim().to_string();
-
-    if !stderr.is_empty() {
-        warn!("[Pusher auth PS] stderr: {stderr}");
-    }
-
-    if stdout.is_empty() || !stdout.contains(':') {
-        warn!("[Pusher auth PS] respuesta vacía o inválida: {stdout:?}");
-        return None;
-    }
-
-    info!("[Pusher auth PS] OK — auth={stdout:.40}...");
-    Some(stdout)
+    let out = String::from_utf8_lossy(&result.stdout).trim().to_string();
+    if out.is_empty() || !out.contains(':') { None } else { Some(out) }
 }
 
-fn url_encode(s: &str) -> String {
-    s.bytes().flat_map(|b| match b {
-        b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9'
-        | b'-' | b'_' | b'.' | b'~' => vec![b as char],
-        b' ' => vec!['+'],
-        _ => format!("%{b:02X}").chars().collect(),
-    }).collect()
-}
+// ─── Polling de chat (fallback) ───────────────────────────────────────────────
 
-// ─── Utilidad ─────────────────────────────────────────────────────────────────
+async fn poll_chat_loop(ch: Arc<ChannelState>, global: Arc<AppState>) {
+    let chatroom_id = loop {
+        let id = *ch.chatroom_id.read().await;
+        if let Some(id) = id { break id; }
+        sleep(Duration::from_secs(2)).await;
+    };
+
+    let candidates = [
+        format!("https://api.kick.com/public/v1/chatrooms/{chatroom_id}/messages"),
+        format!("https://api.kick.com/public/v1/channels/{chatroom_id}/messages"),
+    ];
+    let mut active_url: Option<String> = None;
+    for url in &candidates {
+        let token = ch.access_token.read().await.clone();
+        match global.http.get(url).header("Authorization", format!("Bearer {token}")).send().await {
+            Ok(r) if r.status().is_success() => { active_url = Some(url.clone()); break; }
+            Ok(r) => { info!("[Poll][{}] {url} → {}", ch.slug, r.status()); }
+            Err(e) => warn!("[Poll][{}] {url} → {e}", ch.slug),
+        }
+    }
+    let Some(url) = active_url else {
+        warn!("[Poll][{}] Sin endpoint de mensajes — solo Pusher activo", ch.slug);
+        return;
+    };
+
+    let mut last_id: Option<String> = None;
+    loop {
+        sleep(Duration::from_secs(1)).await;
+        let token = ch.access_token.read().await.clone();
+        let resp = match global.http.get(&url).header("Authorization", format!("Bearer {token}")).send().await {
+            Ok(r)  => r,
+            Err(e) => { warn!("[Poll] Red: {e}"); continue; }
+        };
+        if !resp.status().is_success() { continue; }
+        let json: serde_json::Value = match resp.json().await {
+            Ok(j)  => j,
+            Err(e) => { warn!("[Poll] JSON: {e}"); continue; }
+        };
+        let msgs = json.get("data").and_then(|d| d.as_array())
+            .or_else(|| json.as_array()).cloned().unwrap_or_default();
+
+        for msg in msgs.iter().rev() {
+            let id = msg.get("id").and_then(|v| v.as_str()).map(|s| s.to_string())
+                .or_else(|| msg["id"].as_u64().map(|n| n.to_string()));
+            if id.as_deref() == last_id.as_deref() { break; }
+            let username = msg["sender"]["username"].as_str().or_else(|| msg["username"].as_str()).unwrap_or("?").to_string();
+            let content  = msg["content"].as_str().unwrap_or("").trim().to_string();
+            if content.is_empty() { continue; }
+            info!("[CHAT-Poll][{}] {username}: {content}", ch.slug);
+            ns_emit(&global, &ch.slug, "chatMessage", json!({"user": &username, "content": &content}));
+            commands::handle(&username, &content, &ch, &global).await;
+        }
+        if let Some(first) = msgs.first() {
+            last_id = first.get("id").and_then(|v| v.as_str()).map(|s| s.to_string())
+                .or_else(|| first["id"].as_u64().map(|n| n.to_string()));
+        }
+    }
+}
 
 fn raw_data_str(data: &Option<serde_json::Value>) -> String {
     match data {

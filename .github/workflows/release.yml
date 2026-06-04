@@ -7,7 +7,7 @@ on:
   workflow_dispatch: # Permite lanzarlo manualmente desde GitHub Actions
 
 jobs:
-  build:
+  build-and-release:
     name: Build installer
     runs-on: windows-latest
 
@@ -40,7 +40,7 @@ jobs:
         run: .\make_icon.ps1
         working-directory: installer
         shell: powershell
-        continue-on-error: true  # Si no hay icon_source.png usa el default
+        continue-on-error: true
 
       - name: Setup Python portable + edge-tts
         working-directory: installer
@@ -48,110 +48,42 @@ jobs:
         run: |
           $PyDir   = ".\python_portable"
           $EdgeTts = "$PyDir\Scripts\edge-tts.exe"
-
           if (-not (Test-Path $EdgeTts)) {
-            Write-Host "Preparando Python portable..." -ForegroundColor Cyan
-            if (Test-Path $PyDir) { Remove-Item $PyDir -Recurse -Force }
-
             $PyVersion = "3.12.9"
             $PyZip = "$env:TEMP\python-embed-amd64.zip"
             Invoke-WebRequest -Uri "https://www.python.org/ftp/python/$PyVersion/python-$PyVersion-embed-amd64.zip" `
                               -OutFile $PyZip -UseBasicParsing
             Expand-Archive $PyZip -DestinationPath $PyDir
-
             $pthFile = Get-ChildItem $PyDir -Filter "python*._pth" | Select-Object -First 1
             $content = (Get-Content $pthFile.FullName -Raw) -replace '#import site', 'import site'
             [System.IO.File]::WriteAllText($pthFile.FullName, $content, [System.Text.Encoding]::ASCII)
-
             Invoke-WebRequest -Uri "https://bootstrap.pypa.io/get-pip.py" -OutFile "$env:TEMP\get-pip.py" -UseBasicParsing
             & "$PyDir\python.exe" "$env:TEMP\get-pip.py" --no-warn-script-location --quiet
             & "$PyDir\python.exe" -m pip install edge-tts --no-warn-script-location --quiet
-
-            Write-Host "Python portable listo." -ForegroundColor Green
-          } else {
-            Write-Host "Python portable ya existe." -ForegroundColor Gray
           }
 
-      - name: Build installer with Inno Setup
+      - name: Build installer
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" DaiBot.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
         working-directory: installer
         shell: powershell
-        run: |
-          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          & $iscc DaiBot.iss
-          if ($LASTEXITCODE -ne 0) { exit 1 }
 
-      - name: Upload unsigned installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: DaiBot-unsigned
-          path: installer/output/DaiBot.exe
-          retention-days: 1
-
-  sign:
-    name: Sign installer (SignPath)
-    needs: build
-    runs-on: ubuntu-latest
-    # Solo firma si los secrets de SignPath están configurados
-    if: |
-      vars.SIGNPATH_ORG_ID != '' &&
-      github.event_name == 'push' &&
-      startsWith(github.ref, 'refs/tags/')
-
-    steps:
-      - name: Submit signing request to SignPath Foundation
-        uses: signpath/github-action-submit-signing-request@v1
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ vars.SIGNPATH_ORG_ID }}
-          project-slug: daibot
-          signing-policy-slug: release-signing
-          artifact-configuration-slug: installer
-          github-artifact-name: DaiBot-unsigned
-          wait-for-completion: true
-          output-artifact-name: DaiBot-signed
-
-  release:
-    name: Create GitHub Release
-    needs: [build, sign]
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    # Usa el firmado si existe, sino el sin firmar
-    continue-on-error: false
-
-    steps:
-      - name: Download signed installer
-        uses: actions/download-artifact@v4
-        with:
-          name: DaiBot-signed
-          path: dist/
-        continue-on-error: true
-
-      - name: Download unsigned installer (fallback)
-        uses: actions/download-artifact@v4
-        with:
-          name: DaiBot-unsigned
-          path: dist/
-        continue-on-error: true
-
-      - name: Rename installer
-        run: mv dist/DaiBot.exe dist/DaiBot-${{ github.ref_name }}.exe || true
-
-      - name: Create Release
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           name: DaiBot ${{ github.ref_name }}
-          draft: false
-          prerelease: false
           generate_release_notes: true
-          files: dist/DaiBot-${{ github.ref_name }}.exe
+          files: installer/output/DaiBot.exe
           body: |
             ## DaiBot ${{ github.ref_name }}
 
-            ### Instalación
-            1. Descarga `DaiBot-${{ github.ref_name }}.exe`
-            2. Si Windows muestra "Windows protegió su PC" → haz clic en **Más información** → **Ejecutar de todas formas**
+            ### Instalacion
+            1. Descarga `DaiBot.exe`
+            2. Si Windows muestra **"Windows protegió su PC"** → clic en **Más información** → **Ejecutar de todas formas**
             3. Sigue el instalador — no requiere permisos de administrador
-            4. Al terminar, abre DaiBot desde el Escritorio e inicia sesión en Kick
+            4. Al terminar abre DaiBot desde el Escritorio e inicia sesion en Kick
 
             ### Overlay en OBS
-            Browser Source → `http://localhost:3000/pixel.html` — 1920×1080
+            Browser Source → `http://localhost:3000/pixel.html` — 1920x1080

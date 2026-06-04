@@ -191,6 +191,21 @@ async fn main() {
         .nest_service("/", ServeDir::new(&overlay_dir))
         .layer(layer);
 
+    // Liberar el puerto si una instancia anterior quedó corriendo
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", &format!(
+                "Get-NetTCPConnection -LocalPort {} -ErrorAction SilentlyContinue \
+                 | ForEach-Object {{ Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }}",
+                config.port
+            )])
+            .creation_flags(0x08000000)
+            .output();
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+
     let addr = format!("0.0.0.0:{}", config.port);
     let listener = tokio::net::TcpListener::bind(&addr).await
         .unwrap_or_else(|e| fatal(&format!("No se pudo abrir el puerto {}: {e}\nCierra cualquier otra instancia de DaiBot e inténtalo de nuevo.", config.port)));

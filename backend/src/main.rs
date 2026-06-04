@@ -70,7 +70,8 @@ async fn kick_webhook(
     info!("[Webhook] event={event_type}");
 
     // Rutear al canal correcto por broadcaster_user_id
-    let broadcaster_id = json["event"]["broadcaster_user_id"].as_u64()
+    let broadcaster_id = json["broadcaster"]["user_id"].as_u64()
+        .or_else(|| json["event"]["broadcaster_user_id"].as_u64())
         .or_else(|| json["broadcaster_user_id"].as_u64())
         .or_else(|| json["data"]["broadcaster_user_id"].as_u64());
 
@@ -86,10 +87,12 @@ async fn kick_webhook(
     let ev = json.get("event").unwrap_or(&json);
 
     if event_type.contains("chat") || event_type.contains("message") {
-        let username = ev["sender"]["username"].as_str()
-            .or_else(|| ev["sender"]["slug"].as_str())
+        let username = json["sender"]["username"].as_str()
+            .or_else(|| json["sender"]["slug"].as_str())
+            .or_else(|| ev["sender"]["username"].as_str())
             .unwrap_or("?").to_string();
-        let content = ev["content"].as_str()
+        let content = json["content"].as_str()
+            .or_else(|| ev["content"].as_str())
             .or_else(|| ev["message"]["content"].as_str())
             .unwrap_or("").trim().to_string();
         if !content.is_empty() {

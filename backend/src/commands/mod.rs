@@ -7,6 +7,7 @@ const YT_API_KEY: &str = "AIzaSyBJRSpiY0bvQmjmJDdvUNPLRU_Z4YNCrRs";
 
 /// Punto de entrada — llamado desde kick/mod.rs y desde panelCommand.
 pub async fn handle(username: &str, content: &str, state: &Arc<AppState>) {
+    info!("[CHAT] {username}: {content}");
     let is_owner = username.eq_ignore_ascii_case(&state.config.channel_name);
     let cmd = content.to_lowercase();
 
@@ -322,6 +323,7 @@ pub async fn handle(username: &str, content: &str, state: &Arc<AppState>) {
 
 /// Lógica de !play: YouTube, playlist, video directo.
 pub async fn play(url: String, username: String, state: &Arc<AppState>) {
+    use crate::kick::sender;
     info!("[PLAY] {username}: {url}");
 
     // 1. Video directo
@@ -334,20 +336,32 @@ pub async fn play(url: String, username: String, state: &Arc<AppState>) {
         return;
     }
 
-    // 2. YouTube playlist
+    // 2. YouTube playlist (ignora las RD/mix — solo tomar el video individual)
     if url.contains("list=") {
-        if let Some((vid, title)) = first_from_playlist(&state.http, &url).await {
-            enqueue(VideoItem { video_id: Some(vid), url: None, title, user: username }, state).await;
-            return;
+        let list_id = url.split("list=").nth(1).unwrap_or("").split('&').next().unwrap_or("");
+        if !list_id.starts_with("RD") {
+            if let Some((vid, title)) = first_from_playlist(&state.http, &url).await {
+                let msg = format!("▶ @{username} agregó «{}» a la cola", &title[..title.len().min(60)]);
+                enqueue(VideoItem { video_id: Some(vid), url: None, title, user: username }, state).await;
+                sender::send(&msg, state).await;
+                return;
+            }
         }
+        // Es un mix/RD o falló la playlist → tratar como video individual
     }
 
     // 3. YouTube individual
     if let Some(vid) = yt_id(&url) {
         let title = yt_title(&state.http, &url).await;
+        let msg = format!("▶ @{username} agregó «{}» a la cola", &title[..title.len().min(60)]);
         enqueue(VideoItem { video_id: Some(vid), url: None, title, user: username }, state).await;
+        sender::send(&msg, state).await;
     } else {
         warn!("[PLAY] No se pudo extraer ID: {url}");
+        sender::send(
+            &format!("@{username} no pude procesar esa URL. Usa un link de YouTube válido."),
+            state,
+        ).await;
     }
 }
 

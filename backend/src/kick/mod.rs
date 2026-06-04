@@ -180,11 +180,25 @@ async fn connect_once(http: &reqwest::Client, state: &Arc<AppState>) -> Result<(
 
     info!("Pusher socket_id={socket_id}");
 
-    // ── Chat (canal público — no requiere Pusher auth) ────────────────────────
-    // "chatrooms.{id}.v2" es público. "private-chatrooms.{id}.v2" requiere
-    // auth de sesión web que no acepta tokens OAuth.
-    let chat_channel = format!("chatrooms.{}.v2", info.chatroom_id);
-    subscribe(&mut tx, &chat_channel, None).await?;
+    // ── Chat: intentar canal privado (autenticado) primero, luego el público ──
+    // Kick dejó de entregar mensajes en el canal público sin auth. El canal
+    // privado requiere un auth token de Kick obtenido con el access_token OAuth.
+    let token = state.access_token.read().await.clone();
+    let private_chat = format!("private-chatrooms.{}.v2", info.chatroom_id);
+    let public_chat  = format!("chatrooms.{}.v2", info.chatroom_id);
+
+    let chat_channel = match pusher_auth(http, &socket_id, &private_chat, &token).await {
+        Some(auth) => {
+            info!("Auth Pusher OK — usando canal privado {private_chat}");
+            subscribe(&mut tx, &private_chat, Some(&auth)).await?;
+            private_chat
+        }
+        None => {
+            warn!("Auth Pusher falló — fallback a canal público {public_chat}");
+            subscribe(&mut tx, &public_chat, None).await?;
+            public_chat
+        }
+    };
     info!("Suscrito a {chat_channel}");
 
     // ── Eventos del canal (follows, subs, stream live/offline) ───────────────
@@ -268,7 +282,13 @@ async fn on_event(
     state: &Arc<AppState>,
     slug:  &str,
 ) {
-    let Ok(ev) = serde_json::from_str::<PusherEvent>(raw) else { return };
+    let Ok(ev) = serde_json::from_str::<PusherEvent>(raw) else {
+        debug!("[Pusher] JSON no parseable: {raw}");
+        return;
+    };
+
+    // Log de todos los eventos que llegan (visible con RUST_LOG=debug)
+    debug!("[Pusher] evento={} data={:?}", ev.event, ev.data);
 
     match ev.event.as_str() {
 
@@ -282,7 +302,10 @@ async fn on_event(
         // ── Chat ─────────────────────────────────────────────────────────────
         "App\\Events\\ChatMessageEvent" => {
             let data_str = raw_data_str(&ev.data);
-            let Ok(msg)  = serde_json::from_str::<KickChatMsg>(&data_str) else { return };
+            let Ok(msg) = serde_json::from_str::<KickChatMsg>(&data_str) else {
+                warn!("[Kick] ChatMessageEvent no parseable — data cruda: {data_str}");
+                return;
+            };
 
             let username = msg.sender.username.clone();
             let content  = msg.content.trim().to_string();
@@ -427,6 +450,55 @@ async fn alert_gift_sub(gifter: &str, count: usize, state: &Arc<AppState>) {
     })).ok();
 
     sender::send(&format!("🎁 ¡{gifter} regaló {count} subs! ¡Gracias!"), state).await;
+}
+
+// ─── Autenticación Pusher para canales privados ───────────────────────────────
+
+/// Obtiene el auth token de Kick para suscribirse a canales privados de Pusher.
+/// Kick exige esto para el canal "private-chatrooms.{id}.v2" desde mid-2025.
+async fn pusher_auth(
+    http:      &reqwest::Client,
+    socket_id: &str,
+    channel:   &str,
+    token:     &str,
+) -> Option<String> {
+    if token.is_empty() { return None; }
+
+    // Endpoint estándar de Laravel Pusher broadcasting
+    let body = format!(
+        "socket_id={}&channel_name={}",
+        url_encode(socket_id),
+        url_encode(channel),
+    );
+
+    let r = http
+        .post("https://kick.com/broadcasting/auth")
+        .header("Authorization",  format!("Bearer {token}"))
+        .header("Content-Type",   "application/x-www-form-urlencoded")
+        .header("Origin",         "https://kick.com")
+        .header("Referer",        "https://kick.com/")
+        .body(body)
+        .send()
+        .await
+        .ok()?;
+
+    let status = r.status();
+    if !status.is_success() {
+        warn!("[Pusher auth] {status}");
+        return None;
+    }
+
+    let json: serde_json::Value = r.json().await.ok()?;
+    json["auth"].as_str().map(|s| s.to_string())
+}
+
+fn url_encode(s: &str) -> String {
+    s.bytes().flat_map(|b| match b {
+        b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9'
+        | b'-' | b'_' | b'.' | b'~' => vec![b as char],
+        b' ' => vec!['+'],
+        _ => format!("%{b:02X}").chars().collect(),
+    }).collect()
 }
 
 // ─── Utilidad ─────────────────────────────────────────────────────────────────

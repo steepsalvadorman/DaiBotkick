@@ -7,11 +7,11 @@ backend/target/
 # ── Node.js ────────────────────────────────────────────────────────────────
 node_modules/
 
-# ── Installer (artefactos generados por build.ps1) ────────────────────────
-installer/output/
-installer/python_portable/
-installer/icon.ico
-installer/ngrok.exe
+# ── Installer (obsoleto — build en Render/Docker) ─────────────────────────
+installer/
+
+# ── Login helper Node.js (obsoleto — OAuth multi-tenant en auth.rs) ────────
+login/
 
 # ── Runtime / datos generados ─────────────────────────────────────────────
 data/queue.json

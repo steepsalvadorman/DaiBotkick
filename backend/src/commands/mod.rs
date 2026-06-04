@@ -71,7 +71,7 @@ pub async fn handle(username: &str, content: &str, ch: &Arc<ChannelState>, globa
         }),
         "!comandos" | "!help" | "!ayuda" | "!commands" => global_cmd!("!comandos", {
             sender::send(
-                "📋 Comandos: !play [url] · !s [texto] · !quitarme · !misongs · !dado · !8ball [pregunta] · !sorteo · !uptime · !cola · !discord · !redes · !pc · !horario",
+                "📋 Comandos: !play [url] · !s/!dalia/!jorge/!alex [texto] · !quitarme · !misongs · !dado · !8ball [pregunta] · !sorteo · !uptime · !cola · !discord · !redes · !pc · !horario",
                 ch, global,
             ).await;
         }),
@@ -269,7 +269,9 @@ pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global:
     if is_direct_video(&url) {
         let title = url.split('/').next_back()
             .and_then(|s| s.split('?').next()).unwrap_or("Video").to_string();
+        let msg = format!("▶ @{username} agregó «{}» a la cola", &title[..title.len().min(60)]);
         enqueue(VideoItem { video_id: None, url: Some(url), title, user: username }, ch, global).await;
+        sender::send(&msg, ch, global).await;
         return;
     }
 
@@ -344,10 +346,7 @@ async fn yt_title(http: &reqwest::Client, url: &str) -> String {
         else { format!("%{b:02X}").chars().collect() }
     }).collect();
     let api = format!("https://noembed.com/embed?url={enc}");
-    http.get(&api).send().await.ok()
-        .and_then(|r| tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(r.json::<serde_json::Value>()).ok()
-        }))
-        .and_then(|v| v["title"].as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| "Video de YouTube".to_string())
+    let Ok(resp) = http.get(&api).send().await else { return "Video de YouTube".to_string() };
+    let Ok(json) = resp.json::<serde_json::Value>().await else { return "Video de YouTube".to_string() };
+    json["title"].as_str().unwrap_or("Video de YouTube").to_string()
 }

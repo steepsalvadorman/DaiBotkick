@@ -1,5 +1,5 @@
 # ── Stage 1: compilar el bot en Rust ─────────────────────────────────────────
-FROM rust:1.85-bookworm AS builder
+FROM rust:1.86-bookworm AS builder
 WORKDIR /build
 COPY backend/ .
 RUN cargo build --release

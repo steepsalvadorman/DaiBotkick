@@ -95,7 +95,21 @@ pub async fn token_refresh_loop(state: Arc<AppState>, initial_expires: u64) {
     }
 }
 
-const PUSHER_KEY: &str = "32cbd69e4b950bf97679";
+// Key primaria en us2 (conecta pero no entrega mensajes sin auth)
+// También intentamos otros clusters con la key alternativa
+const PUSHER_KEY_PRIMARY: &str = "32cbd69e4b950bf97679";
+const PUSHER_KEY_ALT: &str     = "eb1d5f283081a78b932c";
+
+// Lista de (host, key) a probar en orden hasta que uno funcione
+const PUSHER_ENDPOINTS: &[(&str, &str)] = &[
+    ("ws-us2.pusher.com",  PUSHER_KEY_PRIMARY),
+    ("ws-eu.pusher.com",   PUSHER_KEY_ALT),
+    ("ws-mt1.pusher.com",  PUSHER_KEY_ALT),
+    ("ws-ap1.pusher.com",  PUSHER_KEY_ALT),
+    ("ws-ap3.pusher.com",  PUSHER_KEY_ALT),
+    ("ws-us3.pusher.com",  PUSHER_KEY_ALT),
+    ("ws-sa1.pusher.com",  PUSHER_KEY_ALT),
+];
 
 #[derive(Deserialize)]
 struct PusherEvent {
@@ -119,12 +133,175 @@ struct KickSender {
 pub async fn run(state: Arc<AppState>) {
     let http = state.http.clone();
 
+    // Lanzar polling de chat como respaldo al Pusher
+    let poll_state = state.clone();
+    tokio::spawn(async move {
+        poll_chat_loop(poll_state).await;
+    });
+
+    // Suscribir a eventos de Kick vía EventSub
+    let sub_state = state.clone();
+    tokio::spawn(async move {
+        let broadcaster_id = loop {
+            let id = *sub_state.channel_id.read().await;
+            if let Some(id) = id { break id; }
+            sleep(Duration::from_secs(2)).await;
+        };
+        // Pequeño delay para que ngrok esté activo
+        sleep(Duration::from_secs(3)).await;
+        subscribe_kick_events(&sub_state, broadcaster_id).await;
+    });
+
     loop {
         match connect_once(&http, &state).await {
             Ok(_)  => warn!("Kick: conexión cerrada, reconectando en 5s…"),
             Err(e) => error!("Kick: {e} — reconectando en 5s…"),
         }
         sleep(Duration::from_secs(5)).await;
+    }
+}
+
+
+/// Suscribe a eventos de Kick via EventSub API.
+async fn subscribe_kick_events(state: &Arc<AppState>, broadcaster_user_id: u64) {
+    let token = state.access_token.read().await.clone();
+    let url = "https://api.kick.com/public/v1/events/subscriptions";
+
+    let body = serde_json::json!({
+        "events": [
+            { "name": "chat.message.sent",          "version": 1 },
+            { "name": "channel.followed",            "version": 1 },
+            { "name": "channel.subscription.new",    "version": 1 },
+            { "name": "channel.subscription.renewed","version": 1 },
+            { "name": "channel.subscription.gifts",  "version": 1 }
+        ],
+        "method": "webhook",
+        "broadcaster_user_id": broadcaster_user_id
+    });
+
+    match state.http
+        .post(url)
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&body)
+        .send()
+        .await
+    {
+        Ok(r) => {
+            let status = r.status();
+            let text   = r.text().await.unwrap_or_default();
+            if status.is_success() {
+                info!("[EventSub] Suscripciones creadas: {text:.300}");
+            } else {
+                warn!("[EventSub] Error {status}: {text:.300}");
+            }
+        }
+        Err(e) => warn!("[EventSub] Error de red: {e}"),
+    }
+}
+
+/// Polling de mensajes de chat vía API pública como respaldo al Pusher.
+/// Prueba varios endpoints hasta encontrar uno que funcione.
+async fn poll_chat_loop(state: Arc<AppState>) {
+    // Esperar a que el chatroom_id esté disponible
+    let chatroom_id = loop {
+        {
+            let id = state.chatroom_id.read().await;
+            if let Some(id) = *id { break id; }
+        }
+        sleep(Duration::from_secs(2)).await;
+    };
+
+    let candidates = [
+        format!("https://api.kick.com/public/v1/chatrooms/{chatroom_id}/messages"),
+        format!("https://api.kick.com/public/v1/channels/{chatroom_id}/messages"),
+    ];
+
+    info!("[Poll] Buscando endpoint de mensajes para chatroom {chatroom_id}...");
+
+    // Descubrir qué URL funciona
+    let mut active_url: Option<String> = None;
+    for url in &candidates {
+        let token = state.access_token.read().await.clone();
+        match state.http.get(url)
+            .header("Authorization", format!("Bearer {token}"))
+            .send().await
+        {
+            Ok(r) => {
+                let status = r.status();
+                let body   = r.text().await.unwrap_or_default();
+                if status.is_success() {
+                    info!("[Poll] Endpoint OK: {url} → {body:.200}");
+                    active_url = Some(url.clone());
+                    break;
+                } else {
+                    info!("[Poll] {url} → {status}: {body:.200}");
+                }
+            }
+            Err(e) => warn!("[Poll] {url} → red: {e}"),
+        }
+    }
+
+    let Some(url) = active_url else {
+        warn!("[Poll] Ningún endpoint de mensajes disponible en la API pública — solo Pusher activo");
+        return;
+    };
+
+    info!("[Poll] Usando {url} (intervalo 1s)");
+    let mut last_id: Option<String> = None;
+
+    loop {
+        sleep(Duration::from_secs(1)).await;
+
+        let token = state.access_token.read().await.clone();
+        let resp = match state.http.get(&url)
+            .header("Authorization", format!("Bearer {token}"))
+            .send().await
+        {
+            Ok(r)  => r,
+            Err(e) => { warn!("[Poll] Error de red: {e}"); continue; }
+        };
+
+        if !resp.status().is_success() { continue; }
+
+        let json: serde_json::Value = match resp.json().await {
+            Ok(j)  => j,
+            Err(e) => { warn!("[Poll] JSON inválido: {e}"); continue; }
+        };
+
+        // Procesar mensajes nuevos (array en data o en la raíz)
+        let msgs = json.get("data")
+            .and_then(|d| d.as_array())
+            .or_else(|| json.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        for msg in msgs.iter().rev() {
+            let id = msg.get("id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .or_else(|| msg["id"].as_u64().map(|n| n.to_string()));
+
+            if id.as_deref() == last_id.as_deref() { break; }
+
+            let username = msg["sender"]["username"].as_str()
+                .or_else(|| msg["username"].as_str())
+                .unwrap_or("?")
+                .to_string();
+            let content = msg["content"].as_str().unwrap_or("").trim().to_string();
+
+            if content.is_empty() { continue; }
+
+            info!("[CHAT-Poll] {username}: {content}");
+            state.io.emit("chatMessage", serde_json::json!({ "user": &username, "content": &content })).ok();
+            commands::handle(&username, &content, &state).await;
+        }
+
+        if let Some(first) = msgs.first() {
+            last_id = first.get("id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .or_else(|| first["id"].as_u64().map(|n| n.to_string()));
+        }
     }
 }
 
@@ -154,29 +331,60 @@ async fn connect_once(http: &reqwest::Client, state: &Arc<AppState>) -> Result<(
     *state.channel_id.write().await  = Some(info.channel_id);
     *state.chatroom_id.write().await = Some(info.chatroom_id);
 
-    // Conectar a Pusher — into_client_request() genera Sec-WebSocket-Key automáticamente,
-    // luego añadimos Origin para que Pusher no rechace la conexión.
-    let pusher_host = std::env::var("PUSHER_HOST")
-        .unwrap_or_else(|_| "ws-us2.pusher.com".into());
-    let ws_url = format!(
-        "wss://{pusher_host}/app/{PUSHER_KEY}\
-         ?protocol=7&client=js&version=8.5.0&flash=false"
-    );
-    info!("Conectando a Pusher: {pusher_host}");
-    let mut request = {
-        use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-        ws_url.as_str().into_client_request().map_err(|e| format!("WS request: {e}"))?
+    // Conectar probando cada endpoint (host+key) hasta encontrar uno que devuelva
+    // connection_established. Si PUSHER_HOST está en .env, usarlo directamente.
+    let override_host = std::env::var("PUSHER_HOST").ok();
+    let endpoints_to_try: Vec<(&str, &str)> = if let Some(ref h) = override_host {
+        vec![(h.as_str(), PUSHER_KEY_PRIMARY)]
+    } else {
+        PUSHER_ENDPOINTS.to_vec()
     };
-    request.headers_mut().insert(
-        tokio_tungstenite::tungstenite::http::header::ORIGIN,
-        tokio_tungstenite::tungstenite::http::HeaderValue::from_static("https://kick.com"),
-    );
-    let (ws, _) = connect_async(request).await.map_err(|e| format!("WS: {e}"))?;
-    let (mut tx, mut rx) = ws.split();
 
-    // ── Esperar connection_established ────────────────────────────────────────
-    let socket_id = wait_for_socket_id(&mut rx).await
-        .ok_or("No se recibió connection_established de Pusher")?;
+    let mut found: Option<(
+        futures_util::stream::SplitSink<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>, Message>,
+        futures_util::stream::SplitStream<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>>,
+        String, // socket_id
+    )> = None;
+
+    for (pusher_host, pusher_key) in &endpoints_to_try {
+        let ws_url = format!(
+            "wss://{pusher_host}/app/{pusher_key}\
+             ?protocol=7&client=js&version=8.5.0&flash=false"
+        );
+        info!("Probando WebSocket: {pusher_host} (key={}...)", &pusher_key[..8]);
+
+        let request = {
+            use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+            let mut r = ws_url.as_str().into_client_request()
+                .map_err(|e| format!("WS request: {e}"))?;
+            r.headers_mut().insert(
+                tokio_tungstenite::tungstenite::http::header::ORIGIN,
+                tokio_tungstenite::tungstenite::http::HeaderValue::from_static("https://kick.com"),
+            );
+            r
+        };
+
+        let ws = match connect_async(request).await {
+            Ok((ws, _)) => ws,
+            Err(e) => { warn!("  {pusher_host}: error de red: {e}"); continue; }
+        };
+        let (tx, mut rx) = ws.split();
+
+        match wait_for_socket_id(&mut rx).await {
+            Some(sid) => {
+                info!("  ✓ Conectado a {pusher_host} socket_id={sid}");
+                found = Some((tx, rx, sid));
+                break;
+            }
+            None => {
+                info!("  ✗ {pusher_host}: no devolvió connection_established");
+                continue;
+            }
+        }
+    }
+
+    let (mut tx, mut rx, socket_id) = found
+        .ok_or_else(|| "Ningún endpoint de Pusher respondió correctamente".to_string())?;
 
     info!("Pusher socket_id={socket_id}");
 
@@ -209,7 +417,9 @@ async fn connect_once(http: &reqwest::Client, state: &Arc<AppState>) -> Result<(
     // ── Loop de mensajes ──────────────────────────────────────────────────────
     while let Some(msg) = rx.next().await {
         match msg {
-            Ok(Message::Text(raw))    => on_event(&raw, &mut tx, state, &info.slug).await,
+            Ok(Message::Text(raw)) => {
+                on_event(&raw, &mut tx, state, &info.slug).await;
+            }
             Ok(Message::Ping(d))      => { tx.send(Message::Pong(d)).await.ok(); }
             Ok(Message::Close(_))     => { warn!("Pusher cerró la conexión"); break; }
             Err(e)                    => return Err(format!("WS: {e}")),
@@ -455,41 +665,94 @@ async fn alert_gift_sub(gifter: &str, count: usize, state: &Arc<AppState>) {
 // ─── Autenticación Pusher para canales privados ───────────────────────────────
 
 /// Obtiene el auth token de Kick para suscribirse a canales privados de Pusher.
-/// Kick exige esto para el canal "private-chatrooms.{id}.v2" desde mid-2025.
+/// reqwest/rustls tiene un fingerprint TLS que Cloudflare bloquea en kick.com.
+/// PowerShell usa Windows Schannel (mismo TLS que Edge/IE) y pasa el filtro.
 async fn pusher_auth(
-    http:      &reqwest::Client,
+    _http:     &reqwest::Client,
     socket_id: &str,
     channel:   &str,
     token:     &str,
 ) -> Option<String> {
     if token.is_empty() { return None; }
 
-    // Endpoint estándar de Laravel Pusher broadcasting
-    let body = format!(
-        "socket_id={}&channel_name={}",
-        url_encode(socket_id),
-        url_encode(channel),
-    );
+    // Primero intentar la API pública (no tiene fingerprint issue)
+    // — mantenemos este intento por si Kick añade el endpoint en el futuro
+    // (actualmente devuelve 404)
 
-    let r = http
-        .post("https://kick.com/broadcasting/auth")
-        .header("Authorization",  format!("Bearer {token}"))
-        .header("Content-Type",   "application/x-www-form-urlencoded")
-        .header("Origin",         "https://kick.com")
-        .header("Referer",        "https://kick.com/")
-        .body(body)
-        .send()
-        .await
-        .ok()?;
+    // Usar PowerShell + Windows Schannel para bypass de Cloudflare TLS fingerprint
+    #[cfg(windows)]
+    {
+        let auth = pusher_auth_via_powershell(socket_id, channel, token).await;
+        if auth.is_some() {
+            return auth;
+        }
+    }
 
-    let status = r.status();
-    if !status.is_success() {
-        warn!("[Pusher auth] {status}");
+    None
+}
+
+/// Llama a kick.com/broadcasting/auth usando PowerShell (Windows Schannel),
+/// que tiene un fingerprint TLS diferente a reqwest/rustls, bypaseando Cloudflare.
+#[cfg(windows)]
+async fn pusher_auth_via_powershell(
+    socket_id: &str,
+    channel:   &str,
+    token:     &str,
+) -> Option<String> {
+    let ps_script = r#"
+$token     = $env:KICK_TOKEN
+$socket_id = $env:KICK_SOCKET_ID
+$channel   = $env:KICK_CHANNEL
+$ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+$headers = @{
+    'Authorization' = "Bearer $token"
+    'Origin'        = 'https://kick.com'
+    'Referer'       = 'https://kick.com/'
+    'Accept'        = 'application/json, text/plain, */*'
+}
+$body = "socket_id=$socket_id&channel_name=$channel"
+try {
+    $resp = Invoke-RestMethod -Uri 'https://kick.com/broadcasting/auth' `
+        -Method POST `
+        -Headers $headers `
+        -ContentType 'application/x-www-form-urlencoded' `
+        -Body $body `
+        -UserAgent $ua
+    if ($resp.auth) { $resp.auth } else { "" }
+} catch {
+    ""
+}
+"#;
+
+    let socket_id = socket_id.to_string();
+    let channel   = channel.to_string();
+    let token     = token.to_string();
+
+    let result = tokio::task::spawn_blocking(move || {
+        use std::os::windows::process::CommandExt;
+        std::process::Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", ps_script])
+            .env("KICK_TOKEN",     &token)
+            .env("KICK_SOCKET_ID", &socket_id)
+            .env("KICK_CHANNEL",   &channel)
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
+            .output()
+    }).await.ok()?.ok()?;
+
+    let stdout = String::from_utf8_lossy(&result.stdout).trim().to_string();
+    let stderr = String::from_utf8_lossy(&result.stderr).trim().to_string();
+
+    if !stderr.is_empty() {
+        warn!("[Pusher auth PS] stderr: {stderr}");
+    }
+
+    if stdout.is_empty() || !stdout.contains(':') {
+        warn!("[Pusher auth PS] respuesta vacía o inválida: {stdout:?}");
         return None;
     }
 
-    let json: serde_json::Value = r.json().await.ok()?;
-    json["auth"].as_str().map(|s| s.to_string())
+    info!("[Pusher auth PS] OK — auth={stdout:.40}...");
+    Some(stdout)
 }
 
 fn url_encode(s: &str) -> String {

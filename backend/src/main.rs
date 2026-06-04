@@ -52,6 +52,104 @@ pub struct AppState {
     pub cooldown:     Arc<Mutex<cooldown::CooldownManager>>,
 }
 
+// ─── Webhook de Kick (EventSub) ───────────────────────────────────────────────
+
+async fn kick_webhook_get(
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> (axum::http::StatusCode, String) {
+    // WebSub / hub.challenge verification (GET con query param)
+    if let Some(ch) = params.get("hub.challenge").or_else(|| params.get("challenge")) {
+        info!("[Webhook] Verificación GET OK");
+        return (axum::http::StatusCode::OK, ch.clone());
+    }
+    info!("[Webhook] GET recibido: {:?}", params);
+    (axum::http::StatusCode::OK, "ok".into())
+}
+
+async fn kick_webhook(
+    axum::extract::State(state): axum::extract::State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
+    body: axum::body::Bytes,
+) -> (axum::http::StatusCode, String) {
+    let body_str = String::from_utf8_lossy(&body);
+    info!("[Webhook] ← {:.500}", body_str);
+
+    let json: serde_json::Value = match serde_json::from_slice(&body) {
+        Ok(j)  => j,
+        Err(_) => return (axum::http::StatusCode::OK, "ok".into()),
+    };
+
+    // Kick envía un challenge cuando verificas el webhook — hay que responderlo
+    if let Some(ch) = json.get("challenge").and_then(|c| c.as_str()) {
+        info!("[Webhook] Verificación OK");
+        return (axum::http::StatusCode::OK, ch.to_string());
+    }
+
+    // Determinar el tipo de evento (puede venir en header o en el body)
+    let event_type = headers.get("Kick-Event-Type")
+        .or_else(|| headers.get("Kick-Eventsub-Message-Type"))
+        .and_then(|v| v.to_str().ok())
+        .or_else(|| json["type"].as_str())
+        .or_else(|| json["event_type"].as_str())
+        .unwrap_or("unknown")
+        .to_string();
+
+    info!("[Webhook] event={event_type}");
+
+    // Los eventos suelen llegar en "event" o en la raíz
+    let ev = json.get("event").unwrap_or(&json);
+
+    if event_type.contains("chat") || event_type.contains("message") {
+        let username = ev["sender"]["username"].as_str()
+            .or_else(|| ev["sender"]["slug"].as_str())
+            .unwrap_or("?").to_string();
+        let content  = ev["content"].as_str()
+            .or_else(|| ev["message"]["content"].as_str())
+            .unwrap_or("").trim().to_string();
+
+        if !content.is_empty() {
+            info!("[CHAT-WH] {username}: {content}");
+            state.io.emit("chatMessage", serde_json::json!({ "user": &username, "content": &content })).ok();
+            commands::handle(&username, &content, &state).await;
+        }
+
+    } else if event_type.contains("follow") {
+        let username = ev["follower"]["username"].as_str()
+            .or_else(|| ev["username"].as_str())
+            .unwrap_or("alguien").to_string();
+        info!("[Webhook] Follow: {username}");
+        state.tts_tx.send(tts::TtsQueueItem {
+            text:  format!("¡Gracias por el follow, {username}!"),
+            voice: "dalia".into(),
+        }).ok();
+        state.io.emit("kickAlert", serde_json::json!({
+            "type": "follow", "username": &username,
+            "message": format!("¡Gracias por el follow, {username}!"),
+        })).ok();
+
+    } else if event_type.contains("subscription") || event_type.contains("sub") {
+        let username = ev["subscriber"]["username"].as_str()
+            .or_else(|| ev["user"]["username"].as_str())
+            .unwrap_or("alguien");
+        let months = ev["months"].as_u64().unwrap_or(1);
+        info!("[Webhook] Sub: {username} ({months} mes(es))");
+        let msg = if months > 1 {
+            format!("¡{username} se resuscribió por {months} meses!")
+        } else {
+            format!("¡{username} se suscribió al canal!")
+        };
+        state.tts_tx.send(tts::TtsQueueItem { text: msg.clone(), voice: "dalia".into() }).ok();
+        state.io.emit("kickAlert", serde_json::json!({
+            "type": "sub", "username": username, "months": months, "message": msg,
+        })).ok();
+
+    } else {
+        tracing::debug!("[Webhook] Evento no manejado: {event_type}");
+    }
+
+    (axum::http::StatusCode::OK, "ok".into())
+}
+
 fn resolve_overlay_dir(configured: &str) -> std::path::PathBuf {
     let p = std::path::Path::new(configured);
     if p.is_absolute() && p.exists() {
@@ -109,12 +207,7 @@ pub(crate) fn fatal(msg: &str) -> ! {
         unsafe { MessageBoxW(std::ptr::null_mut(), text.as_ptr(), cap.as_ptr(), 0x10); }
     }
     #[cfg(not(windows))]
-    {
-        eprintln!("\n{msg}\n");
-        eprintln!("Presiona Enter para cerrar...");
-        let mut buf = String::new();
-        let _ = std::io::stdin().read_line(&mut buf);
-    }
+    eprintln!("\n[FATAL] {msg}\n");
     std::process::exit(1);
 }
 
@@ -188,6 +281,8 @@ async fn main() {
     info!("Sirviendo overlay desde: {}", overlay_dir.display());
 
     let app = axum::Router::new()
+        .route("/kick_webhook", axum::routing::post(kick_webhook).get(kick_webhook_get))
+        .with_state(state.clone())
         .nest_service("/", ServeDir::new(&overlay_dir))
         .layer(layer);
 
@@ -206,11 +301,65 @@ async fn main() {
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
 
+    // Leer NGROK_DOMAIN directamente del .env
+    let ngrok_domain: String = find_dotenv_path()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|s| {
+            s.lines()
+                .find(|l| l.trim_start().starts_with("NGROK_DOMAIN="))
+                .map(|l| l.trim_start().trim_start_matches("NGROK_DOMAIN=")
+                           .trim_matches('"').trim().to_string())
+        })
+        .unwrap_or_default();
+
     let addr = format!("0.0.0.0:{}", config.port);
     let listener = tokio::net::TcpListener::bind(&addr).await
         .unwrap_or_else(|e| fatal(&format!("No se pudo abrir el puerto {}: {e}\nCierra cualquier otra instancia de DaiBot e inténtalo de nuevo.", config.port)));
     info!("DaiBot corriendo  → http://localhost:{}", config.port);
     info!("Overlay OBS       → http://localhost:{}/pixel.html", config.port);
+
+    // Lanzar ngrok AHORA que el listener ya está listo — así cuando Kick envíe
+    // el challenge de verificación, el servidor ya acepta conexiones.
+    if !ngrok_domain.is_empty() {
+        let domain_clone = ngrok_domain.clone();
+        let port_str = config.port.to_string();
+        tokio::spawn(async move {
+            // Matar instancia anterior
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                let _ = std::process::Command::new("taskkill")
+                    .args(["/F", "/IM", "ngrok.exe"])
+                    .creation_flags(0x08000000).output();
+            }
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+            // Buscar ngrok: junto al exe (installer), en PATH, o en WinGet
+            let exe_dir = std::env::current_exe().ok()
+                .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+                .unwrap_or_default();
+            let candidates = [
+                exe_dir.join("ngrok.exe").to_string_lossy().into_owned(),
+                "ngrok".to_string(),
+                format!("{}\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe\\ngrok.exe",
+                    std::env::var("USERPROFILE").unwrap_or_default()),
+            ];
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                for exe in &candidates {
+                    if std::process::Command::new(exe)
+                        .args(["http", &format!("--domain={domain_clone}"), &port_str])
+                        .creation_flags(0x08000000).spawn().is_ok()
+                    {
+                        info!("ngrok iniciado → https://{domain_clone}");
+                        info!("Webhook listo — ve a Kick Developer Portal y guarda para verificar");
+                        break;
+                    }
+                }
+            }
+        });
+    }
 
     // Popup gaming (WPF nativo, en thread aparte para no bloquear el servidor)
     #[cfg(windows)]

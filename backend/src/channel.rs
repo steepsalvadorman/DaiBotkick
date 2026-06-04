@@ -1,6 +1,6 @@
 use crate::{
     cooldown::CooldownManager,
-    db::{self, ChannelRow},
+    db::ChannelRow,
     kick, stats, tts,
     state::{AppState, ChannelCommands, ChannelState, SorteoState},
     queue::VideoQueue,
@@ -30,7 +30,6 @@ pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) {
 
     let ch = Arc::new(ChannelState {
         slug:              slug.clone(),
-        token_expires,
         access_token:      Arc::new(RwLock::new(row.access_token.clone())),
         refresh_token_val: Arc::new(RwLock::new(row.refresh_token.clone())),
         channel_id:        Arc::new(RwLock::new(row.broadcaster_user_id.map(|v| v as u64))),
@@ -39,7 +38,6 @@ pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) {
         follow_goal:       row.follow_goal as u64,
         video_queue:       Arc::new(RwLock::new(VideoQueue::new())),
         tts_tx,
-        last_advance:      Arc::new(Mutex::new(None)),
         start_time:        std::time::Instant::now(),
         sorteo:            Arc::new(Mutex::new(SorteoState { open: false, participants: Vec::new() })),
         cooldown:          Arc::new(Mutex::new(CooldownManager::new())),
@@ -57,9 +55,6 @@ pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) {
         global.user_id_to_slug.insert(bid as u64, slug.clone());
     }
 
-    // El namespace "/" ya está registrado globalmente en main.rs.
-    // El socket se une a la room del canal cuando conecta con ?ch=slug.
-
     // Guardar en el mapa global
     global.channels.insert(slug.clone(), ch.clone());
 
@@ -74,26 +69,12 @@ pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) {
     // Kick: WebSocket + EventSub
     let ch2      = ch.clone();
     let global2  = global.clone();
-    let tok_exp  = token_expires;
     tokio::spawn(async move {
-        kick::run_channel(ch2, global2, tok_exp).await;
+        kick::run_channel(ch2, global2, token_expires).await;
     });
 
     // Stats (CPU/RAM/followGoal por canal)
     stats::start_channel(global.io.clone(), ch.clone());
 
     info!("[Channel] Iniciado: {slug}");
-}
-
-/// Actualiza los tokens de un canal en memoria y en DB.
-pub async fn update_tokens(
-    ch:      &Arc<ChannelState>,
-    global:  &Arc<AppState>,
-    access:  String,
-    refresh: String,
-    expires: i64,
-) {
-    *ch.access_token.write().await      = access.clone();
-    *ch.refresh_token_val.write().await = refresh.clone();
-    db::update_tokens(&global.db, &ch.slug, &access, &refresh, expires).await;
 }

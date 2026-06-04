@@ -1,3 +1,5 @@
+// Configuración legacy del modo single-tenant (mantenida para compatibilidad local).
+#![allow(dead_code)]
 use std::env;
 
 #[derive(Clone, Debug)]

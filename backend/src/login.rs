@@ -24,7 +24,7 @@ pub async fn run_and_exit() {
     }
 }
 
-/// Primer arranque automático: hace el flujo OAuth y continúa el bot.
+#[allow(dead_code)]
 pub async fn run_first_time() {
     println!("╔══════════════════════════════════════════════╗");
     println!("║         BIENVENIDO A DAIBOT                  ║");

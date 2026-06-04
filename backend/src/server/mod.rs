@@ -1,4 +1,4 @@
-use crate::{commands, state::{AppState, ChannelState}, tts};
+use crate::{commands, state::AppState, tts};
 use socketioxide::extract::SocketRef;
 use std::sync::Arc;
 use tracing::info;

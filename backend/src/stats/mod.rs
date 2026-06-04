@@ -1,4 +1,4 @@
-use crate::state::{AppState, ChannelState};
+use crate::state::ChannelState;
 use std::sync::{atomic::Ordering, Arc};
 use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 use tokio::time::{interval, Duration};

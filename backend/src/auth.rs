@@ -10,7 +10,7 @@ use tracing::{info, warn};
 
 use crate::{channel, db, state::AppState};
 
-pub async fn start_oauth(State(state): State<Arc<AppState>>) -> Html<String> {
+pub async fn start_oauth() -> Html<String> {
     Html(format!(r#"<!DOCTYPE html>
 <html lang="es">
 <head>

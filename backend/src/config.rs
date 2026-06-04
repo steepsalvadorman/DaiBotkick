@@ -32,14 +32,9 @@ impl Config {
         let access_token  = env::var("KICK_ACCESS_TOKEN").unwrap_or_default();
         let refresh_token = env::var("KICK_REFRESH_TOKEN").unwrap_or_default();
 
-        // Cookies requeridas solo si no hay token OAuth
         let cookies = env::var("COOKIES").unwrap_or_default();
         if access_token.is_empty() && cookies.is_empty() {
-            return Err(
-                "ERROR: Falta autenticación en .env\n\
-                 Opción A (recomendada): cd login && node login.js  → OAuth 2.0\n\
-                 Opción B: añade COOKIES manualmente".to_string()
-            );
+            return Err("no_auth".to_string());
         }
 
         let bearer_token = env::var("BEARER_TOKEN").unwrap_or_else(|_| {
@@ -50,7 +45,7 @@ impl Config {
         });
 
         Ok(Self {
-            channel_name: env::var("CHANNEL_NAME").unwrap_or_else(|_| "seniordai".into()),
+            channel_name: env::var("CHANNEL_NAME").unwrap_or_default(),
             access_token,
             refresh_token,
             client_id: env::var("KICK_CLIENT_ID").unwrap_or_default(),

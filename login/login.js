@@ -84,24 +84,24 @@ function listenForCallback(expectedState, codeVerifier) {
             const state  = url.searchParams.get('state');
             const error  = url.searchParams.get('error');
 
+            const html = (body) => {
+                res.setHeader('Content-Type', 'text/html; charset=utf-8');
+                res.end(`<html><head><meta charset="utf-8"></head><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0a0a0a;color:#fff">${body}</body></html>`);
+            };
+
             if (error) {
-                res.end('<h2>Error: ' + error + '</h2><p>Puedes cerrar esta pestaña.</p>');
+                html('<h2>Error: ' + error + '</h2><p>Puedes cerrar esta pestaña.</p>');
                 server.close();
                 reject(new Error('OAuth rechazado: ' + error));
                 return;
             }
 
             if (!code || state !== expectedState) {
-                res.end('<h2>Parámetros inválidos</h2>');
+                html('<h2>Parámetros inválidos</h2>');
                 return;
             }
 
-            res.end(`
-                <html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#0a0a0a;color:#fff">
-                <h2 style="color:#53fc18">✅ Autorizado correctamente</h2>
-                <p>Puedes cerrar esta pestaña y volver a la terminal.</p>
-                </body></html>
-            `);
+            html('<h2 style="color:#53fc18">✅ Autorizado correctamente</h2><p>Puedes cerrar esta pestaña y volver a la terminal.</p>');
             server.close();
             console.log('✅ Autorización recibida');
             resolve({ code, codeVerifier });

@@ -76,7 +76,8 @@ mod tests {
 
     fn make_queue() -> VideoQueue {
         let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let path = format!("/tmp/test_queue_{n}.json");
+        let path = std::env::temp_dir().join(format!("test_queue_{n}.json"));
+        let path = path.to_string_lossy().into_owned();
         fs::write(&path, "[]").unwrap();
         VideoQueue::load(&path)
     }
@@ -180,7 +181,8 @@ mod tests {
     #[test]
     fn persists_to_file_and_reloads() {
         let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let path = format!("/tmp/test_queue_persist_{n}.json");
+        let path = std::env::temp_dir().join(format!("test_queue_persist_{n}.json"));
+        let path = path.to_string_lossy().into_owned();
         fs::write(&path, "[]").unwrap();
         {
             let mut q = VideoQueue::load(&path);

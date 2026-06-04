@@ -23,15 +23,42 @@ pub fn is_valid_voice(id: &str) -> bool {
     VOICES.iter().any(|(k, _)| *k == id)
 }
 
+/// Busca edge-tts: primero en el Python bundled junto al exe, luego en el PATH.
+fn make_edge_tts_cmd() -> tokio::process::Command {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(app) = exe.parent() {
+            // Python portable bundled: {app}/python/Scripts/edge-tts.exe
+            let bundled = app.join("python").join("Scripts").join("edge-tts.exe");
+            if bundled.exists() {
+                return tokio::process::Command::new(bundled);
+            }
+            // Alternativa: llamar al módulo directamente con python.exe bundled
+            let python = app.join("python").join("python.exe");
+            if python.exists() {
+                let mut cmd = tokio::process::Command::new(python);
+                cmd.args(["-m", "edge_tts"]);
+                return cmd;
+            }
+        }
+    }
+    // Fallback: edge-tts en el PATH del sistema
+    tokio::process::Command::new("edge-tts")
+}
+
 /// Sintetiza texto usando el CLI `edge-tts` de Python y devuelve bytes MP3.
 pub async fn synthesize(text: &str, voice_id: &str) -> Result<Vec<u8>, String> {
     let vname = voice_name(voice_id);
-    let tmp   = format!("/tmp/tts_{}.mp3", Uuid::new_v4());
+    let tmp = std::env::temp_dir().join(format!("tts_{}.mp3", Uuid::new_v4()));
 
-    let out = tokio::process::Command::new("edge-tts")
-        .args(["--voice", vname, "--text", text, "--write-media", &tmp])
-        .output()
-        .await
+    let mut cmd = make_edge_tts_cmd();
+    cmd.arg("--voice").arg(vname)
+       .arg("--text").arg(text)
+       .arg("--write-media").arg(&tmp);
+
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+    let out = cmd.output().await
         .map_err(|e| format!("edge-tts spawn: {e}"))?;
 
     if !out.status.success() {

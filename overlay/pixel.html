@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SeniorDai — Pixel Overlay</title>
+    <title>DaiBot — Pixel Overlay</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <script src="/sio.js"></script>
     <style>
@@ -297,8 +297,8 @@
             <div class="stat-chip"><span class="label">UPTIME</span><span class="val" id="uptime">00:00:00</span></div>
         </div>
         <div class="topbar-center">
-            <div class="stream-title glitch" data-text="SENIORDAI">
-                <span class="accent">SENIOR</span>DAI
+            <div id="stream-title-display" class="stream-title glitch" data-text="DAIBOT">
+                <span class="accent">DAI</span>BOT
             </div>
         </div>
         <div class="topbar-right">
@@ -410,13 +410,13 @@
                 <span class="ticker-sep">◆</span>
                 ★ Escribe !s + texto para que hable el bot
                 <span class="ticker-sep">◆</span>
-                ★ Síguenos en Kick.com/SeniorDai
+                ★ Síguenos en <span class="kick-channel-url">kick.com/daibot</span>
                 <span class="ticker-sep">◆</span>
                 ★ Escribe !play + link de YouTube para pedir una canción
                 <span class="ticker-sep">◆</span>
                 ★ Escribe !s + texto para que hable el bot
                 <span class="ticker-sep">◆</span>
-                ★ Síguenos en Kick.com/SeniorDai
+                ★ Síguenos en <span class="kick-channel-url">kick.com/daibot</span>
                 <span class="ticker-sep">◆</span>
             </div>
         </div>
@@ -428,6 +428,27 @@
     const VOL_TTS = 1.0;
 
     const socket = io();
+
+    // Personalización: el bot envía el nombre del canal al conectar
+    socket.on("config", (cfg) => {
+        const name    = (cfg.channel_name || "DaiBot").toUpperCase();
+        const kickUrl = cfg.kick_url || ("kick.com/" + (cfg.channel_name || "daibot"));
+
+        document.title = `${cfg.channel_name} — Pixel Overlay`;
+
+        const titleEl = document.getElementById("stream-title-display");
+        if (titleEl) {
+            titleEl.setAttribute("data-text", name);
+            // Mitad izquierda en color acento, mitad derecha en blanco
+            const mid = Math.ceil(name.length / 2);
+            titleEl.innerHTML =
+                `<span class="accent">${name.slice(0, mid)}</span>${name.slice(mid)}`;
+        }
+
+        document.querySelectorAll(".kick-channel-url").forEach(el => {
+            el.textContent = kickUrl;
+        });
+    });
 
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     let audioUnlocked  = true;

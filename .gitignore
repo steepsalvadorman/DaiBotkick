@@ -1,20 +1,17 @@
 # ── Credenciales (NUNCA en git) ───────────────────────────────────────────
 .env
 
-# ── Node.js ───────────────────────────────────────────────────────────────
-node_modules/
-dist/
-npm-debug.log*
-
 # ── Rust build ────────────────────────────────────────────────────────────
 backend/target/
 
+# ── Installer (artefactos generados por build.ps1) ────────────────────────
+installer/output/
+installer/python_portable/
+installer/icon.ico
+
 # ── Runtime / datos generados ─────────────────────────────────────────────
 data/queue.json
-backend/data/queue.json
 data/tts_cache/
-backend/data/tts_cache/
-tts_cache/
 *.mp3
 
 # ── OS ────────────────────────────────────────────────────────────────────

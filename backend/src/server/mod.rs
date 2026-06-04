@@ -32,9 +32,15 @@ pub fn setup(io: &socketioxide::SocketIo, state: Arc<AppState>) {
             info!("Widget desconectado: {}", s.id);
         });
 
-        // Enviar cola actual al conectar
+        // Enviar config del canal + cola actual al conectar
         let st = state.clone();
         tokio::spawn(async move {
+            // Config personalizada (nombre del canal, URL de Kick)
+            s2.emit("config", serde_json::json!({
+                "channel_name": &st.config.channel_name,
+                "kick_url": format!("kick.com/{}", &st.config.channel_name),
+            })).ok();
+
             let q = st.video_queue.read().await;
             s2.emit("syncQueue", serde_json::json!({"items": &q.items})).ok();
         });

@@ -117,10 +117,7 @@ struct KickSender {
 }
 
 pub async fn run(state: Arc<AppState>) {
-    let http = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124.0")
-        .build()
-        .unwrap();
+    let http = state.http.clone();
 
     loop {
         match connect_once(&http, &state).await {
@@ -135,7 +132,8 @@ async fn connect_once(http: &reqwest::Client, state: &Arc<AppState>) -> Result<(
     let chan = &state.config.channel_name;
 
     // Obtener IDs del canal
-    let info = api::get_channel_info(http, chan)
+    let token = state.access_token.read().await.clone();
+    let info = api::get_channel_info(http, chan, &token)
         .await
         .ok_or_else(|| format!("No se pudo obtener info del canal '{chan}'"))?;
 

@@ -1,6 +1,8 @@
 # DaiBot — Bot de Stream para Kick.com
 
-Bot de streaming para el canal **SeniorDai** en Kick.com. Maneja el chat, reproduce videos de YouTube pedidos por el chat, hace text-to-speech, gestiona sorteos y muestra un overlay animado en OBS.
+Bot de streaming para Kick.com distribuible como instalador de Windows. Gestiona el chat, reproduce videos de YouTube pedidos por el chat, hace text-to-speech, maneja sorteos y muestra un overlay animado en OBS.
+
+> Desarrollado para el canal **SeniorDai** en Kick.com pero distribuible a cualquier streamer.
 
 ---
 
@@ -20,60 +22,15 @@ Bot de streaming para el canal **SeniorDai** en Kick.com. Maneja el chat, reprod
 
 ---
 
-## Requisitos
+## Instalación (usuarios finales)
 
-- **Rust** — [rustup.rs](https://rustup.rs) (el script lo instala solo si falta)
-- **Node.js** — para el login OAuth de Kick
-- **Python edge-tts** — para el text-to-speech
+1. Descarga `DaiBot.exe` desde Releases
+2. Ejecútalo — no requiere permisos de administrador
+3. Al terminar, haz doble clic en el icono del Escritorio
+4. Se abrirá tu navegador para iniciar sesión en Kick
+5. Listo — el bot se configura solo
 
-```bash
-pip install edge-tts
-```
-
----
-
-## Configuración
-
-**1. Clonar el repositorio**
-```bash
-git clone https://github.com/steepsalvadorman/DaiBotkick.git
-cd DaiBotkick
-```
-
-**2. Crear tu `.env`**
-```bash
-cp .env.example .env
-```
-
-**3. Editar `.env` con tus datos** — lo mínimo:
-```env
-CHANNEL_NAME=tu_canal_de_kick
-
-KICK_CLIENT_ID=      # kick.com/settings/developer
-KICK_CLIENT_SECRET=  # kick.com/settings/developer
-
-# Respuestas automáticas del chat
-CMD_DISCORD=https://discord.gg/tu-link
-CMD_REDES=Tus redes sociales aquí
-CMD_PC=CPU: ... | GPU: ... | RAM: ...
-CMD_HORARIO=Lunes a viernes de 18:00 a 22:00
-```
-
-Los tokens OAuth se llenan automáticamente al hacer login.
-
----
-
-## Cómo iniciar
-
-```bash
-./autorun.sh
-```
-
-El script hace todo solo:
-1. Verifica Rust y Node.js
-2. Abre el navegador para autorizar el bot en Kick (primera vez)
-3. Compila el backend en Rust
-4. Arranca el bot y lo reinicia si se cae
+**No necesitas instalar** Rust, Python, Node.js ni nada adicional. Todo viene incluido en el instalador.
 
 ---
 
@@ -87,9 +44,10 @@ Agrega una **Browser Source** con estos ajustes:
 | Ancho | `1920` |
 | Alto | `1080` |
 | Controlar audio vía OBS | ✅ Marcado |
-| CSS personalizado | `body { background-color: rgba(0,0,0,0); margin: 0; overflow: hidden; }` |
 
 > ⚠️ Usa **una sola** browser source. Refrescar crea una segunda conexión.
+
+El overlay se personaliza solo con tu nombre de canal al conectarse.
 
 ---
 
@@ -134,13 +92,49 @@ Agrega una **Browser Source** con estos ajustes:
 
 ---
 
-## Imagen de comandos
+## Para desarrolladores
 
-El archivo `comandos.png` (4K, 3840×2160) es una imagen lista para subir a la información del stream. Para regenerarla:
+### Requisitos
 
-```bash
-./make-comandos.sh
+- [Rust](https://rustup.rs) (toolchain stable)
+- [Inno Setup 6](https://jrsoftware.org/isdl.php) (para compilar el instalador)
+
+### Compilar el instalador
+
+```powershell
+cd installer
+.\build.ps1
 ```
+
+`build.ps1` hace todo automáticamente:
+1. `cargo build --release` — compila el bot
+2. Genera `icon.ico` desde `icon_source.png` si existe
+3. Descarga Python 3.12 embeddable + instala edge-tts (una sola vez, queda en caché)
+4. Compila el instalador con Inno Setup → `installer/output/DaiBot.exe`
+
+### Credenciales OAuth
+
+Antes de compilar, edita `installer/DaiBot.iss` y pon tus credenciales de la app de Kick:
+
+```
+#define KickClientId     "tu_client_id"
+#define KickClientSecret "tu_client_secret"
+```
+
+Crea la app en [kick.com/settings/developer](https://kick.com/settings/developer) con redirect URL `http://localhost:3001/callback`.
+
+### Icono personalizado
+
+Coloca tu imagen como `installer/icon_source.png` y `build.ps1` la convertirá a `.ico` automáticamente.
+
+### Tests
+
+```powershell
+cd backend
+cargo test
+```
+
+43 tests unitarios: cooldowns, cola de videos, voces TTS, parsing de URLs de YouTube y helpers de configuración.
 
 ---
 
@@ -148,32 +142,37 @@ El archivo `comandos.png` (4K, 3840×2160) es una imagen lista para subir a la i
 
 ```
 DaiBotkick/
-├── autorun.sh          ← Inicia el bot (instala deps, autentica, compila)
-├── make-comandos.sh    ← Genera comandos.png en alta resolución
-├── comandos.html       ← Fuente del diseño de la imagen de comandos
-├── comandos.png        ← Imagen de comandos lista para el stream (4K)
-├── .env                ← Credenciales (NO se sube a git)
-├── .env.example        ← Plantilla de configuración
+├── .env.example            ← Plantilla de configuración
+├── comandos.html           ← Fuente del diseño de la imagen de comandos
+├── comandos.png            ← Imagen de comandos lista para el stream (4K)
 │
-├── backend/            ← Servidor en Rust (axum + socketioxide)
+├── backend/                ← Servidor en Rust (axum + socketioxide)
 │   └── src/
-│       ├── main.rs         Punto de entrada y AppState
-│       ├── commands/       Lógica de todos los comandos del chat
-│       ├── cooldown.rs     Anti-spam: cooldowns por usuario y globales
-│       ├── kick/           Conexión al chat de Kick.com (Pusher WebSocket)
-│       ├── tts/            Text-to-speech vía edge-tts (Python CLI)
-│       ├── queue/          Cola de videos con persistencia en disco
-│       ├── server/         WebSocket con el overlay (Socket.IO)
-│       └── stats/          CPU/RAM en tiempo real
+│       ├── main.rs         ← Punto de entrada, AppState, primer arranque
+│       ├── login.rs        ← OAuth 2.0 PKCE en Rust (sin Node.js)
+│       ├── config.rs       ← Carga de variables de entorno
+│       ├── commands/       ← Lógica de todos los comandos del chat
+│       ├── cooldown.rs     ← Anti-spam: cooldowns por usuario y globales
+│       ├── kick/           ← Conexión al chat de Kick.com (Pusher WebSocket)
+│       ├── tts/            ← Text-to-speech vía edge-tts bundled
+│       ├── queue/          ← Cola de videos con persistencia en disco
+│       ├── server/         ← WebSocket con el overlay (Socket.IO)
+│       └── stats/          ← CPU/RAM en tiempo real
 │
-├── overlay/            ← Archivos servidos al OBS
-│   └── pixel.html          Overlay principal (pixel art, chat, reproductor)
+├── overlay/                ← Archivos servidos al OBS
+│   └── pixel.html          ← Overlay principal (pixel art, chat, reproductor)
 │
-├── login/              ← Login OAuth de Kick
+├── login/                  ← Login OAuth legacy (Node.js, referencia)
 │   └── login.js
 │
-└── data/               ← Datos en tiempo real (no en git)
-    └── tts_cache/          Cache de audios MP3 generados
+├── installer/              ← Empaquetado para Windows
+│   ├── DaiBot.iss          ← Script de Inno Setup 6
+│   ├── build.ps1           ← Compila todo: Rust + icono + Python + instalador
+│   ├── make_icon.ps1       ← Convierte icon_source.png → icon.ico
+│   └── icon_source.png     ← Imagen fuente del icono (no en git si es privada)
+│
+└── data/                   ← Datos en tiempo real (no en git)
+    └── tts_cache/          ← Cache de audios MP3 generados
 ```
 
 ---
@@ -182,37 +181,27 @@ DaiBotkick/
 
 - **Backend:** Rust — [Axum](https://github.com/tokio-rs/axum), [socketioxide](https://github.com/Totodore/socketioxide), tokio, reqwest
 - **Overlay:** HTML + CSS + JavaScript vanilla
-- **Chat:** Kick.com API v1 (OAuth 2.0) + Pusher WebSocket
-- **TTS:** [edge-tts](https://github.com/rany2/edge-tts) — voces de Microsoft Edge, gratis
+- **Chat:** Kick.com Public API v1 (OAuth 2.0 PKCE) + Pusher WebSocket
+- **TTS:** [edge-tts](https://github.com/rany2/edge-tts) — voces de Microsoft, incluido en el instalador
 - **Videos:** YouTube IFrame con autoplay y unmute vía postMessage
-
----
-
-## Tests
-
-```bash
-cd backend && cargo test
-```
-
-43 tests unitarios cubriendo: cooldowns, cola de videos, voces TTS, parsing de URLs de YouTube y helpers de configuración.
+- **Instalador:** [Inno Setup 6](https://jrsoftware.org/isdl.php) con Python 3.12 embeddable bundled
 
 ---
 
 ## Solución de problemas
 
+**El overlay no se ve en OBS**
+→ Verifica que DaiBot esté corriendo antes de abrir OBS
+→ URL correcta: `http://localhost:3000/pixel.html`
+
 **El bot no se conecta al chat**
-→ Corre `./autorun.sh` de nuevo para renovar el token OAuth
+→ Usa el acceso directo "Configurar OAuth" del Menú Inicio para renovar el token
 
 **No se escucha el TTS**
-→ Verifica que `edge-tts` esté instalado: `pip install edge-tts`
 → Verifica que "Controlar audio vía OBS" esté marcado en la browser source
 
 **El video no reproduce**
 → Asegúrate de tener una sola browser source en OBS
-→ El video aparece automáticamente cuando alguien usa `!play`
-
-**El bot arranca pero no responde en el chat**
-→ Verifica que el token OAuth sea válido: comprueba los logs de `autorun.sh`
 
 **El overlay se ve cortado**
 → El overlay está diseñado para 1920×1080. Verifica las dimensiones en OBS

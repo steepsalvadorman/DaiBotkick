@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" role="img" aria-label="GorilinRix, un gorila tierno">
+  <!-- Cuerpo y hombros anchos -->
+  <path d="M28 220 C26 168 60 140 110 140 C160 140 194 168 192 220 Z" fill="#2e2838"/>
+  <!-- Pecho -->
+  <path d="M74 220 C74 182 90 166 110 166 C130 166 146 182 146 220 Z" fill="#4a4258"/>
+  <!-- Brazos -->
+  <ellipse cx="44" cy="196" rx="22" ry="30" fill="#2e2838"/>
+  <ellipse cx="176" cy="196" rx="22" ry="30" fill="#2e2838"/>
+  <ellipse cx="50" cy="214" rx="16" ry="10" fill="#7d7389"/>
+  <ellipse cx="170" cy="214" rx="16" ry="10" fill="#7d7389"/>
+  <!-- Orejas -->
+  <circle cx="50" cy="96" r="15" fill="#2e2838"/>
+  <circle cx="170" cy="96" r="15" fill="#2e2838"/>
+  <circle cx="50" cy="96" r="8" fill="#7d7389"/>
+  <circle cx="170" cy="96" r="8" fill="#7d7389"/>
+  <!-- Cabeza con cresta -->
+  <path d="M110 22 C140 22 168 46 170 86 C172 124 146 150 110 150 C74 150 48 124 50 86 C52 46 80 22 110 22 Z" fill="#2e2838"/>
+  <path d="M96 30 Q110 12 124 30 Q110 24 96 30 Z" fill="#2e2838"/>
+  <!-- Cara gris -->
+  <path d="M110 70 C138 64 156 82 154 106 C152 132 134 146 110 146 C86 146 68 132 66 106 C64 82 82 64 110 70 Z" fill="#8f85a0"/>
+  <!-- Ceja (arco superciliar) -->
+  <path d="M64 84 C76 66 100 68 110 78 C120 68 144 66 156 84 C144 80 124 80 110 88 C96 80 76 80 64 84 Z" fill="#3a3346"/>
+  <!-- Ojos grandes y brillantes -->
+  <circle cx="90" cy="98" r="11" fill="#140f1c"/>
+  <circle cx="130" cy="98" r="11" fill="#140f1c"/>
+  <circle cx="94" cy="93" r="4.5" fill="#fff"/>
+  <circle cx="134" cy="93" r="4.5" fill="#fff"/>
+  <circle cx="87" cy="102" r="2" fill="#fff" opacity=".75"/>
+  <circle cx="127" cy="102" r="2" fill="#fff" opacity=".75"/>
+  <!-- Mejillas -->
+  <ellipse cx="76" cy="118" rx="9" ry="5.5" fill="#ff8fb1" opacity=".55"/>
+  <ellipse cx="144" cy="118" rx="9" ry="5.5" fill="#ff8fb1" opacity=".55"/>
+  <!-- Nariz ancha -->
+  <path d="M96 112 C96 104 124 104 124 112 C124 120 116 122 110 122 C104 122 96 120 96 112 Z" fill="#5c536b"/>
+  <ellipse cx="103" cy="114" rx="4" ry="3" fill="#2a2433"/>
+  <ellipse cx="117" cy="114" rx="4" ry="3" fill="#2a2433"/>
+  <!-- Sonrisa -->
+  <path d="M96 130 Q110 141 124 130" stroke="#2a2433" stroke-width="4" stroke-linecap="round" fill="none"/>
+  <!-- Banda verde estilo Kick -->
+  <path d="M58 60 Q110 30 162 60 L158 72 Q110 44 62 72 Z" fill="#53fc18"/>
+  <path d="M158 64 L176 56 L172 70 Z" fill="#53fc18"/>
+</svg>

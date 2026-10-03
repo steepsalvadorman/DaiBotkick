@@ -15,35 +15,10 @@ use crate::{channel, db, state::AppState};
 /// (slug validado por `valid_slug`, base escapada y token UUID).
 const CONNECTED_PAGE: &str = include_str!("connected.html");
 
-pub async fn start_oauth() -> Html<String> {
-    Html(
-        r#"<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>GorilinRix — Conectar canal</title>
-  <style>
-    body{font-family:monospace;background:#060010;color:#53FC18;display:flex;
-          align-items:center;justify-content:center;min-height:100vh;margin:0}
-    .card{border:2px solid #53FC18;padding:40px;max-width:480px;text-align:center;
-           box-shadow:0 0 32px #53FC1844}
-    h1{font-size:2em;margin:0 0 8px}
-    p{color:#aaa;margin:16px 0 32px}
-    a.btn{background:#53FC18;color:#060010;padding:14px 32px;text-decoration:none;
-            font-weight:bold;font-size:1.1em;display:inline-block}
-    a.btn:hover{opacity:.85}
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>[ G O R I L I N R I X ]</h1>
-    <p>Conecta tu canal de Kick para usar el bot, overlay y comandos de chat.</p>
-    <a class="btn" href="/auth/kick">Conectar con Kick</a>
-  </div>
-</body>
-</html>"#
-            .to_string(),
-    )
+const START_PAGE: &str = include_str!("start.html");
+
+pub async fn start_oauth() -> Html<&'static str> {
+    Html(START_PAGE)
 }
 
 pub async fn redirect_to_kick(State(state): State<Arc<AppState>>) -> Response {

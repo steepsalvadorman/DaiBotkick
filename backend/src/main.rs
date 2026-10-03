@@ -1,134 +1,73 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
-
 mod auth;
 mod channel;
 mod commands;
 mod config;
 mod cooldown;
 mod db;
+#[cfg(test)]
+mod integration_tests;
 mod kick;
 mod login;
 mod queue;
 mod server;
 mod state;
 mod stats;
+#[cfg(test)]
+mod test_support;
 mod tts;
+mod webhook;
 
-use axum::{
-    body::Bytes,
-    extract::{Query, State},
-    http::{HeaderMap, StatusCode},
-};
+use axum::{extract::State, http::StatusCode};
 use dashmap::DashMap;
 use socketioxide::SocketIo;
 use state::{AppState, GlobalConfig};
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
+use tokio::sync::{Mutex, Semaphore};
+use tokio_util::sync::CancellationToken;
 use tower_http::services::ServeDir;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
-// ─── Webhook de Kick (EventSub) ───────────────────────────────────────────────
-
-async fn kick_webhook_get(
-    Query(params): Query<HashMap<String, String>>,
-) -> (StatusCode, String) {
-    if let Some(ch) = params.get("hub.challenge").or_else(|| params.get("challenge")) {
-        info!("[Webhook] Verificación GET OK");
-        return (StatusCode::OK, ch.clone());
+async fn ready(State(state): State<Arc<AppState>>) -> StatusCode {
+    if state.shutdown.is_cancelled() {
+        return StatusCode::SERVICE_UNAVAILABLE;
     }
-    (StatusCode::OK, "ok".into())
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        sqlx::query("SELECT 1").execute(&state.db),
+    )
+    .await
+    {
+        Ok(Ok(_)) => StatusCode::OK,
+        _ => StatusCode::SERVICE_UNAVAILABLE,
+    }
 }
 
-async fn kick_webhook(
-    State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
-    body: Bytes,
-) -> (StatusCode, String) {
-    let body_str = String::from_utf8_lossy(&body);
-    info!("[Webhook] ← {:.500}", body_str);
-
-    let json: serde_json::Value = match serde_json::from_slice(&body) {
-        Ok(j)  => j,
-        Err(_) => return (StatusCode::OK, "ok".into()),
-    };
-
-    // Challenge de verificación
-    if let Some(ch) = json.get("challenge").and_then(|c| c.as_str()) {
-        info!("[Webhook] Verificación OK");
-        return (StatusCode::OK, ch.to_string());
-    }
-
-    // Determinar tipo de evento
-    let event_type = headers.get("Kick-Event-Type")
-        .or_else(|| headers.get("Kick-Eventsub-Message-Type"))
-        .and_then(|v| v.to_str().ok())
-        .or_else(|| json["type"].as_str())
-        .or_else(|| json["event_type"].as_str())
-        .unwrap_or("unknown")
-        .to_string();
-
-    info!("[Webhook] event={event_type}");
-
-    // Rutear al canal correcto por broadcaster_user_id
-    let broadcaster_id = json["broadcaster"]["user_id"].as_u64()
-        .or_else(|| json["event"]["broadcaster_user_id"].as_u64())
-        .or_else(|| json["broadcaster_user_id"].as_u64())
-        .or_else(|| json["data"]["broadcaster_user_id"].as_u64());
-
-    let ch_arc = broadcaster_id
-        .and_then(|bid| state.user_id_to_slug.get(&bid).map(|s| s.clone()))
-        .and_then(|slug| state.channels.get(&slug).map(|c| c.clone()));
-
-    let Some(ch) = ch_arc else {
-        info!("[Webhook] Canal no encontrado para broadcaster_id={:?}", broadcaster_id);
-        return (StatusCode::OK, "ok".into());
-    };
-
-    let ev = json.get("event").unwrap_or(&json);
-
-    if event_type.contains("chat") || event_type.contains("message") {
-        let username = json["sender"]["username"].as_str()
-            .or_else(|| json["sender"]["slug"].as_str())
-            .or_else(|| ev["sender"]["username"].as_str())
-            .unwrap_or("?").to_string();
-        let content = json["content"].as_str()
-            .or_else(|| ev["content"].as_str())
-            .or_else(|| ev["message"]["content"].as_str())
-            .unwrap_or("").trim().to_string();
-        if !content.is_empty() {
-            info!("[CHAT-WH][{}] {username}: {content}", ch.slug);
-            server::ns_emit(&state, &ch.slug, "chatMessage",
-                serde_json::json!({"user": &username, "content": &content}));
-            commands::handle(&username, &content, &ch, &state).await;
-        }
-    } else if event_type.contains("follow") {
-        let username = ev["follower"]["username"].as_str()
-            .or_else(|| ev["username"].as_str())
-            .unwrap_or("alguien").to_string();
-        info!("[Webhook][{}] Follow: {username}", ch.slug);
-        ch.tts_tx.send(tts::TtsQueueItem {
-            text:  format!("¡Gracias por el follow, {username}!"),
-            voice: "dalia".into(),
-        }).ok();
-        server::ns_emit(&state, &ch.slug, "kickAlert",
-            serde_json::json!({"type":"follow","username":&username}));
-    } else if event_type.contains("subscription") || event_type.contains("sub") {
-        let username = ev["subscriber"]["username"].as_str()
-            .or_else(|| ev["user"]["username"].as_str())
-            .unwrap_or("alguien");
-        let months = ev["months"].as_u64().unwrap_or(1);
-        info!("[Webhook][{}] Sub: {username} ({months}m)", ch.slug);
-        let msg = if months > 1 { format!("¡{username} se resuscribió por {months} meses!") }
-                  else { format!("¡{username} se suscribió al canal!") };
-        ch.tts_tx.send(tts::TtsQueueItem { text: msg.clone(), voice: "dalia".into() }).ok();
-        server::ns_emit(&state, &ch.slug, "kickAlert",
-            serde_json::json!({"type":"sub","username":username,"months":months,"message":msg}));
-    }
-
-    (StatusCode::OK, "ok".into())
+async fn metrics(State(state): State<Arc<AppState>>) -> String {
+    use std::sync::atomic::Ordering::Relaxed;
+    let pending_tts: usize = state
+        .channels
+        .iter()
+        .map(|channel| channel.tts_tx.max_capacity() - channel.tts_tx.capacity())
+        .sum();
+    let sockets = state.io.sockets().map_or(0, |sockets| sockets.len());
+    format!("daibot_channels {}\ndaibot_sockets {}\ndaibot_tts_pending {}\ndaibot_webhook_rejected_total {}\ndaibot_webhook_received_total {}\ndaibot_webhook_duplicates_total {}\ndaibot_webhook_processed_total {}\n",
+        state.channels.len(), sockets, pending_tts, state.metrics.webhook_rejected.load(Relaxed),
+        state.metrics.webhook_received.load(Relaxed), state.metrics.webhook_duplicates.load(Relaxed), state.metrics.webhook_processed.load(Relaxed))
 }
-
-// ─── Entrypoint ───────────────────────────────────────────────────────────────
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("SIGTERM");
+        tokio::select! { _ = tokio::signal::ctrl_c() => {}, _ = term.recv() => {} }
+    }
+    #[cfg(not(unix))]
+    {
+        tokio::signal::ctrl_c().await.expect("Ctrl+C");
+    }
+}
 
 #[tokio::main]
 async fn main() {
@@ -136,7 +75,9 @@ async fn main() {
     if std::env::args().any(|a| a == "--login") {
         #[cfg(windows)]
         unsafe {
-            extern "system" { fn AllocConsole() -> i32; }
+            extern "system" {
+                fn AllocConsole() -> i32;
+            }
             AllocConsole();
         }
         login::run_and_exit().await;
@@ -158,14 +99,22 @@ async fn main() {
 
     // Configuración global (solo credenciales de la app, no del canal)
     let config = GlobalConfig {
-        client_id:     std::env::var("KICK_CLIENT_ID").unwrap_or_default(),
+        client_id: std::env::var("KICK_CLIENT_ID").unwrap_or_default(),
         client_secret: std::env::var("KICK_CLIENT_SECRET").unwrap_or_default(),
-        port:          std::env::var("PORT").ok().and_then(|v| v.parse().ok()).unwrap_or(3000),
-        overlay_dir:   std::env::var("OVERLAY_DIR").unwrap_or_else(|_| "../overlay".into()),
-        base_url:      std::env::var("BASE_URL")
+        port: std::env::var("PORT")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(3000),
+        overlay_dir: std::env::var("OVERLAY_DIR").unwrap_or_else(|_| "../overlay".into()),
+        base_url: std::env::var("BASE_URL")
             .or_else(|_| std::env::var("RENDER_EXTERNAL_URL"))
             .unwrap_or_else(|_| "http://localhost:3000".into()),
-        tts_cache_dir: std::env::var("TTS_CACHE_DIR").unwrap_or_else(|_| "/tmp/tts_cache".into()),
+        tts_cache_dir: std::env::var("TTS_CACHE_DIR").unwrap_or_else(|_| {
+            std::env::temp_dir()
+                .join("daibot_tts")
+                .to_string_lossy()
+                .into_owned()
+        }),
     };
 
     if config.client_id.is_empty() || config.client_secret.is_empty() {
@@ -178,17 +127,26 @@ async fn main() {
         eprintln!("[FATAL] DATABASE_URL no configurada.");
         std::process::exit(1);
     });
-    let connect_opts = db_url.parse::<sqlx::postgres::PgConnectOptions>()
-        .unwrap_or_else(|e| { eprintln!("[FATAL] DATABASE_URL inválida: {e}"); std::process::exit(1); })
+    let connect_opts = db_url
+        .parse::<sqlx::postgres::PgConnectOptions>()
+        .unwrap_or_else(|e| {
+            eprintln!("[FATAL] DATABASE_URL inválida: {e}");
+            std::process::exit(1);
+        })
         .statement_cache_capacity(0); // requerido para PgBouncer (transaction pooler)
     let db = sqlx::postgres::PgPoolOptions::new()
         .max_connections(5)
         .connect_with(connect_opts)
         .await
-        .unwrap_or_else(|e| { eprintln!("[FATAL] No se pudo conectar a PostgreSQL: {e}"); std::process::exit(1); });
+        .unwrap_or_else(|e| {
+            eprintln!("[FATAL] No se pudo conectar a PostgreSQL: {e}");
+            std::process::exit(1);
+        });
 
     // Ejecutar migraciones
-    db::run_migrations(&db).await;
+    db::run_migrations(&db)
+        .await
+        .unwrap_or_else(|e| fatal(&format!("Migraciones: {e}")));
     info!("Base de datos lista");
 
     // Socket.IO
@@ -205,23 +163,37 @@ async fn main() {
     let state = Arc::new(AppState {
         config,
         http,
+        kick_endpoints: kick::Endpoints::default(),
         io: io_inner,
         db,
-        channels:        Arc::new(DashMap::new()),
+        channels: Arc::new(DashMap::new()),
         user_id_to_slug: Arc::new(DashMap::new()),
+        channel_lock: Mutex::new(()),
+        shutdown: CancellationToken::new(),
+        tts_slots: Arc::new(Semaphore::new(2)),
+        webhook_key: webhook::public_key(),
+        metrics: Arc::new(state::Metrics::default()),
     });
 
     // Registrar el namespace Socket.IO único (rooms por canal)
     server::setup(&state.io.clone(), state.clone());
 
     // Cargar todos los canales registrados
-    let registered = db::load_all_channels(&state.db).await;
+    let registered = db::load_all_channels(&state.db)
+        .await
+        .unwrap_or_else(|e| fatal(&format!("Carga de canales: {e}")));
     info!("Canales registrados: {}", registered.len());
     for row in registered {
-        channel::start_channel(row, state.clone()).await;
+        channel::start_channel(row, state.clone())
+            .await
+            .unwrap_or_else(|e| fatal(&e));
     }
 
     // Overlay
+    let inbox = state.clone();
+    tokio::spawn(async move {
+        webhook::worker(inbox).await;
+    });
     let overlay_dir = resolve_overlay_dir(&state.config.overlay_dir);
     info!("Overlay: {}", overlay_dir.display());
 
@@ -230,48 +202,88 @@ async fn main() {
         .route("/", axum::routing::get(auth::start_oauth))
         .route("/auth/kick", axum::routing::get(auth::redirect_to_kick))
         .route("/auth/callback", axum::routing::get(auth::handle_callback))
-        .route("/kick_webhook",
-            axum::routing::post(kick_webhook).get(kick_webhook_get))
+        .route("/kick_webhook", axum::routing::post(webhook::receive))
+        .route("/healthz", axum::routing::get(|| async { StatusCode::OK }))
+        .route("/readyz", axum::routing::get(ready))
+        .route("/metrics", axum::routing::get(metrics))
+        .layer(axum::extract::DefaultBodyLimit::max(256 * 1024))
         .with_state(state.clone())
         .fallback_service(ServeDir::new(&overlay_dir))
+        .layer(axum::middleware::from_fn(response_headers))
         .layer(layer);
 
     let addr = format!("0.0.0.0:{}", state.config.port);
 
-    // Liberar puerto si hay instancia anterior (solo Windows, desarrollo)
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        let _ = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-Command", &format!(
-                "Get-NetTCPConnection -LocalPort {} -ErrorAction SilentlyContinue \
-                 | ForEach-Object {{ Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }}",
-                state.config.port
-            )])
-            .creation_flags(0x08000000)
-            .output();
-        std::thread::sleep(std::time::Duration::from_millis(500));
-    }
-
-    let listener = tokio::net::TcpListener::bind(&addr).await
-        .unwrap_or_else(|e| { eprintln!("[FATAL] Puerto {}: {e}", state.config.port); std::process::exit(1); });
+    let listener = tokio::net::TcpListener::bind(&addr)
+        .await
+        .unwrap_or_else(|e| {
+            eprintln!("[FATAL] Puerto {}: {e}", state.config.port);
+            std::process::exit(1);
+        });
 
     info!("DaiBot corriendo  → http://localhost:{}", state.config.port);
-    info!("Registro          → http://localhost:{}/", state.config.port);
+    info!(
+        "Registro          → http://localhost:{}/",
+        state.config.port
+    );
 
-    axum::serve(listener, app).await
-        .unwrap_or_else(|e| { eprintln!("[FATAL] Servidor: {e}"); std::process::exit(1); });
+    let shutdown = state.shutdown.clone();
+    let signal = shutdown.clone();
+    tokio::spawn(async move {
+        shutdown_signal().await;
+        signal.cancel();
+    });
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async move { shutdown.cancelled().await })
+        .await
+        .unwrap_or_else(|e| {
+            eprintln!("[FATAL] Servidor: {e}");
+            std::process::exit(1);
+        });
+}
+
+async fn response_headers(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let private = request.uri().path().starts_with("/auth");
+    let mut response = next.run(request).await;
+    response
+        .headers_mut()
+        .insert("x-content-type-options", "nosniff".parse().unwrap());
+    response.headers_mut().insert(
+        "referrer-policy",
+        if private {
+            "no-referrer"
+        } else {
+            "strict-origin-when-cross-origin"
+        }
+        .parse()
+        .unwrap(),
+    );
+    if private {
+        response
+            .headers_mut()
+            .insert("cache-control", "no-store".parse().unwrap());
+    }
+    response
 }
 
 fn resolve_overlay_dir(configured: &str) -> std::path::PathBuf {
     let p = std::path::Path::new(configured);
-    if p.is_absolute() && p.exists() { return p.to_path_buf(); }
+    if p.is_absolute() && p.exists() {
+        return p.to_path_buf();
+    }
     if let Ok(exe) = std::env::current_exe() {
         let candidate = exe.parent().map(|d| d.join(configured)).unwrap_or_default();
-        if candidate.exists() { return candidate; }
+        if candidate.exists() {
+            return candidate;
+        }
         for ancestor in exe.ancestors().skip(1) {
             let c = ancestor.join("overlay");
-            if c.join("pixel.html").exists() { return c; }
+            if c.join("pixel.html").exists() {
+                return c;
+            }
         }
     }
     p.to_path_buf()
@@ -281,11 +293,17 @@ pub(crate) fn find_dotenv_path() -> Option<std::path::PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
         for ancestor in exe.ancestors().skip(1) {
             let candidate = ancestor.join(".env");
-            if candidate.exists() { return Some(candidate); }
+            if candidate.exists() {
+                return Some(candidate);
+            }
         }
     }
     let p = std::path::Path::new(".env");
-    if p.exists() { Some(p.to_path_buf()) } else { None }
+    if p.exists() {
+        Some(p.to_path_buf())
+    } else {
+        None
+    }
 }
 
 pub(crate) fn load_dotenv() {

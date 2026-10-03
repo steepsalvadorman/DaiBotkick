@@ -1,0 +1,12 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+backend/target
+node_modules
+data
+*.mp3
+.claude
+.vscode
+PLAN_PRUEBAS_DESPLIEGUE.md

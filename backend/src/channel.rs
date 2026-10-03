@@ -1,80 +1,78 @@
 use crate::{
     cooldown::CooldownManager,
     db::ChannelRow,
-    kick, stats, tts,
-    state::{AppState, ChannelCommands, ChannelState, SorteoState},
+    kick,
     queue::VideoQueue,
+    state::{AppState, ChannelCommands, ChannelState, SorteoState},
+    stats, tts,
 };
-use std::sync::{atomic::AtomicU64, Arc};
+use std::sync::{
+    atomic::{AtomicBool, AtomicU64},
+    Arc,
+};
 use tokio::sync::{mpsc, Mutex, RwLock};
-use tracing::info;
 
-fn unix_now() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
-}
-
-/// Inicializa un canal: crea su ChannelState, registra el namespace Socket.IO,
-/// y arranca los tasks de Kick, TTS y stats.
-pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) {
+pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) -> Result<(), String> {
+    let queue: VideoQueue =
+        serde_json::from_str(&row.queue_state).map_err(|_| "Cola persistida invalida")?;
     let slug = row.slug.clone();
-
-    // Si ya está corriendo, detener primero (reconexión tras re-login)
-    global.channels.remove(&slug);
-
-    let (tts_tx, tts_rx) = mpsc::unbounded_channel::<tts::TtsQueueItem>();
-
-    let token_expires = if row.token_expires > 0 { row.token_expires as u64 } else { unix_now() + 7200 };
-
+    let _guard = global.channel_lock.lock().await;
+    if let Some((_, old)) = global.channels.remove(&slug) {
+        old.cancel.cancel();
+        global.user_id_to_slug.retain(|_, v| v != &slug);
+    }
+    let (tts_tx, tts_rx) = mpsc::channel(32);
     let ch = Arc::new(ChannelState {
-        slug:              slug.clone(),
-        access_token:      Arc::new(RwLock::new(row.access_token.clone())),
-        refresh_token_val: Arc::new(RwLock::new(row.refresh_token.clone())),
-        channel_id:        Arc::new(RwLock::new(row.broadcaster_user_id.map(|v| v as u64))),
-        chatroom_id:       Arc::new(RwLock::new(row.chatroom_id.map(|v| v as u64))),
-        followers:         Arc::new(AtomicU64::new(0)),
-        follow_goal:       row.follow_goal as u64,
-        video_queue:       Arc::new(RwLock::new(VideoQueue::new())),
+        slug: slug.clone(),
+        access_token: Arc::new(RwLock::new(row.access_token)),
+        refresh_token_val: Arc::new(RwLock::new(row.refresh_token)),
+        channel_id: Arc::new(RwLock::new(row.broadcaster_user_id.map(|v| v as u64))),
+        followers: Arc::new(AtomicU64::new(0)),
+        followers_known: AtomicBool::new(false),
+        follow_goal: row.follow_goal.max(0) as u64,
+        video_queue: Arc::new(RwLock::new(queue)),
         tts_tx,
-        start_time:        std::time::Instant::now(),
-        sorteo:            Arc::new(Mutex::new(SorteoState { open: false, participants: Vec::new() })),
-        cooldown:          Arc::new(Mutex::new(CooldownManager::new())),
-        commands:          ChannelCommands {
+        sorteo: Arc::new(Mutex::new(SorteoState {
+            open: false,
+            participants: Vec::new(),
+        })),
+        cooldown: Arc::new(Mutex::new(CooldownManager::new())),
+        commands: ChannelCommands {
             discord: row.cmd_discord,
-            redes:   row.cmd_redes,
-            pc:      row.cmd_pc,
+            redes: row.cmd_redes,
+            pc: row.cmd_pc,
             horario: row.cmd_horario,
         },
         panel_token: row.panel_token,
+        playback_token: row.playback_token,
+        cancel: global.shutdown.child_token(),
+        refresh_lock: Mutex::new(()),
+        token_expires: AtomicU64::new(row.token_expires.max(0) as u64),
+        player: Mutex::new(None),
+        show_video: AtomicBool::new(row.show_video),
+        live_since: RwLock::new(None),
     });
-
-    // Registrar broadcaster_id → slug para ruteo de webhooks
-    if let Some(bid) = row.broadcaster_user_id {
-        global.user_id_to_slug.insert(bid as u64, slug.clone());
+    if let Some(id) = row.broadcaster_user_id {
+        global.user_id_to_slug.insert(id as u64, slug.clone());
     }
-
-    // Guardar en el mapa global
     global.channels.insert(slug.clone(), ch.clone());
-
-    // TTS processor para este canal
-    let tts_service = Arc::new(tts::TtsService::new(&global.config.tts_cache_dir));
-    let tts_io  = global.io.clone();
+    // Reconnect existing sockets so they acquire the new state and authorization.
+    global.io.to(slug.clone()).disconnect().ok();
+    let service = Arc::new(tts::TtsService::new(&global.config.tts_cache_dir));
+    let (io, cancel, slots) = (
+        global.io.clone(),
+        ch.cancel.clone(),
+        global.tts_slots.clone(),
+    );
     let tts_slug = slug.clone();
     tokio::spawn(async move {
-        tts::spawn_processor(tts_service, tts_rx, tts_io, tts_slug).await;
+        tokio::select! { _ = cancel.cancelled() => {}, _ = tts::spawn_processor(service, tts_rx, io, tts_slug, slots) => {} }
     });
-
-    // Kick: WebSocket + EventSub
-    let ch2      = ch.clone();
-    let global2  = global.clone();
+    let (worker, app) = (ch.clone(), global.clone());
     tokio::spawn(async move {
-        kick::run_channel(ch2, global2, token_expires).await;
+        tokio::select! { _ = worker.cancel.cancelled() => {}, _ = kick::run_channel(worker.clone(), app) => {} }
     });
-
-    // Stats (CPU/RAM/followGoal por canal)
-    stats::start_channel(global.io.clone(), ch.clone(), global.clone());
-
-    info!("[Channel] Iniciado: {slug}");
+    stats::start_channel(global.io.clone(), ch, global.clone());
+    tracing::info!("[Channel] Iniciado: {slug}");
+    Ok(())
 }

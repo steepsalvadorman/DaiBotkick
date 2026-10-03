@@ -1,155 +1,138 @@
-use crate::{commands, state::AppState, tts};
-use socketioxide::extract::SocketRef;
+use crate::{
+    commands, queue,
+    state::{AppState, ChannelState},
+    tts,
+};
+use socketioxide::extract::{Data, SocketRef, TryData};
 use std::sync::{atomic::Ordering, Arc};
-use tokio::time::{sleep, Duration};
-use tracing::info;
 
+#[derive(serde::Deserialize)]
+struct Auth {
+    token: Option<String>,
+}
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AdvanceCmd {
-    video_id: Option<String>,
-    url:      Option<String>,
+    id: String,
+    version: u64,
 }
-
 #[derive(serde::Deserialize)]
 struct PanelCmd {
     command: String,
-    args:    Option<String>,
-    voice:   Option<String>,
-    show:    Option<bool>,
-    index:   Option<usize>,
-    token:   Option<String>,
+    args: Option<String>,
+    voice: Option<String>,
+    show: Option<bool>,
+    index: Option<usize>,
+    token: Option<String>,
 }
 
-/// Registra el único namespace "/" con routing por rooms.
-/// Cada socket se une a una room con el slug del canal (via query ?ch=slug).
+pub fn authorized(expected: &str, supplied: Option<&str>) -> bool {
+    !expected.is_empty() && supplied == Some(expected)
+}
+
 pub fn setup(io: &socketioxide::SocketIo, global: Arc<AppState>) {
-    io.ns("/", move |socket: SocketRef| {
+    io.ns("/", move |socket: SocketRef, TryData(auth): TryData<Auth>| {
         let global = global.clone();
-
-        // Leer slug del canal desde el query param ?ch=slug
-        let slug = socket.req_parts()
-            .uri
-            .query()
-            .and_then(|q| {
-                url::form_urlencoded::parse(q.as_bytes())
-                    .find(|(k, _)| k == "ch")
-                    .map(|(_, v)| v.into_owned())
-            })
-            .unwrap_or_default();
-
         async move {
-            if slug.is_empty() { return; }
-
-            // Esperar hasta 30s a que el canal esté disponible (puede conectar
-            // antes de que el OAuth callback termine de inicializar el canal)
-            let ch = {
-                let mut attempts = 0u8;
-                loop {
-                    if let Some(c) = global.channels.get(&slug).map(|c| c.clone()) {
-                        break c;
-                    }
-                    attempts += 1;
-                    if attempts >= 10 { return; }
-                    sleep(Duration::from_secs(3)).await;
-                }
-            };
-
-            // Unir socket a la room del canal
+            let slug = socket.req_parts().uri.query().and_then(|q| url::form_urlencoded::parse(q.as_bytes())
+                .find(|(k, _)| k == "ch").map(|(_, v)| v.into_owned())).unwrap_or_default();
+            let ch = global.channels.get(&slug).map(|c| c.clone());
+            let Some(ch) = ch else { socket.emit("channelError", "Canal no disponible").ok(); return; };
             socket.join(slug.clone()).ok();
-            info!("Widget conectado: {} (canal: {slug})", socket.id);
-
-            let slug2 = slug.clone();
+            let token = auth.ok().and_then(|a| a.token);
+            let player_ok = authorized(&ch.playback_token, token.as_deref());
+            let socket_id = socket.id.to_string();
+            if player_ok {
+                let mut player = ch.player.lock().await;
+                if player.is_none() { *player = Some(socket_id.clone()); }
+            }
+            let active = *ch.player.lock().await == Some(socket_id.clone());
+            socket.emit("playbackRole", serde_json::json!({"active":active})).ok();
+            socket.emit("config", serde_json::json!({"channel_name":slug,"kick_url":format!("kick.com/{slug}")})).ok();
+            socket.emit("toggleVideo", serde_json::json!({"showVideo":ch.show_video.load(Ordering::Relaxed)})).ok();
+            let q = ch.video_queue.read().await;
+            socket.emit("syncQueue", serde_json::json!({"items":q.items,"version":q.version})).ok();
+            drop(q);
+            let followers = ch.followers_known.load(Ordering::Relaxed).then(|| ch.followers.load(Ordering::Relaxed));
+            socket.emit("followersUpdate", serde_json::json!({"count":followers})).ok();
+            let (dc, dg) = (ch.clone(), global.clone());
             socket.on_disconnect(move |s: SocketRef, _: socketioxide::socket::DisconnectReason| {
-                let slug = slug2.clone();
-                async move { info!("Widget desconectado: {} (canal: {slug})", s.id); }
-            });
-
-            // Enviar config, cola y stats actuales al conectar
-            let ch2 = ch.clone();
-            let s2  = socket.clone();
-            tokio::spawn(async move {
-                s2.emit("config", serde_json::json!({
-                    "channel_name": &ch2.slug,
-                    "kick_url":     format!("kick.com/{}", &ch2.slug),
-                })).ok();
-                let q = ch2.video_queue.read().await;
-                s2.emit("syncQueue", serde_json::json!({"items": &q.items})).ok();
-                drop(q);
-                // Enviar followers actuales inmediatamente (sin esperar el próximo poll de 60s)
-                let followers = ch2.followers.load(Ordering::Relaxed);
-                if followers > 0 {
-                    s2.emit("followersUpdate", serde_json::json!({ "count": followers })).ok();
-                }
-            });
-
-            // advanceQueue
-            let ch3 = ch.clone();
-            let g2  = global.clone();
-            socket.on("advanceQueue", move |_: SocketRef, socketioxide::extract::Data(data): socketioxide::extract::Data<AdvanceCmd>| {
-                let ch = ch3.clone(); let g = g2.clone();
+                let (ch, app) = (dc.clone(), dg.clone());
                 async move {
-                    let mut q = ch.video_queue.write().await;
-                    let current = match q.items.first() { Some(i) => i.clone(), None => return };
-                    let matches = match (data.video_id.as_deref(), data.url.as_deref(),
-                                         current.video_id.as_deref(), current.url.as_deref()) {
-                        (Some(d), _, Some(c), _) => d == c,
-                        (_, Some(d), _, Some(c)) => d == c,
-                        (None, None, None, None) => true,
-                        _ => false,
-                    };
-                    if !matches { return; }
-                    q.advance();
-                    let items = q.items.clone(); drop(q);
-                    ns_emit(&g, &ch.slug, "syncQueue", serde_json::json!({"items": &items}));
-                }
-            });
-
-            // panelCommand
-            let ch4 = ch.clone();
-            let g3  = global.clone();
-            socket.on("panelCommand", move |_: SocketRef, socketioxide::extract::Data(data): socketioxide::extract::Data<PanelCmd>| {
-                let ch = ch4.clone(); let g = g3.clone();
-                async move {
-                    if !ch.panel_token.is_empty() && data.token.as_deref() != Some(ch.panel_token.as_str()) { return; }
-                    match data.command.as_str() {
-                        "play" => {
-                            if let Some(url) = data.args {
-                                commands::play(url, "panel".into(), &ch, &g).await;
-                            }
-                        }
-                        "skip" => ns_emit(&g, &ch.slug, "nextVideo", serde_json::json!({})),
-                        "tts"  => {
-                            if let Some(text) = data.args {
-                                let voice = data.voice.unwrap_or_else(|| "dalia".into());
-                                ch.tts_tx.send(tts::TtsQueueItem { text, voice }).ok();
-                            }
-                        }
-                        "toggleVideo" => {
-                            ns_emit(&g, &ch.slug, "toggleVideo",
-                                serde_json::json!({"showVideo": data.show.unwrap_or(true)}));
-                        }
-                        "removeFromQueue" => {
-                            if let Some(idx) = data.index {
-                                let mut q = ch.video_queue.write().await;
-                                q.remove(idx);
-                                let items = q.items.clone(); drop(q);
-                                ns_emit(&g, &ch.slug, "syncQueue", serde_json::json!({"items": &items}));
-                            }
-                        }
-                        "clearQueue" => {
-                            ch.video_queue.write().await.clear();
-                            ns_emit(&g, &ch.slug, "syncQueue", serde_json::json!({"items": []}));
-                        }
-                        _ => {}
+                    let mut player = ch.player.lock().await;
+                    if *player == Some(s.id.to_string()) {
+                        *player = None;
+                        ns_emit(&app, &ch.slug, "playerAvailable", serde_json::json!({}));
                     }
+                }
+            });
+            let (ac, ag) = (ch.clone(), global.clone());
+            socket.on("advanceQueue", move |s: SocketRef, Data(data): Data<AdvanceCmd>| {
+                let (ch, app) = (ac.clone(), ag.clone());
+                async move {
+                    if ch.cancel.is_cancelled() || *ch.player.lock().await != Some(s.id.to_string()) { return; }
+                    if let Err(e) = queue::change(&ch, &app, |q| q.advance_if(&data.id, data.version)).await {
+                        tracing::error!("[Queue][{}] Advance: {e}", ch.slug);
+                        s.emit("operationError", "No se pudo guardar el avance").ok();
+                    }
+                    let q = ch.video_queue.read().await;
+                    s.emit("syncQueue", serde_json::json!({"items":q.items,"version":q.version})).ok();
+                }
+            });
+            let (pc, pg) = (ch.clone(), global.clone());
+            socket.on("panelCommand", move |s: SocketRef, Data(data): Data<PanelCmd>| {
+                let (ch, app) = (pc.clone(), pg.clone());
+                async move {
+                    if ch.cancel.is_cancelled() || !authorized(&ch.panel_token, data.token.as_deref()) { return; }
+                    let result = match data.command.as_str() {
+                        "play" => { if let Some(url) = data.args { commands::play(url, "panel".into(), &ch, &app).await; } Ok(true) }
+                        "tts" => { if let Some(text) = data.args { tts::enqueue(&ch, &text, data.voice.as_deref().unwrap_or("dalia")); } Ok(true) }
+                        "skip" => queue::change(&ch, &app, |q| { if q.items.is_empty() { return false; } q.advance(); true }).await,
+                        "clearQueue" => queue::change(&ch, &app, |q| { q.clear(); true }).await,
+                        "removeFromQueue" => queue::change(&ch, &app, |q| { let Some(index) = data.index.filter(|i| *i < q.items.len()) else { return false; }; q.remove(index); true }).await,
+                        "toggleVideo" => set_visibility(&ch, &app, data.show.unwrap_or(true)).await.map(|_| true),
+                        _ => Ok(false),
+                    };
+                    if let Err(e) = result { tracing::error!("[Panel][{}] {e}", ch.slug); s.emit("operationError", "No se pudo guardar el cambio").ok(); }
                 }
             });
         }
     });
 }
 
-/// Emite a todos los sockets del canal (room = slug).
+pub async fn set_visibility(
+    ch: &ChannelState,
+    app: &AppState,
+    visible: bool,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE channels SET show_video=$1 WHERE slug=$2")
+        .bind(visible)
+        .bind(&ch.slug)
+        .execute(&app.db)
+        .await?;
+    ch.show_video.store(visible, Ordering::Relaxed);
+    ns_emit(
+        app,
+        &ch.slug,
+        "toggleVideo",
+        serde_json::json!({"showVideo":visible}),
+    );
+    Ok(())
+}
+
 pub fn ns_emit(global: &AppState, slug: &str, event: &'static str, data: serde_json::Value) {
     global.io.to(slug.to_owned()).emit(event, data).ok();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn authorization_fails_closed() {
+        assert!(!authorized("", None));
+        assert!(!authorized("", Some("")));
+        assert!(!authorized("secret", Some("wrong")));
+        assert!(!authorized("secret", None));
+        assert!(authorized("secret", Some("secret")));
+    }
 }

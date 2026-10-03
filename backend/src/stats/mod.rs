@@ -1,93 +1,74 @@
 use crate::state::{AppState, ChannelState};
 use serde_json::json;
 use std::sync::{atomic::Ordering, Arc};
-use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
-use tokio::time::{interval, Duration};
 
 pub fn start_channel(io: socketioxide::SocketIo, ch: Arc<ChannelState>, global: Arc<AppState>) {
-    let slug = ch.slug.clone();
     tokio::spawn(async move {
-        let mut sys = System::new_with_specifics(
-            RefreshKind::new()
-                .with_cpu(CpuRefreshKind::everything())
-                .with_memory(MemoryRefreshKind::everything()),
-        );
-        sys.refresh_cpu_all();
-        tokio::time::sleep(Duration::from_millis(250)).await;
-
-        let mut ticker    = interval(Duration::from_secs(2));
-        let mut poll_tick = 0u8;
-
-        // Fetch inicial inmediato
-        let token = ch.access_token.read().await.clone();
-        fetch_channel_stats(&global, &ch, &slug, &token, &io).await;
-
+        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(60));
         loop {
-            ticker.tick().await;
-            poll_tick = poll_tick.wrapping_add(1);
-
-            // Cada 60s: viewers + followers reales de la API
-            if poll_tick % 30 == 0 {
-                let token = ch.access_token.read().await.clone();
-                fetch_channel_stats(&global, &ch, &slug, &token, &io).await;
-            }
+            tokio::select! { _ = ch.cancel.cancelled() => return, _ = ticker.tick() => {} }
+            tokio::select! { _ = ch.cancel.cancelled() => return, _ = fetch(&global, &ch, &io) => {} }
         }
     });
 }
-
-async fn fetch_channel_stats(
-    global: &Arc<AppState>,
-    ch:     &Arc<ChannelState>,
-    slug:   &str,
-    token:  &str,
-    io:     &socketioxide::SocketIo,
-) {
-    if token.is_empty() { return; }
-
-    let url = format!(
-        "https://api.kick.com/public/v1/channels?broadcaster_username={slug}"
-    );
-    let Ok(resp) = global.http
-        .get(&url)
-        .header("Authorization", format!("Bearer {token}"))
+async fn fetch(global: &AppState, ch: &ChannelState, io: &socketioxide::SocketIo) {
+    let token = ch.access_token.read().await.clone();
+    let Ok(response) = global
+        .http
+        .get(format!("{}/channels", global.kick_endpoints.api))
+        .query(&[(
+            "broadcaster_user_id",
+            ch.channel_id.read().await.unwrap_or(0).to_string(),
+        )])
+        .bearer_auth(token)
         .send()
         .await
-    else { return };
-
-    let Ok(json) = resp.json::<serde_json::Value>().await else { return };
-    let ch_data = &json["data"][0];
-
-    // Log temporal para ver qué campos devuelve la API
-    tracing::info!("[Stats][{slug}] API raw: {}", ch_data);
-
-    // Viewers (puede estar anidado bajo "stream")
-    let viewers = ch_data["viewers_count"].as_u64()
-        .or_else(|| ch_data["viewer_count"].as_u64())
-        .or_else(|| ch_data["stream"]["viewers_count"].as_u64())
-        .or_else(|| ch_data["stream"]["viewer_count"].as_u64())
-        .unwrap_or(0);
-    tracing::info!("[Stats][{slug}] Viewers: {viewers}");
-    io.to(slug.to_owned()).emit("viewerCount", json!({ "count": viewers })).ok();
-
-    // Followers — probamos todos los nombres posibles
-    let followers = ch_data["followers_count"].as_u64()
-        .or_else(|| ch_data["follower_count"].as_u64())
-        .or_else(|| ch_data["followers"].as_u64())
-        .or_else(|| ch_data["subscriber_count"].as_u64());
-    if let Some(f) = followers {
-        tracing::info!("[Stats][{slug}] Followers: {f}");
-        ch.followers.store(f, Ordering::Relaxed);
-        io.to(slug.to_owned()).emit("followersUpdate", json!({ "count": f })).ok();
-    } else {
-        tracing::info!("[Stats][{slug}] Followers: campo no encontrado en API");
+    else {
+        return;
+    };
+    if !response.status().is_success() {
+        tracing::warn!("[Stats][{}] HTTP {}", ch.slug, response.status());
+        return;
     }
-}
-
-#[cfg(target_os = "linux")]
-fn _read_thermal_zone() -> Option<f32> {
-    std::fs::read_to_string("/sys/class/thermal/thermal_zone0/temp")
-        .ok()
-        .and_then(|s| s.trim().parse::<f32>().ok())
-        .map(|t| t / 1000.0)
-        .filter(|t| *t > 0.0 && t.is_finite())
+    let Ok(data) = response.json::<serde_json::Value>().await else {
+        return;
+    };
+    let Some(channel) = data["data"].as_array().and_then(|a| a.first()) else {
+        return;
+    };
+    let stream = &channel["stream"];
+    let live = stream["is_live"].as_bool().unwrap_or(false);
+    let viewers = stream["viewer_count"]
+        .as_u64()
+        .or_else(|| channel["viewer_count"].as_u64());
+    io.to(ch.slug.clone())
+        .emit("viewerCount", json!({"count":viewers}))
+        .ok();
+    let started = if live {
+        stream["start_time"]
+            .as_str()
+            .or_else(|| stream["started_at"].as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|t| t.with_timezone(&chrono::Utc))
+    } else {
+        None
+    };
+    *ch.live_since.write().await = started;
+    io.to(ch.slug.clone())
+        .emit(
+            "streamStatus",
+            json!({"live":live,"startedAt":started.map(|t| t.to_rfc3339())}),
+        )
+        .ok();
+    let followers = channel["followers_count"]
+        .as_u64()
+        .or_else(|| channel["follower_count"].as_u64());
+    if let Some(count) = followers {
+        ch.followers.store(count, Ordering::Relaxed);
+    }
+    ch.followers_known
+        .store(followers.is_some(), Ordering::Relaxed);
+    io.to(ch.slug.clone())
+        .emit("followersUpdate", json!({"count":followers}))
+        .ok();
 }

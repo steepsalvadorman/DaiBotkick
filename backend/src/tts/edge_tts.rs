@@ -5,15 +5,16 @@
 use uuid::Uuid;
 
 pub const VOICES: &[(&str, &str)] = &[
-    ("dalia",   "es-MX-DaliaNeural"),
-    ("jorge",   "es-MX-JorgeNeural"),
-    ("camila",  "es-PE-CamilaNeural"),
-    ("alex",    "es-PE-AlexNeural"),
+    ("dalia", "es-MX-DaliaNeural"),
+    ("jorge", "es-MX-JorgeNeural"),
+    ("camila", "es-PE-CamilaNeural"),
+    ("alex", "es-PE-AlexNeural"),
     ("jacinta", "es-PE-CamilaNeural"),
 ];
 
 pub fn voice_name(id: &str) -> &'static str {
-    VOICES.iter()
+    VOICES
+        .iter()
         .find(|(k, _)| *k == id)
         .map(|(_, v)| *v)
         .unwrap_or("es-PE-CamilaNeural")
@@ -51,31 +52,48 @@ pub async fn synthesize(text: &str, voice_id: &str) -> Result<Vec<u8>, String> {
     let tmp = std::env::temp_dir().join(format!("tts_{}.mp3", Uuid::new_v4()));
 
     let mut cmd = make_edge_tts_cmd();
-    cmd.arg("--voice").arg(vname)
-       .arg("--text").arg(text)
-       .arg("--write-media").arg(&tmp);
+    cmd.arg("--voice")
+        .arg(vname)
+        .arg("--text")
+        .arg(text)
+        .arg("--write-media")
+        .arg(&tmp);
 
     #[cfg(windows)]
     cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
 
-    let out = cmd.output().await
-        .map_err(|e| format!("edge-tts spawn: {e}"))?;
+    cmd.kill_on_drop(true);
+    let _cleanup = TempAudio(tmp.clone());
+    let out = tokio::time::timeout(std::time::Duration::from_secs(30), cmd.output())
+        .await
+        .map_err(|_| "edge-tts timeout".to_string())?
+        .map_err(|_| "edge-tts no disponible".to_string())?;
 
     if !out.status.success() {
-        let err = String::from_utf8_lossy(&out.stderr);
-        return Err(format!("edge-tts: {err}"));
+        return Err(format!("edge-tts fallo: {}", out.status));
     }
 
-    let bytes = tokio::fs::read(&tmp).await
+    let bytes = tokio::fs::read(&tmp)
+        .await
         .map_err(|e| format!("edge-tts leer salida: {e}"))?;
 
     let _ = tokio::fs::remove_file(&tmp).await;
 
+    if bytes.len() > 4 * 1024 * 1024 {
+        return Err("TTS demasiado grande".into());
+    }
     if bytes.is_empty() {
         return Err("edge-tts: archivo de salida vacío".to_string());
     }
 
     Ok(bytes)
+}
+
+struct TempAudio(std::path::PathBuf);
+impl Drop for TempAudio {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
 }
 
 #[cfg(test)]
@@ -84,17 +102,17 @@ mod tests {
 
     #[test]
     fn known_voices_resolve_correctly() {
-        assert_eq!(voice_name("camila"),  "es-PE-CamilaNeural");
-        assert_eq!(voice_name("dalia"),   "es-MX-DaliaNeural");
-        assert_eq!(voice_name("jorge"),   "es-MX-JorgeNeural");
-        assert_eq!(voice_name("alex"),    "es-PE-AlexNeural");
+        assert_eq!(voice_name("camila"), "es-PE-CamilaNeural");
+        assert_eq!(voice_name("dalia"), "es-MX-DaliaNeural");
+        assert_eq!(voice_name("jorge"), "es-MX-JorgeNeural");
+        assert_eq!(voice_name("alex"), "es-PE-AlexNeural");
         assert_eq!(voice_name("jacinta"), "es-PE-CamilaNeural");
     }
 
     #[test]
     fn unknown_voice_falls_back_to_camila() {
         assert_eq!(voice_name("noexiste"), "es-PE-CamilaNeural");
-        assert_eq!(voice_name(""),         "es-PE-CamilaNeural");
+        assert_eq!(voice_name(""), "es-PE-CamilaNeural");
     }
 
     #[test]

@@ -1,220 +1,124 @@
-# DaiBot — Bot de Stream para Kick.com
+# DaiBot para Kick
 
-Bot multi-tenant de streaming para Kick.com desplegado en la nube. Gestiona el chat, reproduce videos de YouTube pedidos por el chat, hace text-to-speech, maneja sorteos y muestra un overlay animado en OBS. Cualquier streamer puede conectar su canal sin necesidad de instalar nada.
+Bot para varios canales de Kick, con comandos de chat, cola de YouTube/video, TTS, sorteos y overlay para OBS.
 
-> Desarrollado para el canal **SeniorDai** en Kick.com y disponible como servicio compartido.
+## Funcionamiento
 
----
-
-## ¿Qué hace?
-
-| Función | Descripción |
-|---|---|
-| 💬 Chat en vivo | Lee el chat de Kick vía EventSub webhook y responde a comandos |
-| 🎬 Cola de videos | El chat pide videos de YouTube con `!play` |
-| 🔊 Text-to-Speech | El chat hace hablar al bot con `!dai` y otras voces |
-| 🎮 Entretenimiento | Dados, 8-ball y sorteos con `!dado`, `!8ball`, `!sorteo` |
-| 📢 Respuestas automáticas | Discord, PC, horario, seguidores, uptime… |
-| 🛡️ Anti-spam | Cooldowns por usuario y globales en todos los comandos |
-| 📺 Overlay OBS | Pantalla animada estilo pixel art con chat y reproductor de video |
-| 👥 Seguidores en tiempo real | Contador actualizado cada 60s vía API de Kick |
-| 📱 Responsive | El overlay se adapta a cualquier resolución (1920×1080, móvil…) |
-
----
-
-## Arquitectura
-
-```
-Kick EventSub Webhooks ──→ Render (Rust backend) ──→ Socket.IO ──→ OBS Overlay
-Kick Pusher WebSocket  ──→       │
-                                 │
-                            PostgreSQL (Supabase)
-                            · channels (tokens OAuth, IDs)
-                            · oauth_state (PKCE flow)
+```text
+Kick -> webhook firmado -> inbox PostgreSQL -> comandos del canal
+                                           -> Socket.IO -> overlay OBS
+OAuth Kick -> PostgreSQL -> estado y tareas del canal
 ```
 
-- **Backend:** Rust — Axum + socketioxide + sqlx + reqwest
-- **Base de datos:** Supabase PostgreSQL (Session Pooler, puerto 5432)
-- **Deploy:** Render — Docker (plan Starter, siempre encendido)
-- **Chat:** Kick EventSub webhooks + Pusher WebSocket (canal público)
-- **TTS:** edge-tts (voces de Microsoft, instalado en el contenedor)
+El backend usa Rust, Axum, socketioxide y sqlx. `pixel.html` carga `app.js` y `style.css`; esos son los archivos que debes editar para cambiar el overlay. El reproductor utiliza la [API oficial de YouTube](https://developers.google.com/youtube/iframe_api_reference).
 
----
+EventSub es la única entrada de chat y alertas. Se verifica la [firma RSA de Kick](https://github.com/KickEngineering/KickDevDocs/blob/main/events/webhook-security.md), el timestamp y el ID de entrega. Pusher ya no forma parte del servidor activo.
 
-## Conectar tu canal
+## Conectar un canal y OBS
 
-1. Ve a `https://daibotkick.onrender.com`
-2. Haz clic en **Conectar con Kick**
-3. Autoriza la app en Kick.com
-4. Copia la URL del overlay que aparece en la pantalla de éxito
+1. Abre la raíz del servicio y pulsa **Conectar con Kick**.
+2. Autoriza la app y copia la URL completa de la pantalla de éxito, incluido `#token=...`.
+3. En OBS agrega una Browser Source de 1920×1080 y activa **Controlar audio vía OBS**.
 
-**Listo** — el bot empieza a leer tu chat al instante.
+La URL privada tiene este formato:
 
----
-
-## Configurar OBS
-
-Agrega una **Browser Source** con estos ajustes:
-
-| Campo | Valor |
-|---|---|
-| URL | `https://daibotkick.onrender.com/pixel.html?ch=tu_slug` |
-| Ancho | `1920` |
-| Alto | `1080` |
-| Controlar audio vía OBS | ✅ Marcado |
-
-Sustituye `tu_slug` por tu nombre de canal en Kick (ej. `seniordai`).
-
-> El overlay escala automáticamente a cualquier resolución — también funciona en móvil.
-
----
-
-## Comandos del chat
-
-### Cualquiera del chat
-
-| Comando | Descripción | Cooldown |
-|---|---|---|
-| `!play [url]` | Agrega un video de YouTube a la cola | 30s por usuario |
-| `!cola` | Muestra los próximos videos en cola | 30s global |
-| `!quitarme` | Elimina tu primer video de la cola | — |
-| `!misongs` | Ve tus videos con su posición en cola | 15s por usuario |
-| `!dai [texto]` | TTS voz Camila (acento peruano) | 15s por usuario |
-| `!dalia [texto]` | TTS voz Dalia (mexicano) | 15s por usuario |
-| `!jorge [texto]` | TTS voz Jorge (mexicano) | 15s por usuario |
-| `!alex [texto]` | TTS voz Alex (peruano) | 15s por usuario |
-| `!dado` | Número aleatorio del 1 al 100 | 15s por usuario |
-| `!8ball [pregunta]` | El oráculo responde | 10s por usuario |
-| `!sorteo` / `!participar` | Entrar al sorteo cuando esté abierto | — |
-| `!uptime` | Tiempo que llevamos en vivo | 30s global |
-| `!seguidores` | Seguidores actuales vs meta | 60s global |
-| `!discord` | Link al servidor de Discord | 20s global |
-| `!redes` | Redes sociales | 20s global |
-| `!pc` / `!setup` | Especificaciones del equipo | 20s global |
-| `!horario` | Horario de streams | 20s global |
-| `!comandos` / `!help` | Lista rápida de comandos | 20s global |
-
-> Todos los comandos TTS (`!dai`, `!dalia`, `!jorge`, `!alex`) comparten el mismo cooldown de 15s.
-
-### Solo el streamer
-
-| Comando | Descripción |
-|---|---|
-| `!von` | Muestra el widget de video en el overlay |
-| `!voff` | Oculta el video (el audio continúa) |
-| `!vstop` | Para el video y vacía la cola |
-| `!next` / `!skip` | Salta al siguiente video |
-| `!sorteo abrir` | Abre el sorteo para participantes |
-| `!sorteo cerrar` | Cierra el sorteo |
-| `!sorteo ganador` | Elige y anuncia al ganador al azar |
-
----
-
-## Para desarrolladores
-
-### Requisitos locales
-
-- [Rust](https://rustup.rs) (toolchain stable)
-- PostgreSQL o cadena de conexión a Supabase
-- Python 3 + `pip install edge-tts` (para TTS)
-
-### Variables de entorno
-
-```env
-KICK_CLIENT_ID=tu_client_id
-KICK_CLIENT_SECRET=tu_client_secret
-DATABASE_URL=postgresql://postgres.xxx:password@aws-1-us-east-2.pooler.supabase.com:5432/postgres
-BASE_URL=https://daibotkick.onrender.com
-OVERLAY_DIR=../overlay
-TTS_CACHE_DIR=/tmp/tts_cache
-PORT=3000
+```text
+https://tu-servicio/pixel.html?ch=tu_canal#token=TOKEN_GENERADO
 ```
 
-Crea la app OAuth en [kick.com/settings/developer](https://kick.com/settings/developer) con:
-- **Redirect URL:** `https://daibotkick.onrender.com/auth/callback`
-- **Webhook URL:** `https://daibotkick.onrender.com/kick_webhook`
+Conserva esa URL en OBS. El token autoriza solo reproducción, no comandos de panel, y se envía en el handshake de Socket.IO. Un único socket autorizado controla video y TTS por canal. Una segunda fuente espera a que la primera se desconecte.
 
-### Ejecutar en local
+La URL sin token muestra chat y estadísticas, pero no reproduce audio/video ni puede avanzar la cola. Los canales registrados antes de esta actualización deben volver a conectarse por OAuth para obtener su URL privada. `index.html` conserva canal y token al redirigir.
 
-```bash
+Si el navegador bloquea autoplay, interactúa con la fuente de OBS. La pantalla muestra el estado de conexión y errores de reproducción. Un video tiene un límite de reproducción de diez minutos.
+
+## Comandos
+
+| Comando | Función |
+|---|---|
+| `!play URL` | Agregar un video de YouTube; 30 s por usuario |
+| `!cola` | Ver próximos videos; 30 s global |
+| `!quitarme` | Quitar tu primer video |
+| `!misongs` | Ver tus videos; 15 s por usuario |
+| `!dai TEXTO`, `!dalia TEXTO`, `!jorge TEXTO`, `!alex TEXTO` | TTS; cooldown compartido de 15 s |
+| `!dado`, `!8ball PREGUNTA` | Entretenimiento |
+| `!participar` / `!sorteo` | Entrar al sorteo abierto |
+| `!uptime` | Tiempo desde el inicio real del stream, si está disponible |
+| `!seguidores` | Total y meta, si Kick proporciona ese dato |
+| `!discord`, `!redes`, `!pc`, `!horario`, `!comandos` | Información |
+
+Solo la identidad del broadcaster, verificada por su ID en el webhook firmado, puede usar `!von`, `!voff`, `!vstop`, `!skip` / `!next` y `!sorteo abrir|cerrar|ganador`. El skip modifica la cola en el backend incluso sin overlay conectado.
+
+Las respuestas y la meta son campos por canal en PostgreSQL: `cmd_discord`, `cmd_redes`, `cmd_pc`, `cmd_horario`, `follow_goal`. Una reautorización conserva esos valores. No se leen de variables `CMD_*`.
+
+Se aceptan videos directos MP4/WebM/MOV/M4V por HTTPS, con validación de URL y rechazo de direcciones locales literales. Un host DNS externo puede resolver o redirigir a otra dirección; usa enlaces de proveedores de confianza. La cola admite 100 elementos. TTS admite 350 caracteres, 32 pendientes por canal y dos síntesis simultáneas en el proceso. La síntesis tiene timeout de 30 s; la caché conserva hasta aproximadamente 256 archivos durante 24 h y puede regenerarse.
+
+## Desarrollo local
+
+Requisitos: Rust 1.88.0, PostgreSQL y `edge-tts==7.2.8` en el PATH. Node 22 o posterior se usa para las pruebas del overlay.
+
+Desde la raíz del repositorio, copia `.env.example` a `.env` y configura:
+
+| Variable | Uso |
+|---|---|
+| `KICK_CLIENT_ID`, `KICK_CLIENT_SECRET` | Credenciales de la app OAuth |
+| `DATABASE_URL` | PostgreSQL; desarrollo y producción deben usar bases diferentes |
+| `BASE_URL` | Origen público del servidor; si se omite usa `RENDER_EXTERNAL_URL` o localhost |
+| `PORT` | Puerto HTTP/Socket.IO; por defecto 3000 |
+| `OVERLAY_DIR` | Ruta de archivos del overlay; por defecto `../overlay` |
+| `TTS_CACHE_DIR` | Directorio temporal de caché; opcional |
+| `YOUTUBE_API_KEY` | Opcional, para el primer elemento de playlists; no hace falta para un video individual |
+| `RUST_LOG` | Nivel de logs; por defecto info |
+
+No hay claves de YouTube incluidas en el código. Si utilizabas la clave de la versión anterior, revisa restricciones y rotación en Google Cloud antes de habilitar playlists.
+
+```powershell
 cd backend
-cargo run
+cargo run --locked
 ```
 
-### Tests
+Registra en la app de Kick `BASE_URL/auth/callback` como redirect y `BASE_URL/kick_webhook` como webhook. Para recibir webhooks locales necesitas una URL HTTPS pública mediante un túnel. El flujo de registro es `/auth/kick`; el modo antiguo `--login` solo guarda tokens en `.env` y no registra canales del servidor actual.
 
-```bash
-cd backend
-cargo test
+Las migraciones versionadas se ejecutan al arrancar. Si falla una migración o la carga de canales, el servidor termina con error. Las tablas de una instalación anterior creadas sin sqlx se conservan mediante `CREATE TABLE IF NOT EXISTS`; respalda la base antes de actualizar.
+
+## Verificación
+
+```powershell
+cargo +1.88.0 fmt --manifest-path backend/Cargo.toml --all -- --check
+cargo +1.88.0 clippy --manifest-path backend/Cargo.toml --locked --all-targets -- -D warnings
+cargo +1.88.0 test --manifest-path backend/Cargo.toml --locked
+node --test tests/overlay.test.cjs
 ```
 
-43 tests unitarios: cooldowns, cola de videos, voces TTS, parsing de URLs de YouTube y helpers de configuración.
+La prueba de integración requiere PostgreSQL de pruebas y permiso para crear/eliminar un schema aislado. Nunca la apuntes a producción:
 
-### Deploy en Render
-
-El archivo `render.yaml` configura el servicio. Render usa el `Dockerfile` que:
-1. Compila el backend con Rust 1.88
-2. Instala Python 3 + edge-tts en la imagen final
-3. Sirve el overlay desde `/app/overlay/`
-
-Variables de entorno requeridas en el dashboard de Render:
-- `KICK_CLIENT_ID`
-- `KICK_CLIENT_SECRET`
-- `DATABASE_URL` (Session Pooler de Supabase, puerto 5432)
-- `BASE_URL` (URL pública del servicio)
-
----
-
-## Estructura del proyecto
-
-```
-DaiBotkick/
-├── .env.example            ← Plantilla de configuración
-├── Dockerfile              ← Imagen Docker para Render
-├── render.yaml             ← Configuración de Render
-│
-├── backend/                ← Servidor en Rust (axum + socketioxide + sqlx)
-│   └── src/
-│       ├── main.rs         ← Punto de entrada, AppState, router HTTP, webhook
-│       ├── auth.rs         ← OAuth 2.0 PKCE (registro de streamers)
-│       ├── channel.rs      ← Inicialización de canales por streamer
-│       ├── commands/       ← Lógica de todos los comandos del chat
-│       ├── cooldown.rs     ← Anti-spam: cooldowns por usuario y globales
-│       ├── db.rs           ← Queries PostgreSQL (upsert, load, tokens)
-│       ├── kick/           ← Pusher WebSocket + EventSub + sender
-│       ├── tts/            ← Text-to-speech vía edge-tts
-│       ├── queue/          ← Cola de videos
-│       ├── server/         ← Socket.IO con el overlay (rooms por canal)
-│       ├── state.rs        ← AppState, ChannelState, tipos compartidos
-│       └── stats/          ← Viewer count y followers vía API de Kick
-│
-├── overlay/                ← Archivos servidos como static files
-│   └── pixel.html          ← Overlay principal (pixel art, chat, reproductor)
-│
-└── installer/              ← Empaquetado legacy para Windows (no activo)
-    ├── DaiBot.iss          ← Script de Inno Setup 6
-    └── build.ps1           ← Build script
+```powershell
+$env:TEST_DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/daibot_test'
+cargo +1.88.0 test --manifest-path backend/Cargo.toml --locked -- --ignored
 ```
 
----
+CI ejecuta formato, Clippy, tests Rust, integración PostgreSQL, tests del overlay y build Docker en Linux. Las pruebas de Node simulan DOM, Socket.IO y media: no sustituyen una sesión real de OBS/YouTube. Consulta [el plan de pruebas](PLAN_PRUEBAS_DESPLIEGUE.md) para la validación real y de carga.
 
-## Solución de problemas
+## Despliegue
 
-**El overlay muestra viewers/seguidores en 0**
-→ Los datos se actualizan en el primer fetch al iniciar el canal (~2s) y luego cada 60s
-→ Si persiste, verifica que el token OAuth esté vigente
+`Dockerfile` compila con Rust 1.88.0 y `--locked`, instala TTS en un entorno Python y ejecuta el servicio sin privilegios. `.dockerignore` excluye credenciales y builds locales.
 
-**El bot no responde a comandos**
-→ Verifica en los logs de Render que aparezca `[EventSub][slug] Suscripciones creadas`
-→ El bot lee el chat vía webhook, no hace polling
+`render.yaml` usa una instancia de web service pago y recibe `DATABASE_URL` como secreto para una base persistente, por ejemplo Supabase o PostgreSQL administrado pago. Ya no crea una base gratuita. Los servicios gratuitos y la base Free tienen límites que debes revisar en la [documentación de Render](https://render.com/docs/free).
 
-**El overlay no se ve en OBS**
-→ Verifica que la URL incluya `?ch=tu_slug`
-→ Refresca la browser source en OBS (botón derecho → Refresh)
+Configura credenciales, base y `BASE_URL` en Render; registra ese origen en Kick y lanza staging primero. Los despliegues automáticos esperan a los checks de CI mediante [`autoDeployTrigger: checksPass`](https://render.com/docs/blueprint-spec). No se ha publicado ninguna versión desde esta revisión.
 
-**No se escucha el TTS**
-→ Verifica que "Controlar audio vía OBS" esté marcado en la browser source
+- `/healthz`: proceso HTTP activo.
+- `/readyz`: proceso disponible y PostgreSQL responde; devuelve 503 si falla.
+- `/metrics`: conteos de canales, sockets, TTS pendientes y webhooks recibidos/rechazados/duplicados/procesados. Los contadores se reinician al reiniciar el proceso.
 
-**El video no reproduce**
-→ Usa una sola browser source en OBS
-→ En algunos navegadores el autoplay requiere interacción previa — haz clic en el overlay una vez
+Mantén una sola instancia. Durante un despliegue Render puede solapar instancias brevemente: las filas del inbox se bloquean con `FOR UPDATE SKIP LOCKED` y las escrituras de cola comprueban el estado anterior, pero Socket.IO y elección de reproductor siguen siendo locales. No hay soporte completo para varias réplicas. Para un stream crítico, actualiza en una ventana de mantenimiento hasta contar con coordinación y distribución de eventos entre procesos.
+
+## Persistencia y recuperación
+
+La cola, su versión, los IDs de elementos, visibilidad del video, configuración y tokens se guardan en PostgreSQL. Un reinicio recupera el primer video desde el comienzo; no guarda el segundo exacto de reproducción. Sorteos, cooldowns y TTS pendientes se reinician.
+
+El webhook responde después de guardar el evento en un inbox. Reentregas con el mismo ID no insertan otro evento. La ejecución tiene semántica de **al menos una vez**: un crash después de enviar audio/chat y antes de confirmar la fila puede repetir un efecto. No se garantiza ejecución exactamente una vez de servicios externos. Los eventos procesados se limpian después de 24 h; los pendientes permanecen para recuperación.
+
+Reautorizar cancela las tareas del estado anterior, preserva configuración y cola, y reconecta sockets. El apagado atiende Ctrl+C/SIGTERM y cancela tareas; los subprocess TTS se terminan al cancelar. Si falla PostgreSQL justo después de que Kick rota un refresh token, el proceso conserva el token nuevo en memoria, pero un reinicio antes de persistirlo puede requerir reconectar el canal.
+
+Para rollback, conserva la imagen/commit anterior y un backup probado. Volver a una imagen no revierte migraciones ni efectos externos. Esta versión cambia el protocolo de cola (`items`, `version`, ID único) y autorización del overlay: despliega backend y overlay juntos, y actualiza la URL de OBS al migrar.

@@ -56,11 +56,9 @@ async fn run_flow() -> Result<(), String> {
     let client_secret = std::env::var("KICK_CLIENT_SECRET").unwrap_or_default();
 
     if client_id.is_empty() || client_secret.is_empty() {
-        return Err(
-            "Faltan KICK_CLIENT_ID o KICK_CLIENT_SECRET.\n\
+        return Err("Faltan KICK_CLIENT_ID o KICK_CLIENT_SECRET.\n\
              Contacta al soporte de DaiBot."
-                .to_string(),
-        );
+            .to_string());
     }
 
     // PKCE
@@ -85,8 +83,7 @@ async fn run_flow() -> Result<(), String> {
         &format!(
             "Al hacer clic en Aceptar se abrirá tu navegador para iniciar sesión en Kick.\n\
              Acepta los permisos y vuelve aquí cuando termines.\n\n\
-             Si el navegador NO se abre, copia esta dirección:\n\n{}",
-            auth_url
+             Si el navegador NO se abre, copia esta dirección:\n\n{auth_url}"
         ),
         "DaiBot — Conectar con Kick",
         0x40, // MB_ICONINFORMATION
@@ -105,8 +102,14 @@ async fn run_flow() -> Result<(), String> {
     let http = reqwest::Client::new();
     let tokens = exchange_code(&http, &code, &code_verifier, &client_id, &client_secret).await?;
 
-    let access  = tokens["access_token"].as_str().unwrap_or_default().to_string();
-    let refresh = tokens["refresh_token"].as_str().unwrap_or_default().to_string();
+    let access = tokens["access_token"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
+    let refresh = tokens["refresh_token"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
     let expires = tokens["expires_in"].as_u64().unwrap_or(7200);
 
     save_tokens(&access, &refresh, expires);
@@ -129,7 +132,8 @@ async fn fetch_and_save_channel_name(http: &reqwest::Client, token: &str) {
                 "No se pudo detectar tu nombre de canal en Kick.\n\
                  Escribe tu nombre de usuario (ejemplo: seniordai):",
                 "DaiBot — Configuración",
-            ).unwrap_or_default()
+            )
+            .unwrap_or_default()
         }
         #[cfg(not(windows))]
         {
@@ -174,7 +178,8 @@ async fn fetch_from_user_endpoint(http: &reqwest::Client, token: &str) -> Option
     let json: serde_json::Value = resp.json().await.ok()?;
 
     // La API puede devolver el slug en distintos campos según la versión
-    json["data"]["slug"].as_str()
+    json["data"]["slug"]
+        .as_str()
         .or_else(|| json["data"]["username"].as_str())
         .or_else(|| json["data"]["name"].as_str())
         .or_else(|| json["slug"].as_str())
@@ -196,8 +201,7 @@ async fn fetch_from_channel_endpoint(http: &reqwest::Client, token: &str) -> Opt
     }
 
     let json: serde_json::Value = resp.json().await.ok()?;
-    json["data"].as_array()?
-        .first()?["slug"]
+    json["data"].as_array()?.first()?["slug"]
         .as_str()
         .map(|s| s.to_lowercase())
 }
@@ -237,7 +241,13 @@ fn set_key(content: String, key: &str, value: &str) -> String {
     if content.lines().any(|l| l.starts_with(&prefix)) {
         content
             .lines()
-            .map(|l| if l.starts_with(&prefix) { line.as_str() } else { l })
+            .map(|l| {
+                if l.starts_with(&prefix) {
+                    line.as_str()
+                } else {
+                    l
+                }
+            })
             .collect::<Vec<_>>()
             .join("\n")
     } else if content.is_empty() {
@@ -266,7 +276,8 @@ async fn wait_callback(expected_state: &str) -> Result<String, String> {
 
     let listener = TcpListener::bind("127.0.0.1:3001").await.map_err(|_| {
         "El puerto 3001 está ocupado por otro programa.\n\
-         Cierra cualquier otra instancia de DaiBot e inténtalo de nuevo.".to_string()
+         Cierra cualquier otra instancia de DaiBot e inténtalo de nuevo."
+            .to_string()
     })?;
 
     println!("Esperando autorización en el navegador...");
@@ -293,9 +304,11 @@ async fn wait_callback(expected_state: &str) -> Result<String, String> {
             url::form_urlencoded::parse(qs.as_bytes()).collect();
 
         if let Some(err) = params.get("error") {
-            html_reply(&mut socket, &format!(
-                "<h2>Error: {err}</h2><p>Puedes cerrar esta pestaña.</p>"
-            )).await;
+            html_reply(
+                &mut socket,
+                &format!("<h2>Error: {err}</h2><p>Puedes cerrar esta pestaña.</p>"),
+            )
+            .await;
             return Err(format!("OAuth rechazado: {err}"));
         }
 
@@ -314,7 +327,8 @@ async fn wait_callback(expected_state: &str) -> Result<String, String> {
                 &mut socket,
                 "<h2 style='color:#53fc18'>&#x2705; ¡Autorizado correctamente!</h2>\
                  <p>Puedes cerrar esta pestaña y volver al bot.</p>",
-            ).await;
+            )
+            .await;
             println!("Autorización recibida.");
             return Ok(code.to_string());
         }
@@ -330,7 +344,8 @@ async fn html_reply(socket: &mut tokio::net::TcpStream, body: &str) {
     let response = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n\
          Content-Length: {}\r\nConnection: close\r\n\r\n{}",
-        html.len(), html
+        html.len(),
+        html
     );
     socket.write_all(response.as_bytes()).await.ok();
 }
@@ -366,7 +381,9 @@ async fn exchange_code(
         return Err(format!("Error {status}: {text}"));
     }
 
-    let data: serde_json::Value = resp.json().await
+    let data: serde_json::Value = resp
+        .json()
+        .await
         .map_err(|e| format!("Respuesta inválida: {e}"))?;
 
     if data["access_token"].is_null() {
@@ -412,7 +429,12 @@ fn open_browser(url: &str) {
     #[cfg(target_os = "linux")]
     {
         // Probar los abridos más comunes en orden
-        for cmd in ["xdg-open", "sensible-browser", "firefox", "chromium-browser"] {
+        for cmd in [
+            "xdg-open",
+            "sensible-browser",
+            "firefox",
+            "chromium-browser",
+        ] {
             if std::process::Command::new(cmd).arg(url).spawn().is_ok() {
                 break;
             }
@@ -424,12 +446,20 @@ fn open_browser(url: &str) {
 
 #[cfg(windows)]
 fn msg_dialog(text: &str, title: &str, utype: u32) {
+    #[link(name = "user32")]
     extern "system" {
-        fn MessageBoxW(hwnd: *mut std::ffi::c_void, text: *const u16, caption: *const u16, utype: u32) -> i32;
+        fn MessageBoxW(
+            hwnd: *mut std::ffi::c_void,
+            text: *const u16,
+            caption: *const u16,
+            utype: u32,
+        ) -> i32;
     }
     let t: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
     let c: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
-    unsafe { MessageBoxW(std::ptr::null_mut(), t.as_ptr(), c.as_ptr(), utype); }
+    unsafe {
+        MessageBoxW(std::ptr::null_mut(), t.as_ptr(), c.as_ptr(), utype);
+    }
 }
 
 /// Muestra un InputBox de Windows usando VisualBasic (disponible en todas las versiones de Windows).
@@ -450,5 +480,9 @@ fn input_dialog(message: &str, title: &str) -> Option<String> {
         .output()
         .ok()?;
     let result = String::from_utf8_lossy(&out.stdout).trim().to_lowercase();
-    if result.is_empty() { None } else { Some(result) }
+    if result.is_empty() {
+        None
+    } else {
+        Some(result)
+    }
 }

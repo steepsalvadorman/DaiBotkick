@@ -1,53 +1,56 @@
 use sqlx::PgPool;
 
+const COLUMNS: &str = "slug, broadcaster_user_id, chatroom_id, access_token, refresh_token, token_expires, panel_token, cmd_discord, cmd_redes, cmd_pc, cmd_horario, follow_goal, queue_state, show_video, playback_token";
+
 #[derive(sqlx::FromRow, Clone)]
 pub struct ChannelRow {
-    pub slug:                String,
+    pub slug: String,
     pub broadcaster_user_id: Option<i64>,
-    pub chatroom_id:         Option<i64>,
-    pub access_token:        String,
-    pub refresh_token:       String,
-    pub token_expires:       i64,
-    pub panel_token:         String,
-    pub cmd_discord:         String,
-    pub cmd_redes:           String,
-    pub cmd_pc:              String,
-    pub cmd_horario:         String,
-    pub follow_goal:         i64,
+    pub chatroom_id: Option<i64>,
+    pub access_token: String,
+    pub refresh_token: String,
+    pub token_expires: i64,
+    pub panel_token: String,
+    pub cmd_discord: String,
+    pub cmd_redes: String,
+    pub cmd_pc: String,
+    pub cmd_horario: String,
+    pub follow_goal: i64,
+    pub queue_state: String,
+    pub show_video: bool,
+    pub playback_token: String,
 }
 
-pub async fn run_migrations(pool: &PgPool) {
-    let sql = include_str!("../migrations/001_initial.sql");
-    for stmt in sql.split(';').map(|s| s.trim()).filter(|s| !s.is_empty()) {
-        if let Err(e) = sqlx::query(stmt).execute(pool).await {
-            tracing::warn!("[DB] Migration warning: {e}");
-        }
-    }
+pub async fn run_migrations(pool: &PgPool) -> Result<(), sqlx::migrate::MigrateError> {
+    sqlx::migrate!("./migrations").run(pool).await
 }
 
-pub async fn load_all_channels(pool: &PgPool) -> Vec<ChannelRow> {
-    sqlx::query_as::<_, ChannelRow>(
-        "SELECT slug, broadcaster_user_id, chatroom_id, access_token, refresh_token,
-                token_expires, panel_token, cmd_discord, cmd_redes, cmd_pc, cmd_horario, follow_goal
-         FROM channels",
-    )
-    .fetch_all(pool)
-    .await
-    .unwrap_or_default()
+pub async fn load_all_channels(pool: &PgPool) -> Result<Vec<ChannelRow>, sqlx::Error> {
+    sqlx::query_as::<_, ChannelRow>(&format!("SELECT {COLUMNS} FROM channels"))
+        .fetch_all(pool)
+        .await
 }
 
-pub async fn upsert_channel(pool: &PgPool, row: &ChannelRow) {
-    let _ = sqlx::query(
+pub async fn load_channel(pool: &PgPool, slug: &str) -> Result<ChannelRow, sqlx::Error> {
+    sqlx::query_as::<_, ChannelRow>(&format!("SELECT {COLUMNS} FROM channels WHERE slug=$1"))
+        .bind(slug)
+        .fetch_one(pool)
+        .await
+}
+
+pub async fn upsert_channel(pool: &PgPool, row: &ChannelRow) -> Result<(), sqlx::Error> {
+    sqlx::query(
         "INSERT INTO channels
             (slug, broadcaster_user_id, chatroom_id, access_token, refresh_token,
-             token_expires, panel_token, cmd_discord, cmd_redes, cmd_pc, cmd_horario, follow_goal)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+             token_expires, panel_token, cmd_discord, cmd_redes, cmd_pc, cmd_horario, follow_goal, playback_token)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
          ON CONFLICT (slug) DO UPDATE SET
            broadcaster_user_id = COALESCE(EXCLUDED.broadcaster_user_id, channels.broadcaster_user_id),
            chatroom_id         = COALESCE(EXCLUDED.chatroom_id, channels.chatroom_id),
            access_token        = EXCLUDED.access_token,
            refresh_token       = EXCLUDED.refresh_token,
            token_expires       = EXCLUDED.token_expires,
+           playback_token      = CASE WHEN channels.playback_token = '' THEN EXCLUDED.playback_token ELSE channels.playback_token END,
            panel_token         = CASE WHEN channels.panel_token = '' THEN EXCLUDED.panel_token ELSE channels.panel_token END,
            cmd_discord         = CASE WHEN EXCLUDED.cmd_discord  != '' THEN EXCLUDED.cmd_discord  ELSE channels.cmd_discord  END,
            cmd_redes           = CASE WHEN EXCLUDED.cmd_redes    != '' THEN EXCLUDED.cmd_redes    ELSE channels.cmd_redes    END,
@@ -67,36 +70,40 @@ pub async fn upsert_channel(pool: &PgPool, row: &ChannelRow) {
     .bind(&row.cmd_pc)
     .bind(&row.cmd_horario)
     .bind(row.follow_goal)
+    .bind(&row.playback_token)
     .execute(pool)
-    .await;
+    .await?;
+    Ok(())
 }
 
-pub async fn update_tokens(pool: &PgPool, slug: &str, access: &str, refresh: &str, expires: i64) {
-    let _ = sqlx::query(
-        "UPDATE channels SET access_token=$1, refresh_token=$2, token_expires=$3 WHERE slug=$4",
+pub async fn update_tokens(
+    pool: &PgPool,
+    slug: &str,
+    access: &str,
+    refresh: &str,
+    expires: i64,
+    previous_refresh: &str,
+) -> Result<bool, sqlx::Error> {
+    let updated = sqlx::query(
+        "UPDATE channels SET access_token=$1, refresh_token=$2, token_expires=$3 WHERE slug=$4 AND refresh_token=$5",
     )
     .bind(access)
     .bind(refresh)
     .bind(expires)
     .bind(slug)
+    .bind(previous_refresh)
     .execute(pool)
-    .await;
+    .await?;
+    Ok(updated.rows_affected() == 1)
 }
 
-pub async fn update_channel_ids(pool: &PgPool, slug: &str, broadcaster_id: i64, chatroom_id: i64) {
-    let _ = sqlx::query(
-        "UPDATE channels SET broadcaster_user_id=$1, chatroom_id=$2 WHERE slug=$3",
-    )
-    .bind(broadcaster_id)
-    .bind(chatroom_id)
-    .bind(slug)
-    .execute(pool)
-    .await;
-}
-
-pub async fn save_oauth_state(pool: &PgPool, token: &str, code_verifier: &str) {
+pub async fn save_oauth_state(
+    pool: &PgPool,
+    token: &str,
+    code_verifier: &str,
+) -> Result<(), sqlx::Error> {
     let now = unix_now() as i64;
-    if let Err(e) = sqlx::query(
+    sqlx::query(
         "INSERT INTO oauth_state (token, code_verifier, created_at) VALUES ($1,$2,$3)
          ON CONFLICT (token) DO UPDATE SET code_verifier=EXCLUDED.code_verifier, created_at=EXCLUDED.created_at",
     )
@@ -104,30 +111,37 @@ pub async fn save_oauth_state(pool: &PgPool, token: &str, code_verifier: &str) {
     .bind(code_verifier)
     .bind(now)
     .execute(pool)
-    .await {
-        tracing::error!("[DB] save_oauth_state falló: {e}");
-    }
+    .await?;
+    sqlx::query("DELETE FROM oauth_state WHERE created_at < $1")
+        .bind(now - 600)
+        .execute(pool)
+        .await?;
+    Ok(())
 }
 
-pub async fn consume_oauth_state(pool: &PgPool, token: &str) -> Option<String> {
+pub async fn consume_oauth_state(
+    pool: &PgPool,
+    token: &str,
+) -> Result<Option<String>, sqlx::Error> {
     #[derive(sqlx::FromRow)]
-    struct Row { code_verifier: String, created_at: i64 }
+    struct Row {
+        code_verifier: String,
+        created_at: i64,
+    }
 
     let row = sqlx::query_as::<_, Row>(
-        "SELECT code_verifier, created_at FROM oauth_state WHERE token=$1",
+        "DELETE FROM oauth_state WHERE token=$1 RETURNING code_verifier, created_at",
     )
     .bind(token)
     .fetch_optional(pool)
-    .await
-    .ok()??;
-
-    let _ = sqlx::query("DELETE FROM oauth_state WHERE token=$1")
-        .bind(token)
-        .execute(pool)
-        .await;
-
-    if unix_now() as i64 - row.created_at > 600 { return None; }
-    Some(row.code_verifier)
+    .await?;
+    let Some(row) = row else {
+        return Ok(None);
+    };
+    if unix_now() as i64 - row.created_at > 600 {
+        return Ok(None);
+    }
+    Ok(Some(row.code_verifier))
 }
 
 fn unix_now() -> u64 {

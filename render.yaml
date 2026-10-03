@@ -1,38 +1,25 @@
+# Supply a persistent PostgreSQL database (Supabase or a paid managed database).
 services:
   - type: web
     name: daibot
     runtime: docker
     dockerfilePath: ./Dockerfile
-    plan: starter  # $7/mes — siempre encendido
-
+    plan: starter
+    numInstances: 1
+    autoDeployTrigger: checksPass
+    healthCheckPath: /readyz
     envVars:
-      # Credenciales de la app OAuth de Kick (kick.com/settings/developer)
       - key: KICK_CLIENT_ID
         sync: false
       - key: KICK_CLIENT_SECRET
         sync: false
-
-      # URL pública del servicio (Render la provee automáticamente)
-      # Si no funciona auto-detect, ponla manualmente: https://daibot.onrender.com
+      - key: DATABASE_URL
+        sync: false
       - key: BASE_URL
         sync: false
-
-      # Conectar con la base de datos PostgreSQL de Render
-      - key: DATABASE_URL
-        fromDatabase:
-          name: daibot-db
-          property: connectionString
-
-      # Rutas internas del contenedor
       - key: OVERLAY_DIR
         value: /app/overlay
       - key: TTS_CACHE_DIR
-        value: /tmp/tts_cache
-
-      # Pusher
-      - key: PUSHER_HOST
-        value: ws-us2.pusher.com
-
-databases:
-  - name: daibot-db
-    plan: free   # PostgreSQL gratis (90 días, luego $7/mes)
+        value: /tmp/daibot_tts
+      - key: RUST_LOG
+        value: info

@@ -3,30 +3,51 @@ use std::time::{Duration, Instant};
 
 pub struct CooldownManager {
     per_user: HashMap<(String, String), Instant>,
-    global:   HashMap<String, Instant>,
+    global: HashMap<String, Instant>,
 }
 
 impl CooldownManager {
     pub fn new() -> Self {
-        Self { per_user: HashMap::new(), global: HashMap::new() }
+        Self {
+            per_user: HashMap::new(),
+            global: HashMap::new(),
+        }
+    }
+
+    pub fn consume_user(&mut self, user: &str, cmd: &str, secs: u64) -> bool {
+        self.gc(3600);
+        if !self.check_user(user, cmd, secs) {
+            return false;
+        }
+        self.use_user(user, cmd);
+        true
+    }
+    pub fn consume_global(&mut self, cmd: &str, secs: u64) -> bool {
+        self.gc(3600);
+        if !self.check_global(cmd, secs) {
+            return false;
+        }
+        self.use_global(cmd);
+        true
     }
 
     /// true → puede usar; false → en cooldown.
     pub fn check_user(&self, user: &str, cmd: &str, secs: u64) -> bool {
         match self.per_user.get(&(user.to_lowercase(), cmd.to_string())) {
             Some(t) => t.elapsed() >= Duration::from_secs(secs),
-            None    => true,
+            None => true,
         }
     }
 
     pub fn use_user(&mut self, user: &str, cmd: &str) {
-        self.per_user.insert((user.to_lowercase(), cmd.to_string()), Instant::now());
+        self.per_user
+            .insert((user.to_lowercase(), cmd.to_string()), Instant::now());
     }
 
     pub fn check_global(&self, cmd: &str, secs: u64) -> bool {
         match self.global.get(cmd) {
             Some(t) => t.elapsed() >= Duration::from_secs(secs),
-            None    => true,
+            None => true,
         }
     }
 

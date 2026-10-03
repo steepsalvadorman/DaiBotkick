@@ -1,31 +1,31 @@
-# ── Credenciales (NUNCA en git) ───────────────────────────────────────────
+# Credenciales (NUNCA en git)
 .env
 
-# ── Rust build ────────────────────────────────────────────────────────────
+# Rust build
 backend/target/
 
-# ── Node.js ────────────────────────────────────────────────────────────────
+# Node.js
 node_modules/
 
-# ── Installer (obsoleto — build en Render/Docker) ─────────────────────────
+# Installer (obsoleto, build en Docker)
 installer/
 
-# ── Login helper Node.js (obsoleto — OAuth multi-tenant en auth.rs) ────────
+# Login helper Node.js (obsoleto, OAuth multi-tenant en auth.rs)
 login/
 
-# ── Runtime / datos generados ─────────────────────────────────────────────
+# Runtime / datos generados
 data/queue.json
 data/tts_cache/
 *.mp3
 
-# ── OS ────────────────────────────────────────────────────────────────────
+# OS
 .DS_Store
 Thumbs.db
 
-# ── Editores ──────────────────────────────────────────────────────────────
+# Editores
 .vscode/settings.json
 *.swp
 *.swo
 
-# ── Claude Code (memoria local, no versionar) ─────────────────────────────
+# Claude Code (memoria local, no versionar)
 .claude/

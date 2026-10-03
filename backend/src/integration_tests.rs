@@ -64,7 +64,7 @@ async fn oauth_pkce_browser_binding_reauthorization_and_failures() {
     assert_eq!(
         [a.0, b.0]
             .iter()
-            .filter(|page| page.contains("¡DaiBot conectado"))
+            .filter(|page| page.contains("¡GorilinRix conectado"))
             .count(),
         1
     );
@@ -936,4 +936,165 @@ async fn database_persistence_oauth_and_webhook_idempotency() {
         .await
         .unwrap();
     admin.close().await;
+}
+
+/// Recorre todos los comandos de comandos.html como lo haría el chat real.
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL"]
+async fn every_documented_chat_command_responds() {
+    use crate::commands::handle;
+    let database = test_support::TestDatabase::new().await;
+    db::upsert_channel(&database.pool, &test_support::row("alpha", 1))
+        .await
+        .unwrap();
+    let mock = Arc::new(MockKick::default());
+    let server = mock.serve().await;
+    let mut app = test_support::app(database.pool.clone());
+    use_mock(&mut app, &server);
+    let (ch, mut tts) = test_support::channel("alpha", 1);
+    app.channels.insert("alpha".into(), ch.clone());
+
+    let last = || async {
+        let requests = mock.chat_requests.lock().await;
+        requests
+            .last()
+            .map(|(_, body)| body["content"].as_str().unwrap_or("").to_owned())
+            .unwrap_or_default()
+    };
+    let count = || async { mock.chat_requests.lock().await.len() };
+    macro_rules! says {
+        ($user:expr, $msg:expr, $owner:expr, $expect:expr) => {{
+            let before = count().await;
+            handle($user, $msg, $owner, &ch, &app).await;
+            assert!(count().await > before, "{} no respondió", $msg);
+            let reply = last().await;
+            assert!(reply.contains($expect), "{} respondió {reply:?}", $msg);
+        }};
+    }
+    macro_rules! silent {
+        ($user:expr, $msg:expr, $owner:expr) => {{
+            let before = count().await;
+            handle($user, $msg, $owner, &ch, &app).await;
+            assert_eq!(count().await, before, "{} no debía responder", $msg);
+        }};
+    }
+
+    // Información y configuración con !set
+    says!("ana", "!comandos", false, "!s/!dalia/!jorge/!alex");
+    says!("ana", "!discord", false, "aún no configuró !discord");
+    silent!("ana", "!set discord https://evil.example", false);
+    says!(
+        "dai",
+        "!set discord https://discord.gg/abc",
+        true,
+        "✅ !discord actualizado"
+    );
+    says!("dai", "!discord", true, "Discord → https://discord.gg/abc");
+    says!("dai", "!set redes x.com/dai", true, "✅ !redes actualizado");
+    says!("dai", "!redes", true, "Redes → x.com/dai");
+    says!(
+        "dai",
+        "!SET pc Ryzen 7 · RTX 4070",
+        true,
+        "✅ !pc actualizado"
+    );
+    says!("dai", "!setup", true, "Setup → Ryzen 7 · RTX 4070");
+    says!(
+        "dai",
+        "!set horario Lun-Vie 8pm",
+        true,
+        "✅ !horario actualizado"
+    );
+    says!("dai", "!horario", true, "Horario → Lun-Vie 8pm");
+    says!("dai", "!set meta 50", true, "Meta de seguidores: 50");
+    says!("dai", "!set nada", true, "Uso: !set");
+    let saved = db::load_channel(&database.pool, "alpha").await.unwrap();
+    assert_eq!(saved.cmd_discord, "https://discord.gg/abc");
+    assert_eq!(saved.cmd_pc, "Ryzen 7 · RTX 4070");
+    assert_eq!(saved.follow_goal, 50);
+    ch.followers.store(5, Ordering::Relaxed);
+    ch.followers_known.store(true, Ordering::Relaxed);
+    says!("ana", "!seguidores", false, "5 / 50 (10%)");
+    says!("ana", "!uptime", false, "offline");
+    *ch.live_since.write().await = Some(chrono::Utc::now() - chrono::Duration::minutes(61));
+    says!("dai", "!uptime", true, "En vivo: 1h 1m");
+
+    // Entretenimiento
+    says!("ana", "!dado", false, "ana sacó un");
+    says!("ana", "!8ball ¿gano hoy?", false, "🎱");
+    says!("dai", "!sorteo abrir", true, "sorteo está abierto");
+    says!("ana", "!sorteo", false, "@ana se unió al sorteo! (1)");
+    says!("beto", "!participar", false, "@beto se unió al sorteo! (2)");
+    silent!("ana", "!participar", false);
+    silent!("ana", "!sorteo ganador", false);
+    says!("dai", "!sorteo cerrar", true, "2 participantes");
+    says!("dai", "!sorteo ganador", true, "El ganador es @");
+
+    // Videos y cola
+    says!(
+        "ana",
+        "!Play https://cdn.example.com/a.mp4",
+        false,
+        "@ana agregó «a.mp4»"
+    );
+    says!(
+        "beto",
+        "!play https://cdn.example.com/b.mp4",
+        false,
+        "@beto agregó «b.mp4»"
+    );
+    says!("carla", "!cola", false, "1. a.mp4 · 2. b.mp4");
+    says!("beto", "!misongs", false, "2. b.mp4");
+    says!("beto", "!quitarme", false, "@beto retiro su video");
+    assert_eq!(ch.video_queue.read().await.items.len(), 1);
+    handle("ana", "!next", false, &ch, &app).await;
+    assert_eq!(
+        ch.video_queue.read().await.items.len(),
+        1,
+        "!next es solo del streamer"
+    );
+
+    // Solo streamer
+    handle("dai", "!voff", true, &ch, &app).await;
+    assert!(!ch.show_video.load(Ordering::Relaxed));
+    handle("dai", "!von", true, &ch, &app).await;
+    assert!(ch.show_video.load(Ordering::Relaxed));
+    handle("dai", "!skip", true, &ch, &app).await;
+    assert!(ch.video_queue.read().await.items.is_empty());
+    handle(
+        "dai",
+        "!play https://cdn.example.com/c.mp4",
+        true,
+        &ch,
+        &app,
+    )
+    .await;
+    handle(
+        "dai",
+        "!play https://cdn.example.com/d.mp4",
+        true,
+        &ch,
+        &app,
+    )
+    .await;
+    assert_eq!(ch.video_queue.read().await.items.len(), 2);
+    handle("dai", "!vstop", true, &ch, &app).await;
+    assert!(ch.video_queue.read().await.items.is_empty());
+
+    // Texto a voz
+    for (user, msg, voice) in [
+        ("u1", "!s hola", "camila"),
+        ("u2", "!dalia hola", "dalia"),
+        ("u3", "!jorge hola", "jorge"),
+        ("u4", "!alex hola", "alex"),
+    ] {
+        handle(user, msg, false, &ch, &app).await;
+        let item = tts
+            .try_recv()
+            .unwrap_or_else(|_| panic!("{msg} no generó TTS"));
+        assert_eq!((item.voice.as_str(), item.text.as_str()), (voice, "hola"));
+    }
+
+    drop(server);
+    database.cleanup().await;
 }

@@ -140,7 +140,7 @@ pub fn channel(
             channel_id: Arc::new(RwLock::new(Some(id))),
             followers: Arc::new(AtomicU64::new(0)),
             followers_known: AtomicBool::new(false),
-            follow_goal: 100,
+            follow_goal: AtomicU64::new(100),
             video_queue: Arc::new(RwLock::new(crate::queue::VideoQueue::new())),
             tts_tx,
             sorteo: Arc::new(Mutex::new(SorteoState {
@@ -148,12 +148,12 @@ pub fn channel(
                 participants: Vec::new(),
             })),
             cooldown: Arc::new(Mutex::new(crate::cooldown::CooldownManager::new())),
-            commands: ChannelCommands {
+            commands: RwLock::new(ChannelCommands {
                 discord: String::new(),
                 redes: String::new(),
                 pc: String::new(),
                 horario: String::new(),
-            },
+            }),
             panel_token: "panel-secret".into(),
             playback_token: "play-secret".into(),
             cancel: CancellationToken::new(),

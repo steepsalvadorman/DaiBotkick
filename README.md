@@ -1,4 +1,4 @@
-# DaiBot para Kick
+# GorilinRix para Kick
 
 Bot para varios canales de Kick, con comandos de chat, cola de YouTube/video, TTS, sorteos y overlay para OBS.
 

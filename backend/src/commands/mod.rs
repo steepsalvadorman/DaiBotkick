@@ -21,6 +21,10 @@ pub async fn handle(
 
     // ── Comandos solo del owner ───────────────────────────────────────────────
     if is_owner {
+        if let Some(args) = command_args(content, "!set") {
+            configure(args, ch, global).await;
+            return;
+        }
         match cmd.as_str() {
             "!von" => {
                 visibility(ch, global, true).await;
@@ -67,28 +71,20 @@ pub async fn handle(
 
     match cmd.as_str() {
         "!discord" => global_cmd!("!discord", {
-            if !ch.commands.discord.is_empty() {
-                sender::send(&format!("💬 Discord → {}", ch.commands.discord), ch, global).await;
-            }
+            info(ch, global, "discord", "💬 Discord").await;
         }),
         "!redes" | "!rrss" | "!rss" => global_cmd!("!redes", {
-            if !ch.commands.redes.is_empty() {
-                sender::send(&format!("📱 Redes → {}", ch.commands.redes), ch, global).await;
-            }
+            info(ch, global, "redes", "📱 Redes").await;
         }),
         "!pc" | "!setup" | "!specs" => global_cmd!("!pc", {
-            if !ch.commands.pc.is_empty() {
-                sender::send(&format!("🖥️ Setup → {}", ch.commands.pc), ch, global).await;
-            }
+            info(ch, global, "pc", "🖥️ Setup").await;
         }),
         "!horario" | "!schedule" => global_cmd!("!horario", {
-            if !ch.commands.horario.is_empty() {
-                sender::send(&format!("📅 Horario → {}", ch.commands.horario), ch, global).await;
-            }
+            info(ch, global, "horario", "📅 Horario").await;
         }),
         "!comandos" | "!help" | "!ayuda" | "!commands" => global_cmd!("!comandos", {
             sender::send(
-                "📋 Comandos: !play [url] · !dai/!dalia/!jorge/!alex [texto TTS] · !quitarme · !misongs · !dado · !8ball [pregunta] · !sorteo · !uptime · !cola · !discord · !redes · !pc · !horario",
+                "📋 Comandos: !play [url] · !s/!dalia/!jorge/!alex [texto TTS] · !quitarme · !misongs · !dado · !8ball [pregunta] · !sorteo · !uptime · !cola · !discord · !redes · !pc · !horario",
                 ch, global,
             ).await;
         }),
@@ -162,12 +158,10 @@ pub async fn handle(
                 return;
             }
             let actual = ch.followers.load(Ordering::Relaxed);
-            let pct = actual
-                .saturating_mul(100)
-                .checked_div(ch.follow_goal)
-                .unwrap_or(0);
+            let goal = ch.follow_goal.load(Ordering::Relaxed);
+            let pct = actual.saturating_mul(100).checked_div(goal).unwrap_or(0);
             sender::send(
-                &format!("👥 Seguidores: {actual} / {} ({pct}%)", ch.follow_goal),
+                &format!("👥 Seguidores: {actual} / {goal} ({pct}%)"),
                 ch,
                 global,
             )
@@ -347,7 +341,7 @@ pub async fn handle(
     }
 
     // ── !play ─────────────────────────────────────────────────────────────────
-    if let Some(url) = content.strip_prefix("!play ") {
+    if let Some(url) = command_args(content, "!play").filter(|url| !url.is_empty()) {
         if !is_owner {
             let ok = { ch.cooldown.lock().await.consume_user(username, "!play", 30) };
             if !ok {
@@ -367,7 +361,8 @@ pub async fn handle(
         return;
     }
     let cmd_low = cmd_word.to_lowercase();
-    let is_tts = cmd_low == "!dai"
+    let camila = cmd_low == "!s" || cmd_low == "!dai";
+    let is_tts = camila
         || cmd_low
             .strip_prefix('!')
             .is_some_and(tts::edge_tts::is_valid_voice);
@@ -378,13 +373,110 @@ pub async fn handle(
                 return;
             }
         }
-        let voice = if cmd_low == "!dai" {
+        let voice = if camila {
             "camila".into()
         } else {
             cmd_low.trim_start_matches('!').to_string()
         };
         tts::enqueue(ch, text, &voice);
     }
+}
+
+/// Devuelve el texto tras `name` si el mensaje es ese comando (sin distinguir mayúsculas).
+fn command_args<'a>(content: &'a str, name: &str) -> Option<&'a str> {
+    let head = content.get(..name.len())?;
+    if !head.eq_ignore_ascii_case(name) {
+        return None;
+    }
+    let rest = &content[name.len()..];
+    if rest.is_empty() {
+        Some("")
+    } else if rest.starts_with(char::is_whitespace) {
+        Some(rest.trim())
+    } else {
+        None
+    }
+}
+
+async fn info(ch: &Arc<ChannelState>, global: &Arc<AppState>, key: &str, label: &str) {
+    let text = {
+        let c = ch.commands.read().await;
+        match key {
+            "discord" => c.discord.clone(),
+            "redes" => c.redes.clone(),
+            "pc" => c.pc.clone(),
+            _ => c.horario.clone(),
+        }
+    };
+    let msg = if text.is_empty() {
+        format!("ℹ️ El streamer aún no configuró !{key}")
+    } else {
+        format!("{label} → {text}")
+    };
+    sender::send(&msg, ch, global).await;
+}
+
+const SET_USAGE: &str =
+    "⚙️ Uso: !set discord|redes|pc|horario <texto> (vacío para borrar) · !set meta <número>";
+
+/// `!set <campo> <valor>`: el streamer configura sus comandos desde el chat.
+async fn configure(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
+    let (field, value) = args
+        .split_once(char::is_whitespace)
+        .map(|(f, v)| (f, v.trim()))
+        .unwrap_or((args, ""));
+    let field = match field.to_lowercase().as_str() {
+        "discord" => "discord",
+        "redes" | "rrss" => "redes",
+        "pc" | "setup" | "specs" => "pc",
+        "horario" | "schedule" => "horario",
+        "meta" | "goal" => "meta",
+        _ => {
+            sender::send(SET_USAGE, ch, global).await;
+            return;
+        }
+    };
+    if field == "meta" {
+        let Some(goal) = value
+            .parse::<u64>()
+            .ok()
+            .filter(|g| (1..=100_000_000).contains(g))
+        else {
+            sender::send(SET_USAGE, ch, global).await;
+            return;
+        };
+        if let Err(e) = crate::db::update_follow_goal(&global.db, &ch.slug, goal as i64).await {
+            tracing::error!("[Set][{}] {e}", ch.slug);
+            sender::send("No se pudo guardar. Intenta más tarde.", ch, global).await;
+            return;
+        }
+        ch.follow_goal
+            .store(goal, std::sync::atomic::Ordering::Relaxed);
+        sender::send(&format!("✅ Meta de seguidores: {goal}"), ch, global).await;
+        return;
+    }
+    let value = trunc(value, 400);
+    if let Err(e) = crate::db::update_command_text(&global.db, &ch.slug, field, value).await {
+        tracing::error!("[Set][{}] {e}", ch.slug);
+        sender::send("No se pudo guardar. Intenta más tarde.", ch, global).await;
+        return;
+    }
+    {
+        let mut c = ch.commands.write().await;
+        let slot = match field {
+            "discord" => &mut c.discord,
+            "redes" => &mut c.redes,
+            "pc" => &mut c.pc,
+            _ => &mut c.horario,
+        };
+        *slot = value.to_string();
+    }
+    let msg = if value.is_empty() {
+        format!("🗑️ !{field} borrado")
+    } else {
+        format!("✅ !{field} actualizado")
+    };
+    sender::send(&msg, ch, global).await;
 }
 
 pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
@@ -680,6 +772,20 @@ mod tests {
         assert!(!is_direct_video(
             "https://user:pass@cdn.example.com/video.mp4"
         ));
+    }
+    #[test]
+    fn command_args_ignores_case_and_requires_separator() {
+        assert_eq!(
+            command_args("!Play https://x.y", "!play"),
+            Some("https://x.y")
+        );
+        assert_eq!(command_args("!play", "!play"), Some(""));
+        assert_eq!(command_args("!playlist", "!play"), None);
+        assert_eq!(
+            command_args("!SET discord https://d.gg/A", "!set"),
+            Some("discord https://d.gg/A")
+        );
+        assert_eq!(command_args("!p", "!play"), None);
     }
     #[test]
     fn unicode_truncation_never_splits_code_points() {

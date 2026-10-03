@@ -76,6 +76,37 @@ pub async fn upsert_channel(pool: &PgPool, row: &ChannelRow) -> Result<(), sqlx:
     Ok(())
 }
 
+/// Guarda un texto de comando configurable (!discord, !redes, !pc, !horario).
+pub async fn update_command_text(
+    pool: &PgPool,
+    slug: &str,
+    command: &str,
+    value: &str,
+) -> Result<(), sqlx::Error> {
+    let column = match command {
+        "discord" => "cmd_discord",
+        "redes" => "cmd_redes",
+        "pc" => "cmd_pc",
+        "horario" => "cmd_horario",
+        _ => return Err(sqlx::Error::ColumnNotFound(command.to_string())),
+    };
+    sqlx::query(&format!("UPDATE channels SET {column}=$1 WHERE slug=$2"))
+        .bind(value)
+        .bind(slug)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn update_follow_goal(pool: &PgPool, slug: &str, goal: i64) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE channels SET follow_goal=$1 WHERE slug=$2")
+        .bind(goal)
+        .bind(slug)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 pub async fn update_tokens(
     pool: &PgPool,
     slug: &str,

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Arranca DaiBot en local con un túnel HTTPS público (necesario para los webhooks de Kick).
+# Arranca GorilinRix en local con un túnel HTTPS público (necesario para los webhooks de Kick).
 #
 # Uso:  ./dev.sh
 #
@@ -33,7 +33,7 @@ trap cleanup EXIT INT TERM
 [ -f "$ENV_FILE" ] || { echo "No existe $ENV_FILE (copia .env.example)." >&2; exit 1; }
 export PATH="$HOME/.local/bin:$PATH"
 
-# Liberar el puerto si quedó un DaiBot anterior abierto
+# Liberar el puerto si quedó un GorilinRix anterior abierto
 if command -v fuser >/dev/null && fuser "$PORT/tcp" >/dev/null 2>&1; then
     echo "Cerrando el proceso que ocupaba el puerto $PORT..."
     fuser -k "$PORT/tcp" >/dev/null 2>&1 || true

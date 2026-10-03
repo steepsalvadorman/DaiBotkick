@@ -11,13 +11,17 @@ use tracing::{info, warn};
 
 use crate::{channel, db, state::AppState};
 
+/// Página tras conectar el canal; `slug` y `overlay_url` ya son seguros para HTML/JS
+/// (slug validado por `valid_slug`, base escapada y token UUID).
+const CONNECTED_PAGE: &str = include_str!("connected.html");
+
 pub async fn start_oauth() -> Html<String> {
     Html(
         r#"<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>DaiBot — Conectar canal</title>
+  <title>GorilinRix — Conectar canal</title>
   <style>
     body{font-family:monospace;background:#060010;color:#53FC18;display:flex;
           align-items:center;justify-content:center;min-height:100vh;margin:0}
@@ -32,7 +36,7 @@ pub async fn start_oauth() -> Html<String> {
 </head>
 <body>
   <div class="card">
-    <h1>[ D A I B O T ]</h1>
+    <h1>[ G O R I L I N R I X ]</h1>
     <p>Conecta tu canal de Kick para usar el bot, overlay y comandos de chat.</p>
     <a class="btn" href="/auth/kick">Conectar con Kick</a>
   </div>
@@ -243,28 +247,12 @@ pub async fn handle_callback(
     info!("[Auth] Canal registrado: {slug}");
 
     let base = escape_html(&st.config.base_url);
-    Html(format!(
-        r#"<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>DaiBot — Conectado</title>
-  <style>
-    body{{font-family:monospace;background:#060010;color:#53FC18;padding:40px;max-width:600px;margin:auto}}
-    h1{{color:#53FC18}} code{{background:#111;padding:8px 16px;display:block;margin:8px 0;word-break:break-all}}
-    .dim{{color:#888}} a{{color:#53FC18}}
-  </style>
-</head>
-<body>
-  <h1>✅ ¡DaiBot conectado para {slug}!</h1>
-
-  <h3>Overlay para OBS (Browser Source):</h3>
-  <code>{base}/pixel.html?ch={slug}#token={playback_token}</code>
-  <p>Esta URL permite controlar la reproduccion. Guardala solo en tu OBS y no la compartas.</p>
-
-</body>
-</html>"#
-    ))
+    let overlay_url = format!("{base}/pixel.html?ch={slug}#token={playback_token}");
+    Html(
+        CONNECTED_PAGE
+            .replace("{{overlay_url}}", &overlay_url)
+            .replace("{{slug}}", &slug),
+    )
 }
 
 fn url_encode(s: &str) -> String {

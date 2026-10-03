@@ -1,4 +1,4 @@
-/* DaiBot: authenticated OBS player and public chat overlay. */
+/* GorilinRix: authenticated OBS player and public chat overlay. */
 (() => {
     'use strict';
     const el = id => document.getElementById(id);
@@ -88,7 +88,7 @@
         } else finish(item.id);
     }
     socket.on('config', config => {
-        const name = String(config.channel_name || 'DaiBot').toUpperCase(); document.title = `${name} — Pixel Overlay`;
+        const name = String(config.channel_name || 'GorilinRix').toUpperCase(); document.title = `${name} — Pixel Overlay`;
         const title = el('stream-title-display'); title.setAttribute('data-text', name);
         const accent = document.createElement('span'); accent.className = 'accent'; const mid = Math.ceil(name.length / 2);
         accent.textContent = name.slice(0, mid); title.replaceChildren(accent, document.createTextNode(name.slice(mid)));

@@ -60,9 +60,13 @@ async fn fetch(global: &AppState, ch: &ChannelState, io: &socketioxide::SocketIo
             json!({"live":live,"startedAt":started.map(|t| t.to_rfc3339())}),
         )
         .ok();
-    let followers = channel["followers_count"]
+    let mut followers = channel["followers_count"]
         .as_u64()
         .or_else(|| channel["follower_count"].as_u64());
+    if followers.is_none() {
+        // La API pública oficial no incluye seguidores; la web de Kick sí.
+        followers = legacy_followers(global, &ch.slug).await;
+    }
     if let Some(count) = followers {
         ch.followers.store(count, Ordering::Relaxed);
     }
@@ -71,4 +75,30 @@ async fn fetch(global: &AppState, ch: &ChannelState, io: &socketioxide::SocketIo
     io.to(ch.slug.clone())
         .emit("followersUpdate", json!({"count":followers}))
         .ok();
+}
+
+async fn legacy_followers(global: &AppState, slug: &str) -> Option<u64> {
+    let response = global
+        .http
+        .get(format!("https://kick.com/api/v2/channels/{slug}"))
+        .header(
+            reqwest::header::USER_AGENT,
+            "Mozilla/5.0 (compatible; GorilinRix)",
+        )
+        .header(reqwest::header::ACCEPT, "application/json")
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .await
+        .ok()?;
+    if !response.status().is_success() {
+        tracing::debug!(
+            "[Stats][{slug}] seguidores (web) HTTP {}",
+            response.status()
+        );
+        return None;
+    }
+    let json: serde_json::Value = response.json().await.ok()?;
+    json["followers_count"]
+        .as_u64()
+        .or_else(|| json["followersCount"].as_u64())
 }

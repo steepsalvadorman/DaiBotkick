@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>GorilinRix — Conectado</title>
+  <style>
+    :root {
+      --bg: #07020f; --card: #110a1d; --line: #2a2140; --text: #ece8f4; --muted: #9a91ad;
+      --green: #53fc18; --green-ink: #062200; --warn-bg: #2a1d05; --warn: #ffc94a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; padding: 48px 20px;
+      background: radial-gradient(1200px 500px at 50% -10%, #1b0d33 0%, var(--bg) 60%);
+      color: var(--text);
+      font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    main { max-width: 680px; margin: 0 auto; }
+    .brand { font: 700 13px/1 ui-monospace, Consolas, monospace; letter-spacing: 3px; color: var(--green); margin-bottom: 28px; }
+    .hero { display: flex; gap: 16px; align-items: center; margin-bottom: 28px; }
+    .check {
+      flex: none; width: 48px; height: 48px; border-radius: 50%;
+      display: grid; place-items: center; background: var(--green); color: var(--green-ink);
+      font-size: 26px; font-weight: 800;
+    }
+    h1 { margin: 0; font-size: 26px; line-height: 1.2; }
+    h1 b { color: var(--green); }
+    .sub { margin: 4px 0 0; color: var(--muted); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 22px; margin-bottom: 18px; }
+    h2 { margin: 0 0 4px; font-size: 17px; }
+    .card > p { margin: 0 0 16px; color: var(--muted); }
+    .field { display: flex; gap: 8px; flex-wrap: wrap; }
+    .url {
+      flex: 1 1 320px; min-width: 0;
+      background: #05010b; border: 1px solid var(--line); border-radius: 10px;
+      padding: 12px 14px; color: var(--text);
+      font: 14px/1.4 ui-monospace, Consolas, monospace;
+      overflow-x: auto; white-space: nowrap;
+    }
+    .url.masked { color: var(--muted); letter-spacing: 1px; }
+    button {
+      border: 0; border-radius: 10px; padding: 12px 18px; cursor: pointer;
+      font: 600 14px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    .primary { background: var(--green); color: var(--green-ink); min-width: 132px; }
+    .primary:hover { filter: brightness(1.08); }
+    .primary.done { background: #c8ffb0; }
+    .ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+    .ghost:hover { border-color: var(--muted); }
+    button:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+    .warn {
+      display: flex; gap: 10px; margin-top: 16px; padding: 12px 14px; border-radius: 10px;
+      background: var(--warn-bg); color: var(--warn); font-size: 14px;
+    }
+    ol { margin: 0; padding: 0; list-style: none; counter-reset: s; }
+    li { counter-increment: s; position: relative; padding: 0 0 14px 40px; }
+    li:last-child { padding-bottom: 0; }
+    li::before {
+      content: counter(s); position: absolute; left: 0; top: 0;
+      width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+      background: #1d1430; border: 1px solid var(--line); color: var(--green); font-weight: 700; font-size: 13px;
+    }
+    li b { color: var(--text); }
+    li span { color: var(--muted); }
+    kbd { background: #1d1430; border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; font: 13px ui-monospace, Consolas, monospace; color: var(--text); }
+    .links { display: flex; gap: 10px; flex-wrap: wrap; }
+    .links a {
+      flex: 1 1 200px; text-decoration: none; color: var(--text);
+      background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+    }
+    .links a:hover { border-color: var(--green); }
+    .links small { display: block; color: var(--muted); }
+    footer { margin-top: 26px; color: var(--muted); font-size: 13px; text-align: center; }
+    footer a { color: var(--green); }
+  </style>
+</head>
+<body>
+<main>
+  <div class="brand">[ GORILINRIX ]</div>
+
+  <div class="hero">
+    <div class="check" aria-hidden="true">✓</div>
+    <div>
+      <h1>¡GorilinRix conectado para <b>{{slug}}</b>!</h1>
+      <p class="sub">El bot ya está escuchando el chat de kick.com/{{slug}}.</p>
+    </div>
+  </div>
+
+  <section class="card">
+    <h2>URL del overlay para OBS</h2>
+    <p>Pégala en una fuente de navegador. Está oculta por si estás en directo.</p>
+    <div class="field">
+      <div id="url" class="url masked" aria-live="polite">••••••••••••••••••••••••••••••••••••••••</div>
+      <button id="copy" class="primary" type="button">Copiar URL</button>
+      <button id="toggle" class="ghost" type="button" aria-pressed="false">Mostrar</button>
+    </div>
+    <div class="warn" role="note">
+      <span aria-hidden="true">⚠</span>
+      <span>Esta URL es privada: permite reproducir videos y TTS en tu stream. No la muestres en pantalla ni la compartas.</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Cómo añadirla en OBS</h2>
+    <p>Solo tienes que hacerlo una vez.</p>
+    <ol>
+      <li><b>Fuentes → + → Navegador</b> <span>y ponle un nombre, por ejemplo "GorilinRix".</span></li>
+      <li><b>Pega la URL</b> <span>con <kbd>Ctrl</kbd> + <kbd>V</kbd> en el campo URL.</span></li>
+      <li><b>Ancho 1920 y Alto 1080.</b> <span>El overlay ocupa toda la escena y no tapa el centro.</span></li>
+      <li><b>Activa "Controlar el audio mediante OBS"</b> <span>para que la música y el TTS se escuchen en el stream.</span></li>
+      <li><b>Clic derecho en la fuente → Interactuar</b> <span>y haz un clic dentro una vez para desbloquear el audio.</span></li>
+    </ol>
+  </section>
+
+  <nav class="links">
+    <a href="/comandos.html" target="_blank" rel="noopener">Comandos del chat<small>!play, TTS y más</small></a>
+    <a href="https://kick.com/{{slug}}" target="_blank" rel="noopener noreferrer">Tu canal en Kick<small>kick.com/{{slug}}</small></a>
+  </nav>
+
+  <footer>¿Perdiste la URL? Vuelve a <a href="/auth/kick">conectar con Kick</a> y te aparecerá la misma.</footer>
+</main>
+
+<script>
+  (function () {
+    var url = "{{overlay_url}}";
+    var box = document.getElementById("url");
+    var copy = document.getElementById("copy");
+    var toggle = document.getElementById("toggle");
+    var masked = box.textContent;
+    var shown = false;
+    var timer;
+
+    toggle.addEventListener("click", function () {
+      shown = !shown;
+      box.textContent = shown ? url : masked;
+      box.classList.toggle("masked", !shown);
+      toggle.textContent = shown ? "Ocultar" : "Mostrar";
+      toggle.setAttribute("aria-pressed", String(shown));
+    });
+
+    function fallbackCopy() {
+      var area = document.createElement("textarea");
+      area.value = url;
+      area.setAttribute("readonly", "");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      var ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) {}
+      area.remove();
+      return ok;
+    }
+
+    function feedback(ok) {
+      copy.textContent = ok ? "¡Copiada!" : "Cópiala a mano";
+      copy.classList.toggle("done", ok);
+      if (!ok && !shown) toggle.click();
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        copy.textContent = "Copiar URL";
+        copy.classList.remove("done");
+      }, 2500);
+    }
+
+    copy.addEventListener("click", function () {
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(url).then(function () { feedback(true); }, function () { feedback(fallbackCopy()); });
+      } else {
+        feedback(fallbackCopy());
+      }
+    });
+  })();
+</script>
+</body>
+</html>

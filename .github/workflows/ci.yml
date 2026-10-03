@@ -1,4 +1,4 @@
-name: Validate DaiBot
+name: Validate GorilinRix
 on:
   push:
   pull_request:

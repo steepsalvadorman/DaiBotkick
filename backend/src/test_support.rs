@@ -162,6 +162,7 @@ pub fn channel(
             player: Mutex::new(None),
             show_video: AtomicBool::new(true),
             live_since: RwLock::new(None),
+            recent_sent: Mutex::new(std::collections::VecDeque::new()),
         }),
         rx,
     )

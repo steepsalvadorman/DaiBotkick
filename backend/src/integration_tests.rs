@@ -613,9 +613,14 @@ async fn socket_authorization_player_takeover_and_channel_isolation() {
 
     // Signed owner identity governs commands even when a viewer spoofs the username.
     let worker = tokio::spawn(webhook::worker(app.clone()));
-    for (event_id, sender_id, expected_len) in [("spoof", 99, 2), ("owner", 1, 1)] {
+    // Los comandos no se muestran en el chat del overlay; los mensajes normales sí.
+    for (event_id, sender_id, content, expected_len) in [
+        ("spoof", 99, "!skip", 2),
+        ("owner", 1, "!skip", 1),
+        ("chat", 99, "hola chat", 1),
+    ] {
         let timestamp = chrono::Utc::now().to_rfc3339();
-        let body = serde_json::to_vec(&json!({"broadcaster":{"user_id":1},"sender":{"user_id":sender_id,"username":"alpha"},"content":"!skip"})).unwrap();
+        let body = serde_json::to_vec(&json!({"broadcaster":{"user_id":1},"sender":{"user_id":sender_id,"username":"alpha"},"content":content})).unwrap();
         let mut message = format!("{event_id}.{timestamp}.").into_bytes();
         message.extend_from_slice(&body);
         let signature = SigningKey::<Sha256>::new(private.clone()).sign(&message);
@@ -666,7 +671,7 @@ async fn socket_authorization_player_takeover_and_channel_isolation() {
         .await
         .items
         .is_empty());
-    assert_eq!(public.event("chatMessage").await["content"], "!skip");
+    assert_eq!(public.event("chatMessage").await["content"], "hola chat");
     server::ns_emit(&app, "beta", "testMarker", json!({}));
     beta.event("testMarker").await;
     assert!(!beta

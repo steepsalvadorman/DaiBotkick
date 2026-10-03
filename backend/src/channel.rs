@@ -52,6 +52,7 @@ pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) -> Result<(),
         player: Mutex::new(None),
         show_video: AtomicBool::new(row.show_video),
         live_since: RwLock::new(None),
+        recent_sent: Mutex::new(std::collections::VecDeque::new()),
     });
     if let Some(id) = row.broadcaster_user_id {
         global.user_id_to_slug.insert(id as u64, slug.clone());

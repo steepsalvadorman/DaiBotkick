@@ -5,6 +5,7 @@ pub async fn send(text: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
     let Some(id) = *ch.channel_id.read().await else {
         return;
     };
+    remember(ch, text).await;
     for attempt in 0..2 {
         let token = ch.access_token.read().await.clone();
         let response = global
@@ -33,5 +34,46 @@ pub async fn send(text: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
                 return;
             }
         }
+    }
+}
+
+const RECENT_LIMIT: usize = 20;
+
+/// Guarda el texto para reconocer su eco cuando Kick lo devuelva como mensaje del canal.
+async fn remember(ch: &ChannelState, text: &str) {
+    let mut recent = ch.recent_sent.lock().await;
+    if recent.len() >= RECENT_LIMIT {
+        recent.pop_front();
+    }
+    recent.push_back(text.trim().to_owned());
+}
+
+/// `true` si `content` es un mensaje enviado por el bot (y lo consume).
+pub async fn is_own_echo(ch: &ChannelState, content: &str) -> bool {
+    let mut recent = ch.recent_sent.lock().await;
+    match recent.iter().position(|t| t == content.trim()) {
+        Some(i) => {
+            recent.remove(i);
+            true
+        }
+        None => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn own_messages_are_recognized_once_and_others_are_not() {
+        let (ch, _rx) = crate::test_support::channel("alpha", 1);
+        remember(&ch, "▶ @ana agregó «x» a la cola").await;
+        assert!(is_own_echo(&ch, "▶ @ana agregó «x» a la cola ").await);
+        assert!(!is_own_echo(&ch, "▶ @ana agregó «x» a la cola").await);
+        assert!(!is_own_echo(&ch, "hola chat").await);
+        for i in 0..(RECENT_LIMIT + 5) {
+            remember(&ch, &format!("m{i}")).await;
+        }
+        assert_eq!(ch.recent_sent.lock().await.len(), RECENT_LIMIT);
     }
 }

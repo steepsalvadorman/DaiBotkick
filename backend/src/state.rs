@@ -50,6 +50,8 @@ pub struct ChannelState {
     pub player: Mutex<Option<String>>,
     pub show_video: std::sync::atomic::AtomicBool,
     pub live_since: RwLock<Option<chrono::DateTime<chrono::Utc>>>,
+    /// Últimos mensajes que envió el bot; su eco en el webhook no se muestra en el overlay.
+    pub recent_sent: Mutex<std::collections::VecDeque<String>>,
 }
 
 /// Estado global del servidor (compartido entre todos los canales).

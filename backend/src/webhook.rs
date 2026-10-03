@@ -213,13 +213,20 @@ async fn process(app: &Arc<AppState>, kind: &str, json: &serde_json::Value) {
             else {
                 return;
             };
-            ns_emit(
-                app,
-                &ch.slug,
-                "chatMessage",
-                serde_json::json!({"user":username,"content":content}),
-            );
             let owner = json["sender"]["user_id"].as_u64() == Some(id);
+            // El bot escribe con la cuenta del streamer: su eco no se muestra ni se procesa.
+            if owner && crate::kick::sender::is_own_echo(&ch, content).await {
+                return;
+            }
+            // Los comandos (!play, !s…) no se muestran en el chat del overlay.
+            if !content.starts_with('!') {
+                ns_emit(
+                    app,
+                    &ch.slug,
+                    "chatMessage",
+                    serde_json::json!({"user":username,"content":content}),
+                );
+            }
             commands::handle(username, content, owner, &ch, app).await;
         }
         "channel.followed" => {

@@ -3,6 +3,7 @@
     'use strict';
     const el = id => document.getElementById(id);
     const channel = new URLSearchParams(location.search).get('ch') || '';
+    if (new URLSearchParams(location.search).get('chat') === '0') document.body.classList.add('no-chat');
     const token = new URLSearchParams(location.hash.slice(1)).get('token') || '';
     const status = document.createElement('div');
     status.id = 'connection-status'; status.setAttribute('role', 'status'); document.body.append(status);
@@ -119,7 +120,7 @@
         const user = document.createElement('div'); user.className = 'msg-user'; user.textContent = `▶ ${data.user || ''}`;
         const text = document.createElement('div'); text.className = 'msg-text'; text.textContent = data.content || '';
         item.append(user, text); const body = el('chat-messages'); body.append(item);
-        while (body.children.length > 6) body.firstChild.remove();
+        while (body.children.length > 4) body.firstChild.remove();
     });
     let alertTimer;
     const showAlert = data => {

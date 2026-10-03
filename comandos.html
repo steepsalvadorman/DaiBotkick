@@ -2,7 +2,9 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GorilinRix — Comandos</title>
+<link rel="icon" href="/gorilinrix.svg" type="image/svg+xml">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
@@ -12,12 +14,11 @@
     font-family: 'Inter', system-ui, sans-serif;
     background: #0e0e10;
     color: #efeff1;
-    width: 1920px;
-    min-height: 1080px;
+    min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 48px 60px;
+    padding: 48px clamp(16px, 3vw, 60px);
   }
 
   .card {
@@ -25,6 +26,7 @@
     border: 1px solid #2a2a2e;
     border-radius: 20px;
     width: 100%;
+    max-width: 1800px;
     overflow: hidden;
     box-shadow: 0 0 80px rgba(83, 252, 24, 0.07);
   }
@@ -44,6 +46,7 @@
     height: 64px;
     background: #53fc18;
     border-radius: 16px;
+    overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -82,6 +85,26 @@
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
     gap: 36px;
+  }
+
+  .header-icon img { width: 58px; height: 58px; margin-top: 6px; }
+  .header-badge[hidden], .footer [hidden] { display: none; }
+
+  @media (max-width: 1200px) {
+    .body { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 760px) {
+    body { padding-block: 20px; }
+    .header { flex-wrap: wrap; padding: 24px; }
+    .header-badge { margin-left: 0; }
+    .body { grid-template-columns: 1fr; padding: 24px; gap: 24px; }
+    .card { min-width: 0; }
+    .body > div, .section { min-width: 0; }
+    .header-text h1 { font-size: 22px; }
+    .cmd { flex-wrap: wrap; gap: 4px 12px; }
+    .cmd-name { min-width: 0; white-space: normal; flex-basis: 100%; }
+    .cmd-desc { flex: 1; min-width: 0; }
+    .footer { padding-inline: 24px; }
   }
 
   /* ── Section ── */
@@ -175,12 +198,12 @@
 
   <!-- Header -->
   <div class="header">
-    <div class="header-icon">🤖</div>
+    <div class="header-icon"><img src="/gorilinrix.svg" alt="GorilinRix"></div>
     <div class="header-text">
       <h1>GorilinRix — Comandos del Chat</h1>
       <p>Todos los comandos disponibles durante el stream en vivo</p>
     </div>
-    <div class="header-badge">KICK.COM / SENIORDAI</div>
+    <div class="header-badge" id="channel-badge" hidden></div>
   </div>
 
   <!-- Body 3 columnas -->
@@ -365,9 +388,22 @@
   <!-- Footer -->
   <div class="footer">
     <div class="dot"></div>
-    <p>GorilinRix activo · Canal <span>seniordai</span> · kick.com/seniordai</p>
+    <p>GorilinRix activo<span id="channel-footer" hidden></span></p>
   </div>
 
 </div>
+<script>
+  // ?ch=canal muestra el canal del streamer; sin él la página es genérica.
+  (function () {
+    var ch = (new URLSearchParams(location.search).get('ch') || '').toLowerCase();
+    if (!/^[a-z0-9_-]{1,100}$/.test(ch)) return;
+    var badge = document.getElementById('channel-badge');
+    badge.textContent = 'KICK.COM / ' + ch.toUpperCase();
+    badge.hidden = false;
+    var footer = document.getElementById('channel-footer');
+    footer.textContent = ' · Canal ' + ch + ' · kick.com/' + ch;
+    footer.hidden = false;
+  })();
+</script>
 </body>
 </html>

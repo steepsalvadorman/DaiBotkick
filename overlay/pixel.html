@@ -4,102 +4,61 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=1920">
     <title>DaiBot — Pixel Overlay</title>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
     <script src="/sio.js"></script>
     <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 
-    <div class="bg-grid"></div>
-    <div class="scanlines"></div>
-    <div class="crt-vignette"></div>
-
-    <!-- TOP BAR -->
-    <div id="topbar">
-        <div class="topbar-left">
-            <div class="live-badge"><div class="live-dot"></div>LIVE</div>
-            <div class="stat-chip"><span class="label">VIEWERS</span><span class="val" id="viewers">--</span></div>
-            <div class="stat-chip"><span class="label">UPTIME</span><span class="val" id="uptime">00:00:00</span></div>
-        </div>
-        <div class="topbar-center">
-            <div id="stream-title-display" class="stream-title glitch" data-text="DAIBOT">
-                <span class="accent">DAI</span>BOT
-            </div>
-        </div>
-        <div class="topbar-right">
-            <div class="stat-chip"><span class="label">SEGUIDORES</span><span class="val" id="followers-count">--</span></div>
+    <!-- HUD — esquina superior izquierda, compacto -->
+    <div id="hud">
+        <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+        <div class="stat-chip"><span class="label">VIEWERS</span><span class="val" id="viewers">--</span></div>
+        <div class="stat-chip"><span class="label">TIEMPO</span><span class="val" id="uptime">00:00:00</span></div>
+        <div class="stat-chip"><span class="label">SEGUIDORES</span><span class="val" id="followers-count">--</span></div>
+        <!-- El nombre del canal ya lo muestra Kick; se conserva para app.js -->
+        <div id="stream-title-display" class="stream-title" data-text="DAIBOT" hidden>
+            <span class="accent">DAI</span>BOT
         </div>
     </div>
 
-    <!-- RIGHT SIDE STRIP -->
-    <div class="side-strip side-strip-right">
-        <div class="strip-block" style="animation-delay:0.4s;background:var(--purple)"></div>
-        <div class="strip-block" style="animation-delay:0.1s;background:var(--green)"></div>
-        <div class="strip-block" style="animation-delay:0.7s;background:var(--cyan)"></div>
-        <div class="strip-block" style="animation-delay:0.3s;background:var(--yellow)"></div>
-        <div class="strip-block" style="animation-delay:0.6s;background:var(--green)"></div>
-        <div class="strip-block" style="animation-delay:0.2s;background:var(--purple)"></div>
+    <!-- CHAT — abajo a la izquierda, sin panel fijo; los mensajes se desvanecen solos -->
+    <div id="chat-widget">
+        <div class="chat-body" id="chat-messages"></div>
     </div>
 
-    <!-- ══════════════════════════════════════════════════════════════
-         LEFT SIDEBAR — meta de seguidores + chat
-    ═══════════════════════════════════════════════════════════════ -->
-    <div id="left-sidebar">
-
-        <!-- CHAT -->
-        <div id="chat-widget">
-            <div class="chat-header"><span>▶</span> CHAT EN VIVO</div>
-            <div class="chat-body" id="chat-messages"></div>
-        </div>
-
-    </div>
-
-    <!-- ALERT BOX -->
-    <div id="alert-box" class="px-border-purple">
+    <!-- ALERTA — arriba al centro -->
+    <div id="alert-box">
         <div class="alert-header">⚡ NUEVA ALERTA</div>
         <div class="alert-body" id="alert-text"></div>
     </div>
 
-    <!-- ══════════════════════════════════════════════════════════════
-         MEDIA WIDGET — aparece solo cuando hay video en cola
-    ═══════════════════════════════════════════════════════════════ -->
-    <div id="media-widget" class="px-border" style="opacity:0;transform:scale(0.9);visibility:hidden;">
+    <!-- MEDIA — solo aparece cuando hay video en cola -->
+    <div id="media-widget" style="opacity:0;transform:scale(0.9);visibility:hidden;">
         <div id="video-container">
             <div id="youtube-player"></div>
             <video id="direct-video" autoplay></video>
         </div>
         <div class="media-info">
-            <div class="media-label">▶ REPRODUCIENDO AHORA</div>
+            <div class="media-label">▶ SONANDO</div>
             <div id="video-title">---</div>
             <div class="media-meta">
                 <div class="requester-box">
-                    <div class="requester-label">PEDIDO POR</div>
-                    <div id="video-requester">---</div>
+                    <span class="requester-label">PEDIDO POR</span>
+                    <span id="video-requester">---</span>
                 </div>
                 <span id="queue-indicator"></span>
             </div>
         </div>
     </div>
 
-    <!-- BOTTOM BAR -->
-    <div id="bottombar">
-        <div class="ticker">
-            <div class="ticker-inner">
-                ★ Escribe !play + link de YouTube para pedir una canción
-                <span class="ticker-sep">◆</span>
-                ★ Escribe !dai / !dalia / !jorge / !alex + texto para TTS
-                <span class="ticker-sep">◆</span>
-                ★ Síguenos en <span class="kick-channel-url">kick.com/seniordai</span>
-                <span class="ticker-sep">◆</span>
-                ★ Escribe !play + link de YouTube para pedir una canción
-                <span class="ticker-sep">◆</span>
-                ★ Escribe !dai / !dalia / !jorge / !alex + texto para TTS
-                <span class="ticker-sep">◆</span>
-                ★ Síguenos en <span class="kick-channel-url">kick.com/seniordai</span>
-                <span class="ticker-sep">◆</span>
-            </div>
-        </div>
-        <div class="rainbow-bar"></div>
+    <!-- AVISOS — abajo a la derecha, rotan sin desplazarse -->
+    <div id="tips">
+        <div class="tip">Escribe <b>!play</b> + link de YouTube para pedir una canción</div>
+        <div class="tip">Escribe <b>!dai</b> / <b>!dalia</b> / <b>!jorge</b> / <b>!alex</b> + texto para TTS</div>
+        <div class="tip">Síguenos en <b class="kick-channel-url">kick.com/seniordai</b></div>
     </div>
 
     <script src="/app.js"></script>

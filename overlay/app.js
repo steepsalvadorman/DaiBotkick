@@ -119,7 +119,7 @@
         const user = document.createElement('div'); user.className = 'msg-user'; user.textContent = `▶ ${data.user || ''}`;
         const text = document.createElement('div'); text.className = 'msg-text'; text.textContent = data.content || '';
         item.append(user, text); const body = el('chat-messages'); body.append(item);
-        while (body.children.length > 12) body.firstChild.remove();
+        while (body.children.length > 6) body.firstChild.remove();
     });
     let alertTimer;
     const showAlert = data => {

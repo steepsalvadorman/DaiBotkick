@@ -13,6 +13,7 @@ pub fn app(db: sqlx::PgPool) -> Arc<AppState> {
 }
 
 pub fn app_with_io(db: sqlx::PgPool, io: socketioxide::SocketIo) -> Arc<AppState> {
+    io.ns("/", |_: socketioxide::extract::SocketRef| {});
     Arc::new(AppState {
         config: GlobalConfig {
             client_id: "test".into(),
@@ -135,6 +136,7 @@ pub fn channel(
             slug: slug.into(),
             access_token: Arc::new(RwLock::new("access".into())),
             refresh_token_val: Arc::new(RwLock::new("refresh".into())),
+            persisted_refresh_token: RwLock::new("refresh".into()),
             channel_id: Arc::new(RwLock::new(Some(id))),
             followers: Arc::new(AtomicU64::new(0)),
             followers_known: AtomicBool::new(false),

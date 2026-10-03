@@ -25,6 +25,7 @@ pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) -> Result<(),
     let ch = Arc::new(ChannelState {
         slug: slug.clone(),
         access_token: Arc::new(RwLock::new(row.access_token)),
+        persisted_refresh_token: RwLock::new(row.refresh_token.clone()),
         refresh_token_val: Arc::new(RwLock::new(row.refresh_token)),
         channel_id: Arc::new(RwLock::new(row.broadcaster_user_id.map(|v| v as u64))),
         followers: Arc::new(AtomicU64::new(0)),

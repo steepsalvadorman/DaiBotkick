@@ -6,9 +6,35 @@ Revisión del código disponible el 3 de octubre de 2026. El diagnóstico siguie
 
 Aplicado: firma RSA y timestamp en webhooks; inbox persistente con deduplicación; EventSub como entrada única; identidad del broadcaster por ID; texto externo sin `innerHTML`; cola persistente/versionada con IDs únicos; un reproductor autenticado por canal con token separado del panel; skip en backend; cancelación al reautorizar/apagar; OAuth con cookie y consumo atómico de state; errores DB visibles y migraciones sqlx; eliminación de clave YouTube del código; límites/timeout/caché TTS y audio secuencial; cooldown atómico; estadísticas sin confundir suscriptores y seguidores; extracción de JS/CSS a app.js/style.css; redirección conservando query/token; health checks, métricas, Docker sin privilegios, plantilla vigente y CI.
 
-Verificado localmente: tests Rust con toolchain 1.88.0 de Windows y pruebas Node del overlay. La integración PostgreSQL y el build Docker están preparados en CI; no se han ejecutado localmente porque no hay PostgreSQL ni Docker disponibles. CI aún no se ha lanzado desde esta sesión.
+Verificado localmente el 3 de octubre de 2026: formato, Clippy sin warnings, 43 tests Rust aislados y build release con Rust 1.88.0 en Linux; ocho integraciones con PostgreSQL temporal 18.6; doce pruebas del overlay y cuatro del backend en ejecución con Node 22.16.0 en Linux. También pasó backup/restauración de fixtures y recuperación de readiness al detener/reiniciar PostgreSQL. Docker está instalado, pero la sesión no tiene permisos sobre su socket; no se ejecutó la imagen. CI usa PostgreSQL 16 y ahora incluye backup/restauración y arranque/verificación de la imagen. No se ha verificado una ejecución remota de CI desde esta sesión.
 
-Pendiente de validación real: OAuth y eventos de Kick, autoplay/audio en OBS, playlists con una clave propia, interrupciones de red/DB, carga de varios canales, backups y rollback. El inbox admite reejecución tras un crash: puede repetir efectos externos ya enviados. La cola recupera el video desde el comienzo; sorteos, cooldowns y TTS pendientes quedan en memoria. Varias réplicas requieren coordinación adicional; hacer el primer rollout en staging y una ventana de mantenimiento.
+Pendiente de validación real: OAuth y eventos de Kick, autoplay/audio en OBS, playlists con una clave propia, interrupciones de servicios externos y DB en staging, carga prolongada de varios canales, backup operativo y rollback de imagen. El inbox admite reejecución tras un crash: puede repetir efectos externos ya enviados; ese caso ahora tiene una prueba de integración. La cola recupera el video desde el comienzo; sorteos, cooldowns y TTS pendientes quedan en memoria. Varias réplicas requieren coordinación adicional; hacer el primer rollout en staging y una ventana de mantenimiento.
+
+### Seguimiento de tareas pendientes
+
+- [x] Validar formato, Clippy, tests y compilación release en Linux con el toolchain del Dockerfile.
+- [x] Ejecutar integración PostgreSQL y corregir su fixture Socket.IO, que no registraba el namespace antes de emitir eventos.
+- [x] Probar OAuth/PKCE con servicio HTTP simulado, cookie incorrecta, callbacks concurrentes, rechazos del proveedor e identidad inválida.
+- [x] Probar reautorización: cancelar estado antiguo y preservar cola, visibilidad y token de reproducción.
+- [x] Probar conexiones Socket.IO reales: tokens público/incorrecto/privado, panel separado, dos ACK simultáneos, takeover y aislamiento de dos canales.
+- [x] Probar identidad firmada: un viewer con nombre del streamer no puede saltar la cola; el broadcaster sí.
+- [x] Probar refresh concurrente, `expires_in` de 90 s, 401 tardíos y persistencia después de una escritura rechazada temporalmente.
+- [x] Corregir recuperación de refresh tokens: recordar el valor de DB permite guardar la siguiente rotación sin restaurar el token antiguo; los 401 del token anterior comparten refresh.
+- [x] Probar inbox con efecto real aislado por canal, reentrega y reejecución tras interrumpir una respuesta externa antes del commit.
+- [x] Probar cola con conflicto entre estados, error DB sin cambio en memoria y readiness negativa.
+- [x] Ampliar pruebas del overlay: redirección, autoplay bloqueado, pérdida del rol, reconexión, ACK perdido y callbacks de videos antiguos.
+- [x] Corregir reintento de la API de YouTube tras un fallo de red; el siguiente video puede volver a cargar el script.
+- [x] Ejecutar `tests/backup_restore.sh`: restaurar configuración, tokens, visibilidad, IDs/versiones de cola e inbox pendiente en una base desechable. No demuestra restauración de un backup operativo ni rollback del backend.
+- [x] Arrancar binario release en Linux con DB de pruebas y archivos preparados como en la imagen: health checks, métricas y recursos pasan las cuatro pruebas de `tests/runtime.test.cjs`.
+- [x] Detener/reiniciar la DB temporal: `/healthz` permanece en 200, `/readyz` devuelve 503 y recupera 200 en 0,02 s desde la primera consulta tras reiniciar. Es una comprobación local, no una medición de staging.
+- [x] Añadir a CI backup/restauración y arranque de la imagen para verificar usuario 10001, paquete TTS, rutas y readiness.
+- [ ] Ejecutar y revisar CI con PostgreSQL 16 y build/arranque Docker; no hay acceso al daemon en esta sesión.
+- [ ] Validar síntesis real/TTS, OAuth/EventSub reales, OBS/YouTube y playlists con clave propia en staging.
+- [ ] Medir carga: 10 canales × 2 sockets, pico de 20 mensajes/s, p95 y sesión de cuatro horas; validar crecimiento de RAM/disco y proveedores caídos.
+- [ ] Restaurar un backup operativo y probar redeploy/rollback de imagen en staging.
+- [ ] Lanzar canal piloto y supervisar un stream completo antes de ampliar.
+
+Los apartados de diagnóstico y verificaciones originales siguientes describen el estado anterior a los cambios; las casillas anteriores registran la validación actual. Las pruebas automatizadas utilizan credenciales y eventos sintéticos, sin llamar a Kick real.
 
 ## Arquitectura y alcance
 

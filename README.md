@@ -90,14 +90,20 @@ cargo +1.88.0 test --manifest-path backend/Cargo.toml --locked
 node --test tests/overlay.test.cjs
 ```
 
-La prueba de integración requiere PostgreSQL de pruebas y permiso para crear/eliminar un schema aislado. Nunca la apuntes a producción:
+Las ocho pruebas de integración requieren PostgreSQL de pruebas y permiso para crear/eliminar schemas aislados. Incluyen OAuth/Kick simulados por HTTP, conexiones Socket.IO reales, aislamiento, renovación concurrente, fallos de DB y recuperación del inbox. Nunca las apuntes a producción:
 
 ```powershell
 $env:TEST_DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/daibot_test'
 cargo +1.88.0 test --manifest-path backend/Cargo.toml --locked -- --ignored
 ```
 
-CI ejecuta formato, Clippy, tests Rust, integración PostgreSQL, tests del overlay y build Docker en Linux. Las pruebas de Node simulan DOM, Socket.IO y media: no sustituyen una sesión real de OBS/YouTube. Consulta [el plan de pruebas](PLAN_PRUEBAS_DESPLIEGUE.md) para la validación real y de carga.
+Para comprobar backup/restauración, instala `psql`, `pg_dump`, `pg_restore` y Python 3, configura `TEST_DATABASE_URL` y ejecuta `bash tests/backup_restore.sh`. Crea fixtures en un schema y una base desechables, comprueba configuración, tokens, cola e inbox restaurados y limpia sus datos. Requiere permiso para crear/eliminar bases; no prueba un backup de producción ni un rollback de imagen.
+
+CI ejecuta formato, Clippy, tests Rust, integración PostgreSQL, backup/restauración, tests del overlay y build Docker en Linux. Arranca además la imagen y comprueba usuario sin privilegios, paquete TTS, health checks, métricas y archivos publicados con `node --test tests/runtime.test.cjs`. Esa prueba también puede ejecutarse contra un backend de pruebas ya iniciado configurando `DAIBOT_BASE_URL`; la prueba de empaquetado espera `/comandos.html`, que el Dockerfile copia al directorio del overlay.
+
+La validación local del 3 de octubre de 2026 pasó con Rust 1.88.0 y Node 22.16.0 en Linux: 43 tests aislados, ocho integraciones con PostgreSQL 18.6, doce tests del overlay, cuatro del backend en ejecución, formato, Clippy y build release. Pasó el backup/restauración de fixtures y `/readyz` pasó de 200 a 503 al detener la DB y volvió a 200 al reiniciarla. CI usa PostgreSQL 16; su ejecución y la imagen Docker siguen pendientes porque esta sesión no tiene acceso al servicio Docker.
+
+Las pruebas del overlay simulan DOM y media: no sustituyen una sesión real de OBS/YouTube. Consulta [el plan de pruebas](PLAN_PRUEBAS_DESPLIEGUE.md) para la validación real y de carga.
 
 ## Despliegue
 
@@ -119,6 +125,6 @@ La cola, su versión, los IDs de elementos, visibilidad del video, configuració
 
 El webhook responde después de guardar el evento en un inbox. Reentregas con el mismo ID no insertan otro evento. La ejecución tiene semántica de **al menos una vez**: un crash después de enviar audio/chat y antes de confirmar la fila puede repetir un efecto. No se garantiza ejecución exactamente una vez de servicios externos. Los eventos procesados se limpian después de 24 h; los pendientes permanecen para recuperación.
 
-Reautorizar cancela las tareas del estado anterior, preserva configuración y cola, y reconecta sockets. El apagado atiende Ctrl+C/SIGTERM y cancela tareas; los subprocess TTS se terminan al cancelar. Si falla PostgreSQL justo después de que Kick rota un refresh token, el proceso conserva el token nuevo en memoria, pero un reinicio antes de persistirlo puede requerir reconectar el canal.
+Reautorizar cancela las tareas del estado anterior, preserva configuración y cola, y reconecta sockets. El apagado atiende Ctrl+C/SIGTERM y cancela tareas; los subprocess TTS se terminan al cancelar. Las respuestas 401 concurrentes del token anterior comparten una renovación. Si falla PostgreSQL justo después de que Kick rota un refresh token, el proceso conserva el token nuevo en memoria y recuerda el último valor persistido para recuperar la escritura en la siguiente renovación. Un reinicio antes de persistirlo todavía puede requerir reconectar el canal.
 
 Para rollback, conserva la imagen/commit anterior y un backup probado. Volver a una imagen no revierte migraciones ni efectos externos. Esta versión cambia el protocolo de cola (`items`, `version`, ID único) y autorización del overlay: despliega backend y overlay juntos, y actualiza la URL de OBS al migrar.

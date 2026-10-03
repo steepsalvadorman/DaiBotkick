@@ -36,12 +36,12 @@
         if (window.YT?.Player) return Promise.resolve();
         if (apiPromise) return apiPromise;
         apiPromise = new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error('YouTube no responde')), 15000);
+            const timeout = setTimeout(() => { script.remove(); reject(new Error('YouTube no responde')); }, 15000);
             window.onYouTubeIframeAPIReady = () => { clearTimeout(timeout); resolve(); };
             const script = document.createElement('script'); script.src = 'https://www.youtube.com/iframe_api';
-            script.onerror = () => { clearTimeout(timeout); reject(new Error('No se pudo cargar YouTube')); };
+            script.onerror = () => { clearTimeout(timeout); script.remove(); reject(new Error('No se pudo cargar YouTube')); };
             document.head.append(script);
-        });
+        }).catch(error => { apiPromise = null; throw error; });
         return apiPromise;
     }
     function finish(id) {

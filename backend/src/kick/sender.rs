@@ -10,7 +10,7 @@ pub async fn send(text: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
         let response = global
             .http
             .post(format!("{}/chat", global.kick_endpoints.api))
-            .bearer_auth(token)
+            .bearer_auth(&token)
             .json(&serde_json::json!({"broadcaster_user_id":id,"content":text,"type":"user"}))
             .send()
             .await;
@@ -20,7 +20,7 @@ pub async fn send(text: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
                 return;
             }
             Ok(r) if r.status() == reqwest::StatusCode::UNAUTHORIZED && attempt == 0 => {
-                if !super::refresh_access_token(ch, global).await {
+                if !super::refresh_if_current(ch, global, &token).await {
                     return;
                 }
             }

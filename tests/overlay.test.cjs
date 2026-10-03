@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
 
-function overlay(hash = '#token=private', search = '?ch=alpha') {
+function overlay(hash = '#token=private', search = '?ch=alpha', options = {}) {
     class Element {
         constructor() { this.children = []; this.style = {}; this.textContent = ''; this.attributes = {}; this.classList = { add() {}, remove() {} }; }
         append(...nodes) { for (const node of nodes) { node.parent = this; this.children.push(node); } }
@@ -15,15 +15,15 @@ function overlay(hash = '#token=private', search = '?ch=alpha') {
         removeAttribute(name) { delete this.attributes[name]; if (name === 'src') this.src = ''; }
         pause() { this.paused = true; }
         load() {}
-        play() { this.paused = false; return Promise.resolve(); }
+        play() { this.paused = false; return options.playError ? Promise.reject(options.playError) : Promise.resolve(); }
         set innerHTML(_) { throw new Error('Unsafe HTML insertion'); }
     }
     const elements = new Map();
     const get = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
-    const handlers = {}, emitted = [], audios = [], players = [];
+    const handlers = {}, emitted = [], audios = [], players = [], calls = [];
     let timerId = 0;
     const timers = new Map();
-    const socket = { connected: true, on(name, callback) { handlers[name] = callback; }, emit(...args) { emitted.push(args); }, disconnect() {}, connect() {} };
+    const socket = { connected: true, on(name, callback) { handlers[name] = callback; }, emit(...args) { emitted.push(args); }, disconnect() { calls.push('disconnect'); }, connect() { calls.push('connect'); } };
     const context = {
         document: { body: new Element(), head: new Element(), getElementById: get, createElement: () => new Element(), createTextNode: text => ({ textContent: text }), querySelectorAll: () => [] },
         location: { hash, search, origin: 'https://bot.example' },
@@ -38,7 +38,7 @@ function overlay(hash = '#token=private', search = '?ch=alpha') {
     };
     context.window = context;
     vm.runInNewContext(fs.readFileSync(__dirname + '/../overlay/app.js', 'utf8'), context);
-    return { handlers, emitted, audios, players, get, context, timers };
+    return { handlers, emitted, audios, players, get, context, timers, calls, socket };
 }
 const item = (id, url = 'https://cdn.example/video.mp4') => ({ id, title: '<img src=x onerror=alert(1)>', user: 'viewer', url });
 
@@ -90,4 +90,81 @@ test('YouTube ended/error events advance once with no custom postMessage handler
 });
 test('missing channel produces guidance and does not open a socket', () => {
     const app = overlay('', ''); assert.equal(app.context.options, undefined);
+});
+
+test('index redirects with the full channel query and private token', () => {
+    const html = fs.readFileSync(__dirname + '/../overlay/index.html', 'utf8');
+    const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+    let destination;
+    vm.runInNewContext(script, { location: { search: '?ch=alpha', hash: '#token=private', replace(url) { destination = url; } } });
+    assert.equal(destination, '/pixel.html?ch=alpha#token=private');
+});
+
+test('losing the playback role cancels media, speech and late completion events', () => {
+    const app = overlay(); app.handlers.playbackRole({ active: true });
+    app.handlers.syncQueue({ items: [item('one')], version: 1 });
+    app.handlers.speak({ audioBase64: 'AAAA' });
+    const ended = app.get('direct-video').onended;
+    app.handlers.playbackRole({ active: false });
+    ended();
+    assert.equal(app.get('direct-video').src, '');
+    assert.equal(app.audios[0].paused, true);
+    assert.equal(app.emitted.length, 0);
+    assert.equal(app.timers.size, 0);
+});
+
+test('reconnection accepts the fresh server version and elects a waiting private overlay', () => {
+    const app = overlay(); app.handlers.playbackRole({ active: true });
+    app.handlers.syncQueue({ items: [item('old')], version: 100 });
+    app.handlers.disconnect('io server disconnect');
+    assert.deepEqual(app.calls, ['connect']);
+    app.handlers.connect(); app.handlers.playbackRole({ active: true });
+    app.handlers.syncQueue({ items: [item('fresh', 'https://cdn.example/fresh.mp4')], version: 1 });
+    assert.equal(app.get('direct-video').src, 'https://cdn.example/fresh.mp4');
+    app.handlers.playbackRole({ active: false });
+    app.handlers.playerAvailable();
+    assert.deepEqual(app.calls, ['connect', 'disconnect', 'connect']);
+    const public = overlay(''); public.handlers.playerAvailable();
+    assert.equal(public.calls.length, 0);
+});
+
+test('direct-video autoplay rejection preserves the head and reports guidance', async () => {
+    const error = Object.assign(new Error('blocked'), { name: 'NotAllowedError' });
+    const app = overlay('#token=private', '?ch=alpha', { playError: error });
+    app.handlers.playbackRole({ active: true });
+    app.handlers.syncQueue({ items: [item('one')], version: 1 });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(app.emitted.length, 0);
+    assert.match(app.context.document.body.children[0].textContent, /Audio bloqueado/);
+});
+
+test('YouTube API recovers for the next item after a failed network request', async () => {
+    const app = overlay(); delete app.context.YT;
+    app.handlers.playbackRole({ active: true });
+    const video = id => ({ ...item(id), videoId: 'dQw4w9WgXcQ', url: undefined });
+    app.handlers.syncQueue({ items: [video('one')], version: 1 });
+    app.context.document.head.children[0].onerror();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(app.emitted.length, 1);
+    assert.equal(app.context.document.head.children.length, 0);
+    app.handlers.syncQueue({ items: [video('two')], version: 2 });
+    assert.equal(app.context.document.head.children.length, 1);
+});
+
+test('stale media callbacks cannot advance a new head and pending ACKs retry safely', () => {
+    const app = overlay(); app.handlers.playbackRole({ active: true });
+    app.handlers.syncQueue({ items: [item('one')], version: 1 });
+    const ended = app.get('direct-video').onended;
+    ended();
+    const retry = [...app.timers.values()].at(-1);
+    retry();
+    assert.equal(app.emitted.length, 2);
+    assert.equal(app.emitted[1][1].id, 'one');
+    assert.equal(app.emitted[1][1].version, 1);
+    app.handlers.syncQueue({ items: [item('two')], version: 2 });
+    ended(); retry();
+    assert.equal(app.emitted.length, 2);
+    app.handlers.syncQueue({ items: [], version: 3 });
+    assert.equal(app.get('direct-video').src, '');
+    assert.equal(app.get('media-widget').style.visibility, 'hidden');
 });

@@ -30,6 +30,8 @@ pub struct ChannelState {
     pub slug: String,
     pub access_token: Arc<RwLock<String>>,
     pub refresh_token_val: Arc<RwLock<String>>,
+    /// Last DB value, retained across failed writes to recover rotated tokens safely.
+    pub persisted_refresh_token: RwLock<String>,
     pub channel_id: Arc<RwLock<Option<u64>>>,
     pub followers: Arc<AtomicU64>,
     pub followers_known: std::sync::atomic::AtomicBool,

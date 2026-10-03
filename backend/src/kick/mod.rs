@@ -22,15 +22,27 @@ impl Default for Endpoints {
 }
 
 pub async fn refresh_access_token(ch: &Arc<ChannelState>, global: &Arc<AppState>) -> bool {
+    let observed = ch.access_token.read().await.clone();
+    refresh_if_current(ch, global, &observed).await
+}
+
+pub async fn refresh_if_current(
+    ch: &Arc<ChannelState>,
+    global: &Arc<AppState>,
+    observed: &str,
+) -> bool {
     if ch.cancel.is_cancelled() {
         return false;
     }
-    let observed = ch.access_token.read().await.clone();
     let _guard = ch.refresh_lock.lock().await;
+    if ch.cancel.is_cancelled() {
+        return false;
+    }
     if *ch.access_token.read().await != observed {
         return true;
     }
     let refresh = ch.refresh_token_val.read().await.clone();
+    let persisted_refresh = ch.persisted_refresh_token.read().await.clone();
     if refresh.is_empty() {
         return false;
     }
@@ -75,14 +87,17 @@ pub async fn refresh_access_token(ch: &Arc<ChannelState>, global: &Arc<AppState>
         access,
         next_refresh,
         expires as i64,
-        &refresh,
+        &persisted_refresh,
     )
     .await
     {
-        Ok(true) => {}
+        Ok(true) => {
+            *ch.persisted_refresh_token.write().await = next_refresh.to_owned();
+        }
         Ok(false) => {
             if let Ok(row) = db::load_channel(&global.db, &ch.slug).await {
                 *ch.access_token.write().await = row.access_token;
+                *ch.persisted_refresh_token.write().await = row.refresh_token.clone();
                 *ch.refresh_token_val.write().await = row.refresh_token;
                 ch.token_expires
                     .store(row.token_expires.max(0) as u64, Ordering::Relaxed);

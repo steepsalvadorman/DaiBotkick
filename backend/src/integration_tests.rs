@@ -268,6 +268,8 @@ struct MockKick {
     token_status: Mutex<Option<StatusCode>>,
     channel_data: Mutex<Option<Value>>,
     chat_requests: Mutex<Vec<(String, Value)>>,
+    block_chat: std::sync::atomic::AtomicBool,
+    release_chat: tokio::sync::Notify,
 }
 
 impl MockKick {
@@ -302,8 +304,21 @@ impl MockKick {
                 .to_str()
                 .unwrap()
                 .to_owned();
-            mock.chat_requests.lock().await.push((token.clone(), body));
+            let n = {
+                let mut requests = mock.chat_requests.lock().await;
+                requests.push((token.clone(), body));
+                requests.len()
+            };
+            if mock.block_chat.load(Ordering::Relaxed) {
+                mock.release_chat.notified().await;
+            }
             if token == "Bearer expired" {
+                tokio::time::sleep(std::time::Duration::from_millis(if n == 1 {
+                    5
+                } else {
+                    150
+                }))
+                .await;
                 StatusCode::UNAUTHORIZED
             } else {
                 StatusCode::OK
@@ -324,11 +339,398 @@ impl MockKick {
     }
 }
 
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL"]
+async fn durable_inbox_retries_after_interrupted_external_effect() {
+    let database = test_support::TestDatabase::new().await;
+    db::upsert_channel(&database.pool, &test_support::row("alpha", 1))
+        .await
+        .unwrap();
+    let mock = Arc::new(MockKick::default());
+    mock.block_chat.store(true, Ordering::Relaxed);
+    let service = mock.serve().await;
+    let mut app = test_support::app(database.pool.clone());
+    use_mock(&mut app, &service);
+    let (ch, _receiver) = test_support::channel("alpha", 1);
+    app.channels.insert("alpha".into(), ch);
+    app.user_id_to_slug.insert(1, "alpha".into());
+    let payload = json!({"broadcaster":{"user_id":1},"sender":{"user_id":1,"username":"alpha"},"content":"!comandos"});
+    sqlx::query("INSERT INTO webhook_events (message_id,received_at,payload,event_type) VALUES ('interrupted',$1,$2,'chat.message.sent')")
+        .bind(chrono::Utc::now().timestamp()).bind(payload.to_string()).execute(&database.pool).await.unwrap();
+    let worker = tokio::spawn(webhook::worker(app.clone()));
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        while mock.chat_requests.lock().await.is_empty() {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    app.shutdown.cancel();
+    worker.await.unwrap();
+    assert!(
+        !sqlx::query_scalar::<_, bool>("SELECT processed FROM webhook_events")
+            .fetch_one(&database.pool)
+            .await
+            .unwrap()
+    );
+    mock.block_chat.store(false, Ordering::Relaxed);
+    mock.release_chat.notify_waiters();
+    let mut restarted = test_support::app(database.pool.clone());
+    use_mock(&mut restarted, &service);
+    let (ch, _receiver) = test_support::channel("alpha", 1);
+    restarted.channels.insert("alpha".into(), ch);
+    restarted.user_id_to_slug.insert(1, "alpha".into());
+    let worker = tokio::spawn(webhook::worker(restarted.clone()));
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        while !sqlx::query_scalar::<_, bool>("SELECT processed FROM webhook_events")
+            .fetch_one(&database.pool)
+            .await
+            .unwrap()
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    // The first external send may already have happened: recovery permits a duplicate effect.
+    assert_eq!(mock.chat_requests.lock().await.len(), 2);
+    assert_eq!(
+        restarted.metrics.webhook_processed.load(Ordering::Relaxed),
+        1
+    );
+    restarted.shutdown.cancel();
+    worker.await.unwrap();
+    database.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL"]
+async fn concurrent_late_401_responses_share_one_refresh() {
+    let database = test_support::TestDatabase::new().await;
+    db::upsert_channel(&database.pool, &test_support::row("alpha", 1))
+        .await
+        .unwrap();
+    let mock = Arc::new(MockKick::default());
+    let service = mock.serve().await;
+    let mut app = test_support::app(database.pool.clone());
+    use_mock(&mut app, &service);
+    let (ch, _receiver) = test_support::channel("alpha", 1);
+    *ch.access_token.write().await = "expired".into();
+    tokio::join!(
+        kick::sender::send("first", &ch, &app),
+        kick::sender::send("second", &ch, &app)
+    );
+    assert_eq!(mock.token_requests.load(Ordering::Relaxed), 1);
+    let requests = mock.chat_requests.lock().await;
+    assert_eq!(requests.len(), 4);
+    assert_eq!(
+        requests
+            .iter()
+            .filter(|(token, _)| token == "Bearer access-1")
+            .count(),
+        2
+    );
+    drop(requests);
+    database.cleanup().await;
+}
+
 fn use_mock(app: &mut Arc<crate::state::AppState>, mock: &test_support::HttpServer) {
     Arc::get_mut(app).unwrap().kick_endpoints = kick::Endpoints {
         oauth: format!("{}/oauth", mock.url),
         api: format!("{}/public/v1", mock.url),
     };
+}
+
+/// Uses the real Engine.IO polling transport, without a JavaScript mock.
+struct SocketClient {
+    http: reqwest::Client,
+    url: String,
+    events: std::collections::VecDeque<Value>,
+}
+
+impl SocketClient {
+    async fn connect(base: &str, slug: &str, token: Option<&str>) -> Self {
+        let http = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(3))
+            .build()
+            .unwrap();
+        let url = format!("{base}/socket.io/?EIO=4&transport=polling&ch={slug}");
+        let handshake = http
+            .get(&url)
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap()
+            .text()
+            .await
+            .unwrap();
+        let open: Value = serde_json::from_str(handshake.strip_prefix('0').unwrap()).unwrap();
+        let url = format!("{url}&sid={}", open["sid"].as_str().unwrap());
+        let socket = Self {
+            http,
+            url,
+            events: Default::default(),
+        };
+        socket.packet(format!("40{}", json!({"token":token}))).await;
+        socket
+    }
+
+    async fn packet(&self, packet: String) {
+        self.http
+            .post(&self.url)
+            .header("content-type", "text/plain")
+            .body(packet)
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap();
+    }
+
+    async fn emit(&self, name: &str, data: Value) {
+        self.packet(format!("42{}", json!([name, data]))).await;
+    }
+
+    async fn event(&mut self, name: &str) -> Value {
+        tokio::time::timeout(std::time::Duration::from_secs(3), async {
+            loop {
+                if let Some(index) = self.events.iter().position(|event| event[0] == name) {
+                    return self.events.remove(index).unwrap()[1].clone();
+                }
+                let body = self
+                    .http
+                    .get(&self.url)
+                    .send()
+                    .await
+                    .unwrap()
+                    .error_for_status()
+                    .unwrap()
+                    .text()
+                    .await
+                    .unwrap();
+                for packet in body.split('\u{1e}') {
+                    if let Some(event) = packet.strip_prefix("42") {
+                        self.events.push_back(serde_json::from_str(event).unwrap());
+                    } else if packet == "2" {
+                        self.packet("3".into()).await;
+                    }
+                }
+            }
+        })
+        .await
+        .unwrap_or_else(|_| panic!("Socket.IO event {name} did not arrive"))
+    }
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL"]
+async fn socket_authorization_player_takeover_and_channel_isolation() {
+    let database = test_support::TestDatabase::new().await;
+    let (layer, io) = socketioxide::SocketIo::new_layer();
+    let mock = Arc::new(MockKick::default());
+    let mock_server = mock.serve().await;
+    let mut app = test_support::app_with_io(database.pool.clone(), io);
+    use_mock(&mut app, &mock_server);
+    let private = RsaPrivateKey::new(&mut rand::thread_rng(), 2048).unwrap();
+    Arc::get_mut(&mut app).unwrap().webhook_key = RsaPublicKey::from(&private);
+    let mut receivers = Vec::new();
+    for (slug, id) in [("alpha", 1), ("beta", 2)] {
+        db::upsert_channel(&database.pool, &test_support::row(slug, id))
+            .await
+            .unwrap();
+        let (ch, receiver) = test_support::channel(slug, id as u64);
+        receivers.push(receiver);
+        app.channels.insert(slug.into(), ch);
+        app.user_id_to_slug.insert(id as u64, slug.into());
+    }
+    let alpha = app.channels.get("alpha").unwrap().clone();
+    queue::change(&alpha, &app, |q| {
+        for id in ["one", "two", "three"] {
+            q.push(queue::VideoItem {
+                id: id.into(),
+                video_id: None,
+                url: Some("https://cdn.example/video.mp4".into()),
+                title: "same video".into(),
+                user: "viewer".into(),
+            });
+        }
+        true
+    })
+    .await
+    .unwrap();
+    server::setup(&app.io, app.clone());
+    let http = test_support::HttpServer::start(axum::Router::new().layer(layer)).await;
+    let mut public = SocketClient::connect(&http.url, "alpha", None).await;
+    let mut wrong = SocketClient::connect(&http.url, "alpha", Some("wrong")).await;
+    let mut player = SocketClient::connect(&http.url, "alpha", Some("play-secret")).await;
+    let mut standby = SocketClient::connect(&http.url, "alpha", Some("play-secret")).await;
+    let mut beta = SocketClient::connect(&http.url, "beta", None).await;
+    assert_eq!(public.event("playbackRole").await["active"], false);
+    assert_eq!(wrong.event("playbackRole").await["active"], false);
+    assert_eq!(player.event("playbackRole").await["active"], true);
+    assert_eq!(standby.event("playbackRole").await["active"], false);
+    assert_eq!(
+        public.event("syncQueue").await["items"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
+    assert!(beta.event("syncQueue").await["items"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    for socket in [&public, &wrong, &standby] {
+        socket
+            .emit("advanceQueue", json!({"id":"one","version":3}))
+            .await;
+        socket
+            .emit(
+                "panelCommand",
+                json!({"command":"clearQueue", "token":"play-secret"}),
+            )
+            .await;
+    }
+    // The panel token also works on a viewer connection and remains separate from playback.
+    public
+        .emit(
+            "panelCommand",
+            json!({"command":"toggleVideo", "show":false,"token":"panel-secret"}),
+        )
+        .await;
+    assert_eq!(public.event("toggleVideo").await["showVideo"], true); // initial snapshot
+    assert_eq!(public.event("toggleVideo").await["showVideo"], false);
+    assert_eq!(alpha.video_queue.read().await.items.len(), 3);
+    player.event("syncQueue").await; // initial snapshot
+    tokio::join!(
+        player.emit("advanceQueue", json!({"id":"one","version":3})),
+        player.emit("advanceQueue", json!({"id":"one","version":3}))
+    );
+    let advanced = player.event("syncQueue").await;
+    assert_eq!(advanced["items"][0]["id"], "two");
+    assert_eq!(advanced["version"], 4);
+
+    // Signed owner identity governs commands even when a viewer spoofs the username.
+    let worker = tokio::spawn(webhook::worker(app.clone()));
+    for (event_id, sender_id, expected_len) in [("spoof", 99, 2), ("owner", 1, 1)] {
+        let timestamp = chrono::Utc::now().to_rfc3339();
+        let body = serde_json::to_vec(&json!({"broadcaster":{"user_id":1},"sender":{"user_id":sender_id,"username":"alpha"},"content":"!skip"})).unwrap();
+        let mut message = format!("{event_id}.{timestamp}.").into_bytes();
+        message.extend_from_slice(&body);
+        let signature = SigningKey::<Sha256>::new(private.clone()).sign(&message);
+        let headers = HeaderMap::from_iter([
+            (
+                "kick-event-message-id".parse().unwrap(),
+                event_id.parse().unwrap(),
+            ),
+            (
+                "kick-event-message-timestamp".parse().unwrap(),
+                timestamp.parse().unwrap(),
+            ),
+            (
+                "kick-event-type".parse().unwrap(),
+                "chat.message.sent".parse().unwrap(),
+            ),
+            (
+                "kick-event-signature".parse().unwrap(),
+                STANDARD.encode(signature.to_bytes()).parse().unwrap(),
+            ),
+        ]);
+        assert_eq!(
+            webhook::receive(State(app.clone()), headers, Bytes::from(body)).await,
+            StatusCode::OK
+        );
+        tokio::time::timeout(std::time::Duration::from_secs(3), async {
+            while !sqlx::query_scalar::<_, bool>(
+                "SELECT processed FROM webhook_events WHERE message_id=$1",
+            )
+            .bind(event_id)
+            .fetch_one(&database.pool)
+            .await
+            .unwrap()
+            {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(alpha.video_queue.read().await.items.len(), expected_len);
+    }
+    assert!(app
+        .channels
+        .get("beta")
+        .unwrap()
+        .video_queue
+        .read()
+        .await
+        .items
+        .is_empty());
+    assert_eq!(public.event("chatMessage").await["content"], "!skip");
+    server::ns_emit(&app, "beta", "testMarker", json!({}));
+    beta.event("testMarker").await;
+    assert!(!beta
+        .events
+        .iter()
+        .any(|event| event[0] == "chatMessage" || event[0] == "syncQueue"));
+
+    player.packet("41".into()).await;
+    standby.event("playerAvailable").await;
+    let mut replacement = SocketClient::connect(&http.url, "alpha", Some("play-secret")).await;
+    assert_eq!(replacement.event("playbackRole").await["active"], true);
+    let row = db::load_channel(&database.pool, "alpha").await.unwrap();
+    channel::start_channel(row, app.clone()).await.unwrap();
+    assert!(alpha.cancel.is_cancelled());
+    let mut reconnected = SocketClient::connect(&http.url, "alpha", Some("play-secret")).await;
+    assert_eq!(reconnected.event("playbackRole").await["active"], true);
+    assert_eq!(
+        reconnected.event("syncQueue").await["items"][0]["id"],
+        "three"
+    );
+    assert_eq!(reconnected.event("toggleVideo").await["showVideo"], false);
+    app.shutdown.cancel();
+    worker.await.unwrap();
+    database.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL"]
+async fn rotated_tokens_recover_after_temporary_database_write_failure() {
+    let database = test_support::TestDatabase::new().await;
+    db::upsert_channel(&database.pool, &test_support::row("alpha", 1))
+        .await
+        .unwrap();
+    let mock = Arc::new(MockKick::default());
+    let service = mock.serve().await;
+    let mut app = test_support::app(database.pool.clone());
+    use_mock(&mut app, &service);
+    let (ch, _receiver) = test_support::channel("alpha", 1);
+    // Fail writes while leaving reads and the external token service available.
+    sqlx::raw_sql("CREATE FUNCTION fail_write() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'simulated outage'; END $$; CREATE TRIGGER outage BEFORE UPDATE ON channels FOR EACH ROW EXECUTE FUNCTION fail_write();")
+        .execute(&database.pool).await.unwrap();
+    assert!(!kick::refresh_access_token(&ch, &app).await);
+    assert_eq!(*ch.refresh_token_val.read().await, "refresh-1");
+    assert_eq!(
+        db::load_channel(&database.pool, "alpha")
+            .await
+            .unwrap()
+            .refresh_token,
+        "refresh"
+    );
+    sqlx::query("DROP TRIGGER outage ON channels")
+        .execute(&database.pool)
+        .await
+        .unwrap();
+    assert!(kick::refresh_access_token(&ch, &app).await);
+    assert_eq!(
+        db::load_channel(&database.pool, "alpha")
+            .await
+            .unwrap()
+            .refresh_token,
+        "refresh-2"
+    );
+    assert_eq!(*ch.refresh_token_val.read().await, "refresh-2");
+    database.cleanup().await;
 }
 
 #[tokio::test]

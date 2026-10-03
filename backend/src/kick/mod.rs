@@ -164,7 +164,13 @@ async fn subscribe(ch: &Arc<ChannelState>, global: &Arc<AppState>) -> bool {
         }
         Ok(r) => {
             let status = r.status();
-            let detail: String = r.text().await.unwrap_or_default().chars().take(300).collect();
+            let detail: String = r
+                .text()
+                .await
+                .unwrap_or_default()
+                .chars()
+                .take(300)
+                .collect();
             tracing::warn!("[EventSub][{}] HTTP {} {}", ch.slug, status, detail);
             false
         }

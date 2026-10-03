@@ -160,10 +160,12 @@ async fn main() {
         .expect("reqwest client");
 
     // Estado global
+    let kick_endpoints = kick::Endpoints::default();
+    let webhook_key = webhook::fetch_public_key(&http, &kick_endpoints.api).await;
     let state = Arc::new(AppState {
         config,
         http,
-        kick_endpoints: kick::Endpoints::default(),
+        kick_endpoints,
         io: io_inner,
         db,
         channels: Arc::new(DashMap::new()),
@@ -171,7 +173,7 @@ async fn main() {
         channel_lock: Mutex::new(()),
         shutdown: CancellationToken::new(),
         tts_slots: Arc::new(Semaphore::new(2)),
-        webhook_key: webhook::public_key(),
+        webhook_key,
         metrics: Arc::new(state::Metrics::default()),
     });
 

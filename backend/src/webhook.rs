@@ -15,11 +15,40 @@ use sha2::Sha256;
 use std::sync::Arc;
 
 // Public verification key published by Kick; this is not a secret.
+// Fallback only: at startup the current key is fetched from Kick (it can rotate).
 const KICK_PUBLIC_KEY: &str =
-    "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq/+l1WnlRrGSolDMA+A8\n6rAhMbQGmQ2SapVcGM3zq8ANXjnhDWocMqfWcTd95btDydITa10kDvHzw9WQOqp2\nMZI7ZyrfzJuz5nhTPCiJwTwnEtWft7nV14BYRDHvlfqPUaZ+1KR4OCaO/wWIk/rQ\nL/TjY0M70gse8rlBkbo2a8rKhu69RQTRsoaf4DVhDPEeSeI5jVrRDGAMGL3cGuyY\n6CLKGdjVEM78g3JfYOvDU/RvfqD7L89TZ3iN94jrmWdGz34JNlEI5hqK8dd7C5EF\nBEbZ5jgB8s8ReQV8H+MkuffjdAj3ajDDX3DOJMIut1lBrUVD1AaSrGCKHooWoL2e\ntwIDAQAB\n-----END PUBLIC KEY-----";
+    "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0C0tthITvk/EjIxCGCko\nYrxM7eqP4GDnUyP4BnfgJ9yaHqniNfraxTKeRv7TGkOOZviow2zcx/YP9waURfHd\ncZOHU+EKA3lSFdMpezLiDGaym+FxR0iXAFZXE9VBdCCOyBeK81/m3mGScGVBNumt\n6pGCZYU9DCn5oqnC6RC5pUnlHnJp+TOXW6z8Silr4Y81a/66b0FAJ6EGUVXmXXgP\nFXQRTmJcLM4EgCXfNXLwExzr2MtowBwp5PYD6Usl7uZcnMIPutPdXJ0JnvqrztFC\nQTvrGMxzKLKLcKQTG159jfHGJ4wKSeenvwXN8jaVJAtW7wRAooRRT8Kho7Axe8jp\nqQIDAQAB\n-----END PUBLIC KEY-----";
 
 pub fn public_key() -> RsaPublicKey {
     RsaPublicKey::from_public_key_pem(KICK_PUBLIC_KEY).expect("valid Kick public key")
+}
+
+/// Descarga la clave vigente de Kick; si falla, usa la incluida en el binario.
+pub async fn fetch_public_key(http: &reqwest::Client, api: &str) -> RsaPublicKey {
+    let fetched = async {
+        let json: serde_json::Value = http
+            .get(format!("{api}/public-key"))
+            .send()
+            .await
+            .ok()?
+            .error_for_status()
+            .ok()?
+            .json()
+            .await
+            .ok()?;
+        RsaPublicKey::from_public_key_pem(json["data"]["public_key"].as_str()?).ok()
+    }
+    .await;
+    match fetched {
+        Some(key) => {
+            tracing::info!("[Webhook] Clave pública de Kick actualizada");
+            key
+        }
+        None => {
+            tracing::warn!("[Webhook] No se pudo descargar la clave de Kick; usando la incluida");
+            public_key()
+        }
+    }
 }
 
 fn header<'a>(headers: &'a HeaderMap, name: &str) -> Result<&'a str, StatusCode> {
@@ -69,6 +98,7 @@ pub async fn receive(
     let id = match verify(&app.webhook_key, &headers, &body, now) {
         Ok(id) => id,
         Err(status) => {
+            tracing::warn!("[Webhook] Firma rechazada ({status})");
             app.metrics
                 .webhook_rejected
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -99,6 +129,7 @@ pub async fn receive(
             .execute(&app.db).await
     {
         Ok(result) => {
+            tracing::info!("[Webhook] Evento recibido: {event_type}");
             app.metrics.webhook_received.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             if result.rows_affected() == 0 { app.metrics.webhook_duplicates.fetch_add(1, std::sync::atomic::Ordering::Relaxed); }
             StatusCode::OK

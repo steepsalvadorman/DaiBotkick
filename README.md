@@ -109,6 +109,20 @@ Las pruebas del overlay simulan DOM y media: no sustituyen una sesión real de O
 
 `Dockerfile` compila con Rust 1.88.0 y `--locked`, instala TTS en un entorno Python y ejecuta el servicio sin privilegios. `.dockerignore` excluye credenciales y builds locales.
 
+### Railway (producción)
+
+`railway.json` construye con el `Dockerfile`, comprueba `/readyz` y reinicia el servicio si falla. En el proyecto de Railway:
+
+1. *New Project → Deploy from GitHub repo* con este repositorio.
+2. *+ New → Database → PostgreSQL* en el mismo proyecto.
+3. Variables del servicio del bot: `DATABASE_URL=${{Postgres.DATABASE_URL}}`, `KICK_CLIENT_ID`, `KICK_CLIENT_SECRET` y `BASE_URL` con el dominio público (sin `/` final). `PORT` lo asigna Railway.
+4. *Settings → Networking → Custom Domain*: añade el dominio y crea en tu DNS el CNAME que indique Railway (en Cloudflare, con el proxy desactivado hasta que Railway emita el certificado).
+5. En la app de Kick: Redirect URL `<BASE_URL>/auth/callback` y webhook `<BASE_URL>/kick_webhook`.
+
+Mantén una sola réplica.
+
+### Render
+
 `render.yaml` usa una instancia de web service pago y recibe `DATABASE_URL` como secreto para una base persistente, por ejemplo Supabase o PostgreSQL administrado pago. Ya no crea una base gratuita. Los servicios gratuitos y la base Free tienen límites que debes revisar en la [documentación de Render](https://render.com/docs/free).
 
 Configura credenciales, base y `BASE_URL` en Render; registra ese origen en Kick y lanza staging primero. Los despliegues automáticos esperan a los checks de CI mediante [`autoDeployTrigger: checksPass`](https://render.com/docs/blueprint-spec). No se ha publicado ninguna versión desde esta revisión.

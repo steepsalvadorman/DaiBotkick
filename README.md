@@ -34,7 +34,11 @@ Si el navegador bloquea autoplay, interactúa con la fuente de OBS. La pantalla 
 
 La topbar del overlay queda a 4 px del borde superior del lienzo y muestra el nombre del canal sin etiquetas de sistema. El panel `music` se despliega desde la barra cuando el reproductor autorizado tiene contenido visible y se repliega al vaciar la cola, ocultarlo o desconectarse. La transición se desactiva si el navegador solicita movimiento reducido.
 
-Las esquinas inferiores llevan dos discos vintage azul Aero parcialmente recortados, limitados a los últimos 42 px del lienzo para dejar libre el chat. Son decorativos, estáticos y no interceptan clics.
+El tema visual de `overlay/glass.css` usa glassmorphism inspirado en Liquid Glass: superficies ahumadas translúcidas, bordes suaves y controles redondeados. Abarca la topbar, chat, música, bingo, menús y alertas sin modificar sus funciones. Mantiene un tinte oscuro para leer el texto sobre fondos claros; reduce la transparencia si el navegador lo solicita y ofrece un fondo más opaco sin soporte de desenfoque.
+
+En OBS, `backdrop-filter` solo desenfoca contenido dentro de la misma fuente del navegador: no puede desenfocar el juego que OBS compone por detrás. El tinte, los reflejos y la transparencia mantienen el acabado de cristal sin depender de ese desenfoque.
+
+Las esquinas inferiores conservan dos discos vintage con reflejos plateados y centro de cristal, parcialmente recortados y limitados a los últimos 42 px del lienzo para dejar libre el chat. Son decorativos, estáticos y no interceptan clics.
 
 Para usar el mouse, haz clic derecho en la fuente de navegador de OBS y selecciona **Interactuar**. Los botones de la topbar permiten mostrar/ocultar el reproductor sin parar el audio, alternar el chat (también con `?chat=0`), consultar la cola y ajustar el volumen de música (no el TTS). Escape cierra los menús. Estas preferencias son locales a esa fuente y se restablecen al recargar; no otorgan permisos de panel. La imagen compuesta de OBS no es una ventana interactiva encima del juego: los clics del juego no llegan al overlay.
 
@@ -61,7 +65,7 @@ La fuente autorizada también puede reiniciar la canción actual, pausar/reanuda
 
 Solo la identidad del broadcaster, verificada por su ID en el webhook firmado, puede usar `!von`, `!voff`, `!vstop`, `!skip` / `!next` y `!sorteo abrir|cerrar|ganador`. El skip modifica la cola en el backend incluso sin overlay conectado.
 
-### Bingo Aero
+### Bingo
 
 El dueño abre con `!bingo abrir` (o `!ruleta`). Los participantes escriben `!carton` antes del inicio: el bot publica cinco filas en orden B-I-N-G-O, con `*` como centro libre. Las columnas usan los rangos 1–15, 16–30, 31–45, 46–60 y 61–75. Hay un único cartón por usuario, hasta 1000 participantes, y un cooldown compartido de 5 s para sus comandos de bingo.
 

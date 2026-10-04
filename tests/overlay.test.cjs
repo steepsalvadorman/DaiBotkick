@@ -5,7 +5,8 @@ const fs = require('node:fs');
 
 function overlay(hash = '#token=private', search = '?ch=alpha', options = {}) {
     class Element {
-        constructor() { this.children = []; this.style = {}; this.textContent = ''; this.attributes = {}; this.classList = { add() {}, remove() {} }; }
+        constructor() { this.children = []; this.listeners = {}; this.style = { setProperty(name, value) { this[name] = value; } }; this.textContent = ''; this.attributes = {}; const classes = new Set(); this.classList = { add(...names) { names.forEach(name => classes.add(name)); }, remove(...names) { names.forEach(name => classes.delete(name)); }, toggle(name, force) { if (force) classes.add(name); else classes.delete(name); }, contains(name) { return classes.has(name); } }; }
+        addEventListener(name, callback) { this.listeners[name] = callback; }
         append(...nodes) { for (const node of nodes) { node.parent = this; this.children.push(node); } }
         replaceChildren(...nodes) { this.children = []; this.append(...nodes); }
         get firstChild() { return this.children[0]; }
@@ -51,6 +52,33 @@ test('external chat, config and titles are rendered as literal text', () => {
     app.handlers.syncQueue({ items: [item('one')], version: 1 });
     assert.match(app.get('video-title').children[0].textContent, /<img/);
 });
+test('topbar controls toggle local panels, chat and player without changing queue permissions', () => {
+    const app = overlay('#token=private', '?ch=alpha&chat=0');
+    assert.equal(app.get('chat-toggle').getAttribute('aria-pressed'), 'false');
+    app.get('chat-toggle').listeners.click();
+    assert.equal(app.get('chat-toggle').getAttribute('aria-pressed'), 'true');
+    assert.equal(app.context.document.body.classList.contains('no-chat'), false);
+    app.get('queue-toggle').listeners.click();
+    assert.equal(app.get('queue-panel').hidden, false);
+    app.get('volume-toggle').listeners.click();
+    assert.equal(app.get('queue-panel').hidden, true);
+    assert.equal(app.get('volume-panel').hidden, false);
+    app.handlers.playbackRole({ active: true });
+    app.handlers.syncQueue({ items: [item('one')], version: 1 });
+    assert.match(app.get('queue-list').children[0].textContent, /<img/);
+    const source = app.get('direct-video').src;
+    app.get('music-anchor').listeners.click();
+    assert.equal(app.get('media-widget').getAttribute('data-shown'), 'false');
+    assert.equal(app.get('direct-video').src, source);
+    app.get('music-anchor').listeners.click();
+    assert.equal(app.get('media-widget').getAttribute('data-shown'), 'true');
+    app.get('music-volume').listeners.input({ target: { value: '60' } });
+    assert.equal(app.get('direct-video').volume, 0.6);
+    assert.equal(app.get('volume-value').textContent, '60%');
+    app.handlers.syncQueue({ items: [item('two')], version: 2 });
+    assert.equal(app.get('direct-video').volume, 0.6);
+    assert.equal(app.emitted.length, 0);
+});
 test('overlay starts with useful defaults and replaces the welcome when data arrives', () => {
     const app = overlay();
     assert.match(app.get('desktop-clock').textContent, /^\d{2}:\d{2}$/);
@@ -67,6 +95,50 @@ test('top area is a single desktop bar without stream status cards', () => {
     assert.doesNotMatch(html, /id="desktop-widget"|id="desktop-dock"|id="weather-description"|id="weather-temperature"/);
     assert.doesNotMatch(html, /api\.open-meteo|geolocation/);
     assert.doesNotMatch(html, /class="stat-chip"|class="live-badge/);
+    assert.doesNotMatch(html, /AERO<span>OS|ESCRITORIO|GORILINRIX|Aero Music/);
+    assert.match(html, /id="stream-title-display"[^>]*>seniordai</);
+    assert.match(html, /id="music-anchor"/);
+});
+test('music unfolds only for the active visible queue and retracts on hide or disconnect', () => {
+    const app = overlay();
+    app.handlers.config({ channel_name: 'SeniorDai' });
+    assert.equal(app.get('stream-title-display').textContent, 'seniordai');
+    assert.equal(app.context.document.title, 'seniordai');
+    app.handlers.playbackRole({ active: true });
+    assert.equal(app.get('media-widget').getAttribute('data-shown'), 'false');
+    app.handlers.syncQueue({ items: [item('one')], version: 1 });
+    assert.equal(app.get('media-widget').getAttribute('data-shown'), 'true');
+    assert.equal(app.get('media-widget').getAttribute('aria-hidden'), 'false');
+    assert.equal(app.get('music-anchor').getAttribute('data-playing'), 'true');
+    app.handlers.toggleVideo({ showVideo: false });
+    assert.equal(app.get('media-widget').getAttribute('data-shown'), 'false');
+    app.handlers.toggleVideo({ showVideo: true });
+    assert.equal(app.get('media-widget').getAttribute('data-shown'), 'true');
+    app.handlers.disconnect('transport close');
+    assert.equal(app.get('media-widget').getAttribute('data-shown'), 'false');
+    assert.equal(app.get('music-anchor').getAttribute('data-playing'), 'false');
+});
+test('roulette validates server results, animates and renders users as text', () => {
+    const app = overlay();
+    app.handlers.rouletteResult({ user: '<img>', slot: 2, lost: false });
+    assert.equal(app.get('roulette-widget').hidden, false);
+    assert.equal(app.get('roulette-user').textContent, '<img>');
+    assert.equal(app.get('roulette-result').textContent, 'Girando…');
+    assert.equal(app.get('roulette-wheel').style['--roulette-angle'], '1320deg');
+    [...app.timers.values()].at(-1)();
+    assert.equal(app.get('roulette-result').textContent, 'Ganas esta ronda');
+    [...app.timers.values()].at(-1)();
+    assert.equal(app.get('roulette-widget').hidden, true);
+    app.handlers.rouletteResult({ user: 'viewer', slot: 0, lost: true });
+    [...app.timers.values()].at(-1)();
+    assert.equal(app.get('roulette-result').textContent, 'Pierdes esta ronda');
+    const count = app.timers.size;
+    app.handlers.rouletteResult({ slot: 9, lost: false });
+    app.handlers.rouletteResult({ slot: 1, lost: true });
+    assert.equal(app.timers.size, count);
+    app.handlers.disconnect('transport close');
+    assert.equal(app.get('roulette-widget').hidden, true);
+    assert.equal(app.timers.size, 0);
 });
 test('public overlay cannot play media, TTS or emit queue advances', () => {
     const app = overlay('');
@@ -183,5 +255,5 @@ test('stale media callbacks cannot advance a new head and pending ACKs retry saf
     assert.equal(app.emitted.length, 2);
     app.handlers.syncQueue({ items: [], version: 3 });
     assert.equal(app.get('direct-video').src, '');
-    assert.equal(app.get('media-widget').style.visibility, 'hidden');
+    assert.equal(app.get('media-widget').getAttribute('data-shown'), 'false');
 });

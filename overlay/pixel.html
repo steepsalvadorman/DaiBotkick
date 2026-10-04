@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=1920">
-    <title>GorilinRix — Stream Overlay</title>
+    <title>seniordai</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -19,12 +19,7 @@
             <img class="brand-mark channel-avatar" id="channel-avatar"
                  src="https://files.kick.com/images/user/19296849/profile_image/conversion/a7442606-c033-4d1b-a6a2-d1fa33e5c321-fullsize.webp"
                  alt="Foto de perfil de SeniorDai">
-            <span class="topbar-system-name">AERO<span>OS</span></span>
-        </div>
-        <span class="topbar-divider" aria-hidden="true"></span>
-        <div class="topbar-channel">
-            <span class="topbar-channel-kicker">ESCRITORIO</span>
-            <span id="stream-title-display" class="stream-title" data-text="GORILINRIX">GORILINRIX</span>
+            <span id="stream-title-display" class="stream-title">seniordai</span>
         </div>
         <span class="topbar-divider" aria-hidden="true"></span>
         <div class="topbar-clock">
@@ -32,13 +27,38 @@
             <span id="desktop-date" class="desktop-date">Cargando fecha…</span>
         </div>
         <span class="topbar-spacer"></span>
+        <div class="aero-control-cluster" role="group" aria-label="Controles del overlay">
+            <button id="chat-toggle" class="topbar-button aero-icon-button" type="button" aria-label="Mostrar u ocultar el chat" aria-pressed="true" title="Mostrar u ocultar el chat">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 3v-3a2 2 0 0 1-2-2V6a2 2 0 0 1 3-2Z"/><path class="icon-detail" d="M7 9h10M7 13h6"/></svg>
+            </button>
+            <button id="queue-toggle" class="topbar-button aero-icon-button" type="button" aria-label="Ver cola de música" title="Ver cola de música" aria-expanded="false" aria-controls="queue-panel">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h12M4 10h9M4 15h7" class="icon-detail"/><path d="M18 10v9a3 3 0 1 1-2-2.83V9l6-2v4Z"/></svg>
+            </button>
+            <button id="volume-toggle" class="topbar-button aero-icon-button" type="button" aria-label="Ajustar volumen de música" title="Ajustar volumen de música" aria-expanded="false" aria-controls="volume-panel">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h4l6-5v16l-6-5H3Z"/><path class="icon-detail" d="M16 8a6 6 0 0 1 0 8M19 5a10 10 0 0 1 0 14"/></svg>
+            </button>
+        </div>
         <div class="topbar-tray" aria-label="Estado del sistema">
             <span class="tray-icon" aria-label="Conexión">◉</span>
             <span class="tray-icon" aria-label="Audio">◖</span>
             <span class="tray-battery" aria-label="Energía"><i></i></span>
             <span class="tray-system">SISTEMA<br>LISTO</span>
         </div>
+        <button id="music-anchor" class="music-anchor" type="button" aria-pressed="true" title="Mostrar u ocultar el reproductor; el audio continúa"><span class="aero-app-orb" aria-hidden="true">♫</span> music</button>
     </header>
+
+    <section id="volume-panel" class="topbar-panel" hidden aria-label="Volumen de música">
+        <div class="aero-window-title">Volumen de música</div>
+        <div class="topbar-panel-body">
+            <label for="music-volume">Nivel <output id="volume-value" for="music-volume">25%</output></label>
+            <input id="music-volume" type="range" min="0" max="100" value="25">
+            <small>No modifica el volumen de TTS.</small>
+        </div>
+    </section>
+    <section id="queue-panel" class="topbar-panel" hidden aria-label="Cola de música">
+        <div class="aero-window-title">Cola de música</div>
+        <ol id="queue-list" class="topbar-panel-body"><li>La cola está vacía.</li></ol>
+    </section>
 
     <!-- Mensajes del chat -->
     <section id="chat-widget" aria-label="Chat en vivo">
@@ -59,7 +79,8 @@
     </section>
 
     <!-- Música y solicitudes; no se muestra ninguna videocámara -->
-    <section id="media-widget" aria-label="Música y solicitudes" style="opacity:0;transform:scale(0.9);visibility:hidden;">
+    <section id="media-widget" aria-label="Música y solicitudes" data-shown="false" aria-hidden="true">
+        <div class="aero-window-title"><span class="aero-app-orb" aria-hidden="true">♫</span> music <span class="aero-window-glint" aria-hidden="true"></span></div>
         <div id="video-container">
             <div id="youtube-player"></div>
             <video id="direct-video" autoplay></video>
@@ -73,6 +94,18 @@
                     <span id="video-requester">---</span>
                 </div>
                 <span id="queue-indicator"></span>
+            </div>
+        </div>
+    </section>
+
+    <section id="roulette-widget" hidden aria-label="Ruleta virtual Aero" aria-live="polite">
+        <div class="aero-window-title"><span class="aero-app-orb" aria-hidden="true">↻</span> Ruleta Aero <span class="roulette-caption">JUEGO VIRTUAL</span></div>
+        <div class="roulette-content">
+            <div class="roulette-wheel" id="roulette-wheel" aria-hidden="true"><span class="roulette-hub">AERO</span></div>
+            <div class="roulette-info">
+                <div id="roulette-user"></div>
+                <div id="roulette-result">Girando…</div>
+                <small>6 casillas · Sin sanciones</small>
             </div>
         </div>
     </section>

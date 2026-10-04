@@ -32,6 +32,10 @@ La URL sin token muestra chat y estadísticas, pero no reproduce audio/video ni 
 
 Si el navegador bloquea autoplay, interactúa con la fuente de OBS. La pantalla muestra el estado de conexión y errores de reproducción. Un video tiene un límite de reproducción de diez minutos.
 
+La topbar del overlay queda a 4 px del borde superior del lienzo y muestra el nombre del canal sin etiquetas de sistema. El panel `music` se despliega desde la barra cuando el reproductor autorizado tiene contenido visible y se repliega al vaciar la cola, ocultarlo o desconectarse. La transición se desactiva si el navegador solicita movimiento reducido.
+
+Para usar el mouse, haz clic derecho en la fuente de navegador de OBS y selecciona **Interactuar**. Los botones de la topbar permiten mostrar/ocultar el reproductor sin parar el audio, alternar el chat (también con `?chat=0`), consultar la cola y ajustar el volumen de música (no el TTS). Escape cierra los menús. Los controles son locales a esa fuente y se restablecen al recargar; no otorgan permisos para modificar la cola. La imagen compuesta de OBS no es una ventana interactiva encima del juego: los clics del juego no llegan al overlay.
+
 ## Comandos
 
 | Comando | Función |
@@ -42,6 +46,7 @@ Si el navegador bloquea autoplay, interactúa con la fuente de OBS. La pantalla 
 | `!misongs` | Ver tus videos; 15 s por usuario |
 | `!dai TEXTO`, `!dalia TEXTO`, `!jorge TEXTO`, `!alex TEXTO` | TTS; cooldown compartido de 15 s |
 | `!dado`, `!8ball PREGUNTA` | Entretenimiento |
+| `!ruleta` | Ruleta virtual Aero: 6 casillas, 1 resultado perdedor, sin sanciones. Animación en el overlay; cooldown global de 15 segundos. |
 | `!participar` / `!sorteo` | Entrar al sorteo abierto |
 | `!uptime` | Tiempo desde el inicio real del stream, si está disponible |
 | `!seguidores` | Total y meta, si Kick proporciona ese dato |

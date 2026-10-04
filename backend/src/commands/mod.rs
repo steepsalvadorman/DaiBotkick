@@ -84,7 +84,7 @@ pub async fn handle(
         }),
         "!comandos" | "!help" | "!ayuda" | "!commands" => global_cmd!("!comandos", {
             sender::send(
-                "📋 Comandos: !play [url] · !s/!dalia/!jorge/!alex [texto TTS] · !quitarme · !misongs · !dado · !8ball [pregunta] · !sorteo · !uptime · !cola · !discord · !redes · !pc · !horario",
+                "📋 Comandos: !play [url] · !s/!dalia/!jorge/!alex [texto TTS] · !quitarme · !misongs · !dado · !ruleta · !8ball [pregunta] · !sorteo · !uptime · !cola · !discord · !redes · !pc · !horario",
                 ch, global,
             ).await;
         }),
@@ -174,6 +174,33 @@ pub async fn handle(
     // ── Entretenimiento ───────────────────────────────────────────────────────
     use rand::seq::SliceRandom;
     use rand::Rng;
+
+    if cmd == "!ruleta" {
+        // Un solo giro por canal evita superponer animaciones, incluso para el owner.
+        if !ch.cooldown.lock().await.consume_global("!ruleta", 15) {
+            return;
+        }
+        let slot: u8 = rand::thread_rng().gen_range(0..6);
+        let lost = slot == 0;
+        crate::server::ns_emit(
+            global,
+            &ch.slug,
+            "rouletteResult",
+            serde_json::json!({"user":username,"slot":slot,"lost":lost}),
+        );
+        let result = if lost {
+            "pierdes esta ronda"
+        } else {
+            "ganas esta ronda"
+        };
+        sender::send(
+            &format!("🌀 Ruleta virtual: {username}, {result}. Solo un juego, sin sanciones."),
+            ch,
+            global,
+        )
+        .await;
+        return;
+    }
 
     if cmd == "!dado" {
         if !is_owner {

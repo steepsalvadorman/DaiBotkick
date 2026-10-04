@@ -3,7 +3,9 @@
     'use strict';
     const el = id => document.getElementById(id);
     const channel = new URLSearchParams(location.search).get('ch') || '';
-    if (new URLSearchParams(location.search).get('chat') === '0') document.body.classList.add('no-chat');
+    let chatShown = new URLSearchParams(location.search).get('chat') !== '0';
+    if (!chatShown) document.body.classList.add('no-chat');
+    el('chat-toggle').setAttribute('aria-pressed', String(chatShown));
     const token = new URLSearchParams(location.hash.slice(1)).get('token') || '';
     const status = document.createElement('div');
     status.id = 'connection-status'; status.setAttribute('role', 'status'); document.body.append(status);
@@ -30,7 +32,64 @@
     const socket = io({ query: { ch: channel }, auth: { token }, reconnectionDelayMax: 10000 });
     let active = false, queue = [], version = 0, playingId = null, pending = false, visible = true;
     let player = null, timer, retry, generation = 0, apiPromise;
+    let musicShown = true, musicVolume = 25;
     const media = el('media-widget'), youtube = el('youtube-player'), direct = el('direct-video');
+    el('chat-toggle').addEventListener('click', () => {
+        chatShown = !chatShown;
+        document.body.classList.toggle('no-chat', !chatShown);
+        el('chat-toggle').setAttribute('aria-pressed', String(chatShown));
+    });
+    el('music-anchor').addEventListener('click', () => {
+        musicShown = !musicShown;
+        el('music-anchor').setAttribute('aria-pressed', String(musicShown));
+        display();
+    });
+    function closePanels() {
+        for (const name of ['queue', 'volume']) {
+            el(`${name}-panel`).hidden = true;
+            el(`${name}-toggle`).setAttribute('aria-expanded', 'false');
+        }
+    }
+    for (const name of ['queue', 'volume']) {
+        el(`${name}-toggle`).addEventListener('click', () => {
+            const opened = el(`${name}-toggle`).getAttribute('aria-expanded') === 'true';
+            closePanels();
+            el(`${name}-panel`).hidden = opened;
+            el(`${name}-toggle`).setAttribute('aria-expanded', String(!opened));
+        });
+    }
+    addEventListener('keydown', event => { if (event.key === 'Escape') closePanels(); });
+    el('music-volume').addEventListener('input', event => {
+        const value = Number(event.target.value);
+        if (!Number.isFinite(value) || value < 0 || value > 100) {
+            notify('Volumen inválido: utiliza un valor entre 0 y 100.');
+            return;
+        }
+        musicVolume = value;
+        el('volume-value').textContent = `${value}%`;
+        direct.volume = value / 100;
+        player?.setVolume(value);
+    });
+    function renderQueue() {
+        const list = el('queue-list');
+        list.replaceChildren();
+        if (!queue.length) {
+            const item = document.createElement('li');
+            item.textContent = 'La cola está vacía.';
+            list.append(item);
+        }
+        queue.slice(0, 20).forEach((entry, index) => {
+            const item = document.createElement('li');
+            item.textContent = `${index === 0 ? 'Actual · ' : ''}${entry.title || 'Sin título'} — ${entry.user || 'Anónimo'}`;
+            list.append(item);
+        });
+        if (queue.length > 20) {
+            const item = document.createElement('li');
+            item.textContent = `Y ${queue.length - 20} solicitudes más.`;
+            list.append(item);
+        }
+    }
+    renderQueue();
     function stop() {
         generation++; clearTimeout(timer); clearTimeout(retry);
         direct.onended = direct.onerror = null; direct.pause(); direct.removeAttribute('src'); direct.load();
@@ -38,9 +97,10 @@
         youtube.replaceChildren(); playingId = null; pending = false;
     }
     function display() {
-        const shown = queue.length && visible && active;
-        media.style.visibility = shown ? 'visible' : 'hidden'; media.style.opacity = shown ? '1' : '0';
-        media.style.transform = 'scale(1)';
+        const shown = Boolean(queue.length && visible && active && musicShown);
+        media.setAttribute('data-shown', String(shown));
+        media.setAttribute('aria-hidden', String(!shown));
+        el('music-anchor').setAttribute('data-playing', String(shown));
         el('queue-indicator').style.display = queue.length > 1 ? 'inline-block' : 'none';
         el('queue-indicator').textContent = `+${Math.max(0, queue.length - 1)} EN COLA`;
     }
@@ -78,7 +138,7 @@
                     width: '100%', height: '100%', videoId: item.videoId,
                     playerVars: { autoplay: 1, playsinline: 1, controls: 0, rel: 0, origin: location.origin },
                     events: {
-                        onReady: event => { if (run === generation) { event.target.setVolume(25); event.target.playVideo(); } },
+                        onReady: event => { if (run === generation) { event.target.setVolume(musicVolume); event.target.playVideo(); } },
                         onStateChange: event => {
                             if (run !== generation) return;
                             if (event.data === YT.PlayerState.PLAYING) notify('');
@@ -90,7 +150,7 @@
                 });
             } catch (error) { if (run === generation) { notify(error.message); finish(item.id); } }
         } else if (item.url) {
-            youtube.style.display = 'none'; direct.style.display = 'block'; direct.src = item.url; direct.volume = 0.25;
+            youtube.style.display = 'none'; direct.style.display = 'block'; direct.src = item.url; direct.volume = musicVolume / 100;
             direct.onended = direct.onerror = () => finish(item.id);
             try { await direct.play(); } catch (error) {
                 if (run !== generation) return;
@@ -100,10 +160,9 @@
         } else finish(item.id);
     }
     socket.on('config', config => {
-        const name = String(config.channel_name || 'GorilinRix').toUpperCase(); document.title = `${name} — AeroOS`;
-        const title = el('stream-title-display'); title.setAttribute('data-text', name);
-        const accent = document.createElement('span'); accent.className = 'accent'; const mid = Math.ceil(name.length / 2);
-        accent.textContent = name.slice(0, mid); title.replaceChildren(accent, document.createTextNode(name.slice(mid)));
+        const name = String(config.channel_name || channel || 'seniordai').toLowerCase();
+        document.title = name;
+        el('stream-title-display').textContent = name;
         document.querySelectorAll('.kick-channel-url').forEach(node => { node.textContent = config.kick_url || `kick.com/${channel}`; });
     });
     socket.on('playbackRole', data => {
@@ -114,6 +173,7 @@
     socket.on('syncQueue', data => {
         if (!Array.isArray(data?.items) || !Number.isSafeInteger(data.version) || data.version < version) return;
         queue = data.items; version = data.version; clearTimeout(retry); pending = false;
+        renderQueue();
         if (playingId !== queue[0]?.id) stop(); display(); playHead();
     });
     socket.on('toggleVideo', data => { visible = Boolean(data.showVideo); display(); });
@@ -123,7 +183,10 @@
     socket.on('connect_error', () => notify('Sin conexión. Reintentando...'));
     socket.on('connect', () => { version = 0; notify('Conectado. Sincronizando...'); });
     socket.on('disconnect', reason => {
+        clearTimeout(rouletteSpinTimer); clearTimeout(rouletteHideTimer);
+        el('roulette-widget').hidden = true;
         active = false; stop(); stopSpeech(); queue = []; display(); notify('Sin conexión. Reintentando...');
+        renderQueue(); closePanels();
         if (reason === 'io server disconnect') socket.connect();
     });
     socket.on('chatMessage', data => {
@@ -141,6 +204,25 @@
         alertTimer = setTimeout(() => el('alert-box').classList.remove('show'), 6000);
     };
     socket.on('kickAlert', showAlert); socket.on('alert', showAlert);
+    let rouletteSpinTimer, rouletteHideTimer;
+    socket.on('rouletteResult', data => {
+        if (!Number.isInteger(data?.slot) || data.slot < 0 || data.slot > 5 || typeof data.lost !== 'boolean' || data.lost !== (data.slot === 0)) return;
+        clearTimeout(rouletteSpinTimer); clearTimeout(rouletteHideTimer);
+        const widget = el('roulette-widget'), wheel = el('roulette-wheel');
+        widget.hidden = false;
+        el('roulette-user').textContent = data.user || 'Participante';
+        el('roulette-result').textContent = 'Girando…';
+        widget.setAttribute('data-result', 'spinning');
+        wheel.style.animation = 'none';
+        void wheel.offsetWidth;
+        wheel.style.setProperty('--roulette-angle', `${1440 - data.slot * 60}deg`);
+        wheel.style.animation = 'roulette-spin 2.4s cubic-bezier(.15,.7,.2,1) forwards';
+        rouletteSpinTimer = setTimeout(() => {
+            widget.setAttribute('data-result', data.lost ? 'lost' : 'won');
+            el('roulette-result').textContent = data.lost ? 'Pierdes esta ronda' : 'Ganas esta ronda';
+            rouletteHideTimer = setTimeout(() => { widget.hidden = true; }, 5000);
+        }, 2400);
+    });
     const speeches = []; let speech = null, speechTimer;
     function stopSpeech() {
         clearTimeout(speechTimer);

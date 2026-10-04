@@ -21,7 +21,7 @@ function overlay(hash = '#token=private', search = '?ch=alpha', options = {}) {
     const elements = new Map();
     const get = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
     const handlers = {}, emitted = [], audios = [], players = [], calls = [];
-    let timerId = 0;
+    let timerId = 0, intervalCallback;
     const timers = new Map();
     const socket = { connected: true, on(name, callback) { handlers[name] = callback; }, emit(...args) { emitted.push(args); }, disconnect() { calls.push('disconnect'); }, connect() { calls.push('connect'); } };
     const context = {
@@ -29,7 +29,7 @@ function overlay(hash = '#token=private', search = '?ch=alpha', options = {}) {
         location: { hash, search, origin: 'https://bot.example' },
         innerWidth: 1920, innerHeight: 1080, URLSearchParams, Date, Promise,
         io: options => { context.options = options; return socket; }, addEventListener() {},
-        setTimeout(fn) { timers.set(++timerId, fn); return timerId; }, clearTimeout(id) { timers.delete(id); }, setInterval() {},
+        setTimeout(fn) { timers.set(++timerId, fn); return timerId; }, clearTimeout(id) { timers.delete(id); }, setInterval(fn) { intervalCallback = fn; },
         Audio: class extends Element { constructor(src) { super(); this.src = src; audios.push(this); } },
         YT: { PlayerState: { PLAYING: 1, ENDED: 0 }, Player: class {
             constructor(target, options) { this.options = options; players.push(this); }
@@ -38,7 +38,7 @@ function overlay(hash = '#token=private', search = '?ch=alpha', options = {}) {
     };
     context.window = context;
     vm.runInNewContext(fs.readFileSync(__dirname + '/../overlay/app.js', 'utf8'), context);
-    return { handlers, emitted, audios, players, get, context, timers, calls, socket };
+    return { handlers, emitted, audios, players, get, context, timers, calls, socket, intervalCallback: () => intervalCallback };
 }
 const item = (id, url = 'https://cdn.example/video.mp4') => ({ id, title: '<img src=x onerror=alert(1)>', user: 'viewer', url });
 
@@ -50,6 +50,33 @@ test('external chat, config and titles are rendered as literal text', () => {
     app.handlers.playbackRole({ active: true });
     app.handlers.syncQueue({ items: [item('one')], version: 1 });
     assert.match(app.get('video-title').children[0].textContent, /<img/);
+});
+test('overlay starts with useful defaults and replaces the welcome when data arrives', () => {
+    const app = overlay();
+    assert.equal(app.get('viewers').textContent, '0');
+    assert.equal(app.get('followers-count').textContent, '0');
+    assert.equal(app.get('uptime').textContent, '00:00:00');
+    assert.equal(app.get('live-status').textContent, 'EN ESPERA');
+
+    app.handlers.viewerCount({ count: 12 });
+    app.handlers.followersUpdate({ count: 6 });
+    assert.equal(app.get('viewers').textContent, 12);
+    assert.equal(app.get('followers-count').textContent, 6);
+    app.handlers.viewerCount({ count: null });
+    app.handlers.followersUpdate({ count: null });
+    assert.equal(app.get('viewers').textContent, 0);
+    assert.equal(app.get('followers-count').textContent, 0);
+
+    app.handlers.streamStatus({ live: true, startedAt: '2026-10-04T12:00:00.000Z' });
+    assert.equal(app.get('live-status').textContent, 'EN VIVO');
+    app.handlers.streamStatus({ live: false, startedAt: null });
+    assert.equal(app.get('live-status').textContent, 'EN ESPERA');
+    app.intervalCallback()();
+    assert.equal(app.get('uptime').textContent, '00:00:00');
+
+    app.handlers.chatMessage({ user: 'viewer', content: '¡Hola!' });
+    assert.equal(app.get('chat-empty').hidden, true);
+    assert.equal(app.get('chat-messages').children[0].children[1].textContent, '¡Hola!');
 });
 test('public overlay cannot play media, TTS or emit queue advances', () => {
     const app = overlay('');

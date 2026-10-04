@@ -24,10 +24,10 @@
                 </div>
             </div>
         </div>
-        <div class="live-badge"><span class="live-dot"></span><span>EN VIVO</span></div>
-        <div class="stat-chip"><span class="label">AUDIENCIA</span><span class="val" id="viewers">--</span></div>
+        <div class="live-badge is-waiting" id="live-badge"><span class="live-dot"></span><span id="live-status">EN ESPERA</span></div>
+        <div class="stat-chip"><span class="label">AUDIENCIA</span><span class="val" id="viewers">0</span></div>
         <div class="stat-chip"><span class="label">EN DIRECTO</span><span class="val" id="uptime">00:00:00</span></div>
-        <div class="stat-chip"><span class="label">SEGUIDORES</span><span class="val" id="followers-count">--</span></div>
+        <div class="stat-chip"><span class="label">SEGUIDORES</span><span class="val" id="followers-count">0</span></div>
     </div>
 
     <!-- Mensajes del chat -->
@@ -37,7 +37,9 @@
             <span>CHAT EN VIVO</span>
             <span class="heading-live">ACTIVO</span>
         </div>
-        <div class="chat-body" id="chat-messages"></div>
+        <div class="chat-body" id="chat-messages">
+            <div class="chat-empty" id="chat-empty">¡El chat está listo! Sé la primera persona en saludar.</div>
+        </div>
     </section>
 
     <!-- Alertas de la comunidad -->

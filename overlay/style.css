@@ -257,10 +257,10 @@ body { color: #f5f4f8; }
     height: 50px;
     gap: 9px;
     padding: 0 15px;
-    border: 1px solid rgba(255, 85, 120, 0.5);
+    border: 1px solid rgba(255, 227, 154, 0.38);
     border-radius: 16px;
-    background: rgba(255, 85, 120, 0.12);
-    color: #ff8ba2;
+    background: rgba(255, 227, 154, 0.08);
+    color: var(--yellow);
     font-family: var(--pixel);
     font-size: 11px;
     letter-spacing: 0.6px;
@@ -272,6 +272,15 @@ body { color: #f5f4f8; }
     border-radius: 50%;
     background: var(--red);
     box-shadow: 0 0 13px rgba(255, 85, 120, 0.8);
+}
+.live-badge.is-live {
+    border-color: rgba(255, 85, 120, 0.5);
+    background: rgba(255, 85, 120, 0.12);
+    color: #ff8ba2;
+}
+.live-badge.is-waiting .live-dot {
+    background: var(--yellow);
+    box-shadow: 0 0 13px rgba(255, 227, 154, 0.55);
 }
 
 .stat-chip {
@@ -339,6 +348,16 @@ body { color: #f5f4f8; }
     align-items: stretch;
     gap: 9px;
     overflow: hidden;
+}
+
+.chat-empty {
+    padding: 13px 16px;
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 13px;
+    background: rgba(16, 19, 28, 0.58);
+    color: #b6bdcb;
+    font-size: 20px;
+    text-shadow: var(--outline);
 }
 
 .msg {

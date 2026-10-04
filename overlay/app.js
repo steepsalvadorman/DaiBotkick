@@ -8,6 +8,10 @@
     const status = document.createElement('div');
     status.id = 'connection-status'; status.setAttribute('role', 'status'); document.body.append(status);
     const notify = text => { status.textContent = text; };
+    el('viewers').textContent = '0';
+    el('followers-count').textContent = '0';
+    el('uptime').textContent = '00:00:00';
+    el('live-status').textContent = 'EN ESPERA';
     function fit() {
         const scale = Math.min(innerWidth / 1920, innerHeight / 1080);
         document.body.style.transform = `scale(${scale})`;
@@ -116,6 +120,7 @@
         if (reason === 'io server disconnect') socket.connect();
     });
     socket.on('chatMessage', data => {
+        el('chat-empty').hidden = true;
         const item = document.createElement('div'); item.className = 'msg';
         const user = document.createElement('div'); user.className = 'msg-user'; user.textContent = `▶ ${data.user || ''}`;
         const text = document.createElement('div'); text.className = 'msg-text'; text.textContent = data.content || '';
@@ -129,12 +134,19 @@
         alertTimer = setTimeout(() => el('alert-box').classList.remove('show'), 6000);
     };
     socket.on('kickAlert', showAlert); socket.on('alert', showAlert);
-    socket.on('viewerCount', data => { el('viewers').textContent = data.count ?? '--'; });
-    socket.on('followersUpdate', data => { el('followers-count').textContent = data.count ?? '--'; });
+    socket.on('viewerCount', data => { el('viewers').textContent = data.count ?? 0; });
+    socket.on('followersUpdate', data => { el('followers-count').textContent = data.count ?? 0; });
     let liveSince = null;
-    socket.on('streamStatus', data => { liveSince = data.live && data.startedAt ? Date.parse(data.startedAt) : null; });
+    socket.on('streamStatus', data => {
+        const live = Boolean(data.live);
+        liveSince = live && data.startedAt ? Date.parse(data.startedAt) : null;
+        el('live-status').textContent = live ? 'EN VIVO' : 'EN ESPERA';
+        const badge = el('live-badge');
+        badge.classList.remove('is-live', 'is-waiting');
+        badge.classList.add(live ? 'is-live' : 'is-waiting');
+    });
     setInterval(() => {
-        if (!Number.isFinite(liveSince)) { el('uptime').textContent = '--:--:--'; return; }
+        if (!Number.isFinite(liveSince)) { el('uptime').textContent = '00:00:00'; return; }
         const seconds = Math.max(0, Math.floor((Date.now() - liveSince) / 1000));
         el('uptime').textContent = [Math.floor(seconds / 3600), Math.floor(seconds % 3600 / 60), seconds % 60].map(n => String(n).padStart(2, '0')).join(':');
     }, 1000);

@@ -36,7 +36,11 @@ La topbar del overlay queda a 4 px del borde superior del lienzo y muestra el no
 
 Las esquinas inferiores llevan dos discos vintage azul Aero parcialmente recortados, limitados a los últimos 42 px del lienzo para dejar libre el chat. Son decorativos, estáticos y no interceptan clics.
 
+El encabezado del chat, los comentarios y las recomendaciones rotativas comparten el acabado Aero azul oscuro de la topbar: cristal pulido, bordes luminosos y texto claro. Conservan su posición por encima de los discos inferiores.
+
 El chat conserva emojis Unicode y convierte los emotes de Kick (`[emote:ID:NOMBRE]`) en imágenes del CDN oficial, incluidos emotes animados. Si una imagen falla, muestra su nombre y un aviso. El resto del mensaje se renderiza como texto, nunca como HTML.
+
+La cápsula Aero de emojis muestra el total y los tres más usados en una ventana móvil de cinco minutos (se actualiza cada cinco segundos). Cuenta emotes de Kick y emojis Unicode completos, sin separar familias, banderas o tonos de piel. Es local a la fuente: recargar reinicia el contador y no recupera mensajes perdidos durante desconexiones.
 
 Para usar el mouse, haz clic derecho en la fuente de navegador de OBS y selecciona **Interactuar**. Los botones de la topbar permiten mostrar/ocultar el reproductor sin parar el audio, alternar el chat (también con `?chat=0`), consultar la cola y ajustar el volumen de música (no el TTS). Escape cierra los menús. Estas preferencias son locales a esa fuente y se restablecen al recargar; no otorgan permisos de panel. La imagen compuesta de OBS no es una ventana interactiva encima del juego: los clics del juego no llegan al overlay.
 
@@ -46,7 +50,7 @@ La fuente autorizada también puede reiniciar la canción actual, pausar/reanuda
 
 | Comando | Función |
 |---|---|
-| `!play URL` | Agregar un video de YouTube; 30 s por usuario |
+| `!play URL` / `!play nombre y artista` | Agregar un video o buscar una canción en YouTube; 30 s por usuario |
 | `!cola` | Ver próximos videos; 30 s global |
 | `!quitarme` | Quitar tu primer video |
 | `!misongs` | Ver tus videos; 15 s por usuario |
@@ -81,7 +85,11 @@ Todos los comandos de voz del chat (incluidos `!s`, `!camila` y `!jacinta`) anun
 
 ## Desarrollo local
 
-Requisitos: Rust 1.88.0, PostgreSQL y `edge-tts==7.2.8` en el PATH. Node 22 o posterior se usa para las pruebas del overlay.
+Requisitos: Rust 1.88.0, PostgreSQL, `edge-tts==7.2.8` y `yt-dlp==2026.8.19` en el PATH. Node 22 o posterior se usa para las pruebas del overlay.
+
+`!play cervecita flor pileña` busca los primeros cinco resultados de YouTube mediante `yt-dlp`, sin clave API ni descargar audio. Selecciona el primero en el orden de relevancia de YouTube que tenga duración conocida de hasta diez minutos y no sea un directo o estreno pendiente. La reproducción sigue usando el reproductor de YouTube y la cola habitual. No garantiza versiones exactas ni disponibilidad para incrustar: añade el artista o usa el enlace exacto. Hay dos búsquedas simultáneas como máximo y timeout de 25 s; los errores y bloqueos de YouTube se avisan en chat.
+
+En Windows puedes usar el ejecutable oficial `yt-dlp.exe`; se detecta también en `%LOCALAPPDATA%\DaiBot\tools\yt-dlp.exe`. Configura `YT_DLP_PATH` con su ruta absoluta para otra ubicación si no está en el PATH. En servidores con Python se puede instalar `yt-dlp==2026.8.19` en el entorno del backend. La imagen de despliegue ya incluye esa dependencia.
 
 Desde la raíz del repositorio, copia `.env.example` a `.env` y configura:
 

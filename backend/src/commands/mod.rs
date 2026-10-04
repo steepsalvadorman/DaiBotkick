@@ -6,6 +6,7 @@ use crate::{
 };
 use std::sync::Arc;
 use tracing::warn;
+mod search;
 
 pub async fn handle(
     username: &str,
@@ -344,7 +345,16 @@ pub async fn handle(
     }
 
     // ── !play ─────────────────────────────────────────────────────────────────
-    if let Some(url) = command_args(content, "!play").filter(|url| !url.is_empty()) {
+    if let Some(url) = command_args(content, "!play") {
+        if url.is_empty() {
+            sender::send(
+                "Usa !play seguido de un enlace o del nombre y artista de la canción.",
+                ch,
+                global,
+            )
+            .await;
+            return;
+        }
         if !is_owner {
             let ok = { ch.cooldown.lock().await.consume_user(username, "!play", 30) };
             if !ok {
@@ -488,7 +498,51 @@ async fn configure(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
 }
 
 pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
-    if ch.cancel.is_cancelled() || url.len() > 2048 || !valid_media_url(&url) {
+    if ch.cancel.is_cancelled() {
+        return;
+    }
+    if !url.contains("://")
+        && !url.starts_with("www.")
+        && !url.starts_with("youtube.com")
+        && !url.starts_with("youtu.be")
+    {
+        let found = tokio::select! {
+            _ = ch.cancel.cancelled() => return,
+            result = search::youtube(url.trim(), global) => result,
+        };
+        match found {
+            Ok((id, title)) => {
+                let message = format!(
+                    "▶ @{username} encontré «{}» y la agregué a la cola.",
+                    trunc(&title, 60)
+                );
+                if enqueue(
+                    VideoItem {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        video_id: Some(id),
+                        url: None,
+                        title,
+                        user: username,
+                    },
+                    ch,
+                    global,
+                )
+                .await
+                {
+                    sender::send(&message, ch, global).await;
+                }
+            }
+            Err(message) => sender::send(message, ch, global).await,
+        }
+        return;
+    }
+    if url.len() > 2048 || !valid_media_url(&url) {
+        sender::send(
+            "Enlace inválido. Usa una URL HTTPS o escribe el nombre y artista de la canción.",
+            ch,
+            global,
+        )
+        .await;
         return;
     }
 
@@ -583,6 +637,18 @@ pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global:
 }
 
 async fn enqueue(item: VideoItem, ch: &Arc<ChannelState>, global: &Arc<AppState>) -> bool {
+    if ch.cancel.is_cancelled() {
+        return false;
+    }
+    if ch.video_queue.read().await.items.len() >= 100 {
+        sender::send(
+            "La cola está llena (100 solicitudes). Espera a que termine una canción.",
+            ch,
+            global,
+        )
+        .await;
+        return false;
+    }
     queue_edit(ch, global, |q| {
         if q.items.len() >= 100 {
             return false;

@@ -69,6 +69,7 @@ pub struct AppState {
     pub channel_lock: Mutex<()>,
     pub shutdown: CancellationToken,
     pub tts_slots: Arc<Semaphore>,
+    pub search_slots: Semaphore,
     pub webhook_key: rsa::RsaPublicKey,
     pub metrics: Arc<Metrics>,
 }

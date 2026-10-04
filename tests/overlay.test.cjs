@@ -29,7 +29,7 @@ function overlay(hash = '#token=private', search = '?ch=alpha', options = {}) {
     const context = {
         document: { body: new Element(), head: new Element(), getElementById: get, createElement: () => new Element(), createTextNode: text => ({ textContent: text }), querySelectorAll: () => [] },
         location: { hash, search, origin: 'https://bot.example' },
-        innerWidth: 1920, innerHeight: 1080, URLSearchParams, Date, Promise,
+        innerWidth: 1920, innerHeight: 1080, URLSearchParams, Date, Promise, Intl,
         io: options => { context.options = options; return socket; }, addEventListener() {},
         setTimeout(fn) { timers.set(++timerId, fn); return timerId; }, clearTimeout(id) { timers.delete(id); }, setInterval(fn, delay) { (context.intervals ||= []).push({ fn, delay }); intervalCallback = fn; },
         Audio: class extends Element { constructor(src) { super(); this.src = src; audios.push(this); } },
@@ -117,6 +117,31 @@ test('chat preserves Unicode emoji and renders Kick emotes safely with explicit 
     assert.match(app.context.document.body.children[0].textContent, /No se pudo cargar el emote KEKW/);
     app.handlers.chatMessage({ user: 'viewer', content: '[emote:https://evil.example:x] <script>' });
     assert.equal(app.get('chat-messages').children[2].children[1].textContent, '[emote:https://evil.example:x] <script>');
+});
+test('emoji meter groups complete Unicode sequences and Kick emotes over a rolling five minutes', () => {
+    const app = overlay();
+    const original = Date.now;
+    let now = 1000000;
+    Date.now = () => now;
+    try {
+        app.handlers.chatMessage({ user: 'viewer', content: '😀😀 👨‍👩‍👧‍👦 🇵🇪 👍🏽 1️⃣ [emote:37226:KEKW] [emote:37226:KEKW]' });
+        assert.equal(app.get('emoji-total').textContent, '8 emojis · 5 min');
+        assert.equal(app.get('emoji-top').children.length, 3);
+        const top = app.get('emoji-top').children;
+        assert.equal(top[1].textContent, '😀');
+        assert.equal(top[1].children[0].textContent, ' ×2');
+        assert.equal(top[0].children[1].alt, 'KEKW');
+        assert.equal(top[0].children.at(-1).textContent, ' ×2');
+        now += 299999;
+        app.context.intervals.find(i => i.delay === 5000).fn();
+        assert.equal(app.get('emoji-total').textContent, '8 emojis · 5 min');
+        now += 1;
+        app.context.intervals.find(i => i.delay === 5000).fn();
+        assert.equal(app.get('emoji-total').textContent, '0 emojis · 5 min');
+        assert.equal(app.get('emoji-top').children.length, 0);
+        app.handlers.chatMessage({ user: 'viewer', content: 'abc 123 <script>' });
+        assert.equal(app.get('emoji-total').textContent, '0 emojis · 5 min');
+    } finally { Date.now = original; }
 });
 test('topbar controls toggle local panels, chat and player without changing queue permissions', () => {
     const app = overlay('#token=private', '?ch=alpha&chat=0');

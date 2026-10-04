@@ -258,12 +258,45 @@
         if (offset === 0) target.textContent = content;
         else target.append(document.createTextNode(content.slice(offset)));
     }
+    const emojiSegments = new Intl.Segmenter('es', { granularity: 'grapheme' });
+    const emojiEvents = [];
+    function updateEmojiMeter() {
+        const cutoff = Date.now() - 300000;
+        while (emojiEvents.length && emojiEvents[0].time <= cutoff) emojiEvents.shift();
+        const counts = new Map();
+        for (const event of emojiEvents) {
+            for (const [key, value] of event.counts) counts.set(key, (counts.get(key) || 0) + value);
+        }
+        const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
+        el('emoji-total').textContent = `${total} emojis · 5 min`;
+        const top = el('emoji-top'); top.replaceChildren();
+        for (const [key, count] of [...counts].sort((a, b) => b[1] - a[1]).slice(0, 3)) {
+            const entry = document.createElement('span');
+            renderChatContent(entry, key);
+            entry.append(document.createTextNode(` ×${count}`));
+            top.append(entry);
+        }
+    }
+    function countEmojis(content) {
+        const counts = new Map();
+        const add = key => counts.set(key, (counts.get(key) || 0) + 1);
+        const plain = content.replace(/\[emote:(\d{1,20}):([^\]\r\n]{1,100})\]/g, (match) => {
+            add(match); return '';
+        });
+        for (const { segment } of emojiSegments.segment(plain)) {
+            if (/\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20e3/u.test(segment)) add(segment);
+        }
+        if (counts.size) emojiEvents.push({ time: Date.now(), counts });
+        updateEmojiMeter();
+    }
+    setInterval(updateEmojiMeter, 5000);
     socket.on('chatMessage', data => {
         el('chat-empty').hidden = true;
         const item = document.createElement('div'); item.className = 'msg';
         const user = document.createElement('div'); user.className = 'msg-user'; user.textContent = `▶ ${data.user || ''}`;
         const text = document.createElement('div'); text.className = 'msg-text';
         renderChatContent(text, typeof data.content === 'string' ? data.content : '');
+        countEmojis(typeof data.content === 'string' ? data.content : '');
         item.append(user, text); const body = el('chat-messages'); body.append(item);
         while (body.children.length > 4) body.firstChild.remove();
     });

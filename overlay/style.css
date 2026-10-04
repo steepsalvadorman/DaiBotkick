@@ -503,7 +503,7 @@ body { color: #f5f4f8; }
     display: flex;
     flex-direction: column;
     width: 490px;
-    max-height: 410px;
+    max-height: 480px;
     gap: 12px;
 }
 
@@ -511,8 +511,12 @@ body { color: #f5f4f8; }
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 0 4px;
-    color: #f5f4f8;
+    padding: 7px 12px;
+    border: 1px solid rgba(154, 209, 255, 0.45);
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(172, 222, 255, .2), rgba(11, 40, 71, .9));
+    box-shadow: inset 0 1px 0 rgba(229, 247, 255, .4);
+    color: #e4f5ff;
     font-family: var(--pixel);
     font-size: 11px;
     letter-spacing: 0.6px;
@@ -521,18 +525,18 @@ body { color: #f5f4f8; }
 .heading-mark {
     width: 8px;
     height: 8px;
-    border-radius: 3px;
-    background: var(--green);
-    box-shadow: 0 0 12px rgba(182, 255, 117, 0.55);
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 20%, #fff, #8de0ff 40%, #308cbd);
+    box-shadow: 0 0 8px rgba(141, 224, 255, .5);
 }
 .heading-live {
     margin-left: auto;
-    color: var(--green);
+    color: #a6dfff;
     font-size: 9px;
 }
 
 .chat-body {
-    max-height: 360px;
+    max-height: 430px;
     align-items: stretch;
     gap: 9px;
     overflow: hidden;
@@ -540,35 +544,37 @@ body { color: #f5f4f8; }
 
 .chat-empty {
     padding: 13px 16px;
-    border: 1px dashed rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(148, 205, 255, .45);
     border-radius: 13px;
-    background: rgba(16, 19, 28, 0.58);
-    color: #b6bdcb;
+    background: linear-gradient(160deg, rgba(61, 110, 151, .9), rgba(9, 31, 60, .93));
+    box-shadow: inset 0 1px 0 rgba(213, 238, 255, .4), 0 5px 14px rgba(0, 12, 34, .25);
+    color: #cce5f7;
     font-size: 20px;
     text-shadow: var(--outline);
 }
 
 .msg {
     max-width: 100%;
-    padding: 11px 15px 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-left: 3px solid var(--green);
-    border-radius: 4px 15px 15px 4px;
-    background: rgba(16, 19, 28, 0.82);
-    box-shadow: 0 7px 24px rgba(0, 0, 0, 0.12);
+    padding: 10px 15px;
+    border: 1px solid rgba(148, 205, 255, .5);
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(179, 225, 255, .17), transparent 45%),
+        linear-gradient(145deg, rgba(30, 71, 108, .94), rgba(9, 31, 60, .96));
+    box-shadow: inset 0 1px 0 rgba(213, 238, 255, .45), 0 5px 14px rgba(0, 12, 34, .25);
     backdrop-filter: blur(10px);
 }
 .msg-user {
-    color: var(--green);
+    color: #a6dfff;
     font-family: var(--pixel);
     font-size: 10px;
+    line-height: 1.3;
     letter-spacing: 0.2px;
     text-shadow: none;
 }
 .msg-text {
     margin-top: 5px;
     font-family: 'DM Sans', 'Segoe UI', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
-    font-size: 23px;
+    font-size: 22px;
     line-height: 1.2;
     text-shadow: var(--outline);
 }
@@ -689,10 +695,11 @@ body { color: #f5f4f8; }
     gap: 15px;
     min-height: 62px;
     padding: 11px 17px;
-    border: 1px solid rgba(255, 255, 255, 0.13);
-    border-right: 3px solid var(--green);
+    border: 1px solid rgba(148, 205, 255, .5);
     border-radius: 15px;
-    background: rgba(16, 19, 28, 0.88);
+    background: linear-gradient(180deg, rgba(179, 225, 255, .18), transparent 48%),
+        linear-gradient(110deg, rgba(28, 69, 105, .95), rgba(9, 31, 60, .96));
+    box-shadow: inset 0 1px 0 rgba(213, 238, 255, .45), 0 5px 14px rgba(0, 12, 34, .25);
     font-size: 19px;
     line-height: 1.2;
     text-shadow: var(--outline);
@@ -703,12 +710,12 @@ body { color: #f5f4f8; }
     flex: 0 0 auto;
     padding-right: 13px;
     border-right: 1px solid rgba(255, 255, 255, 0.16);
-    color: var(--green);
+    color: #a6dfff;
     font-family: var(--pixel);
     font-size: 9px;
     letter-spacing: 0.4px;
 }
-.tip b { color: var(--green); font-weight: 700; }
+.tip b { color: #c4ecff; font-weight: 700; }
 
 #connection-status {
     top: 116px;
@@ -867,6 +874,22 @@ body { color: #f5f4f8; }
     font-weight: 600;
 }
 .topbar-spacer { position: relative; min-width: 12px; flex: 1; }
+#emoji-meter {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    border: 1px solid rgba(151, 212, 255, .35);
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(165, 221, 255, .2), rgba(9, 38, 73, .7));
+    box-shadow: inset 0 1px 0 rgba(222, 246, 255, .35);
+    color: #d9f3ff;
+    font-size: 11px;
+}
+#emoji-top { display: flex; gap: 8px; }
+#emoji-top > span { white-space: nowrap; }
+#emoji-top .chat-emote { width: 20px; height: 20px; }
 .topbar-tray {
     gap: 13px;
     padding: 5px 12px;

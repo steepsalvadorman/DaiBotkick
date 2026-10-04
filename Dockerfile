@@ -7,7 +7,7 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates python3 python3-venv \
     && python3 -m venv /opt/venv \
-    && /opt/venv/bin/pip install --no-cache-dir edge-tts==7.2.8 \
+    && /opt/venv/bin/pip install --no-cache-dir edge-tts==7.2.8 yt-dlp==2026.8.19 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 --create-home daibot
 

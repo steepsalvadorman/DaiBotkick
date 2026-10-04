@@ -174,6 +174,7 @@ async fn main() {
         channel_lock: Mutex::new(()),
         shutdown: CancellationToken::new(),
         tts_slots: Arc::new(Semaphore::new(2)),
+        search_slots: Semaphore::new(2),
         webhook_key,
         metrics: Arc::new(state::Metrics::default()),
     });

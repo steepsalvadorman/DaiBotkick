@@ -85,6 +85,8 @@ Se aceptan videos directos MP4/WebM/MOV/M4V por HTTPS, con validación de URL y 
 
 Todos los comandos de voz del chat (incluidos `!s` y `!camila`) anuncian al autor con «usuario dice: mensaje» en la voz elegida. `!narrador`, `!epico` y `!comedia` son perfiles genéricos originales que ajustan voces oficiales de Edge TTS. `!jacinta` usa el modelo autorizado de Fish Audio configurado para esta voz y requiere la variable secreta `FISH_AUDIO_API_KEY`; el ID del modelo se incluye en el backend y la clave nunca debe guardarse en el repositorio. Para pronunciar el nombre, se utilizan hasta 40 caracteres y se sustituyen separadores y símbolos por espacios. El prefijo no consume los 350 caracteres del mensaje. Las alertas automáticas y el TTS del panel conservan su texto original.
 
+Fish Audio utiliza `s2.1-pro-free` con `latency: "low"` para priorizar una menor demora de generación (puede reducir la calidad), sin acelerar la voz: velocidad `1.0`, volumen sin aumento y normalización de volumen activada. Los ajustes del sitio web de Fish Audio no se aplican automáticamente a las solicitudes del bot. El overlay espera el MP3 completo; todavía puede haber demora por generación, red y mensajes pendientes. La caché de Fish Audio incluye el modelo y los parámetros de síntesis para no reutilizar audios de configuraciones anteriores.
+
 ## Desarrollo local
 
 Requisitos: Rust 1.88.0, PostgreSQL, `edge-tts==7.2.8` y `yt-dlp==2026.8.19` en el PATH. Node 22 o posterior se usa para las pruebas del overlay.

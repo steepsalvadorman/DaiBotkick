@@ -66,6 +66,14 @@ pub fn is_valid_voice(voice: &str) -> bool {
     edge_tts::is_valid_voice(voice) || voice == fish_audio::VOICE_ALIAS
 }
 
+fn cache_identity(text: &str, voice: &str) -> String {
+    if voice == fish_audio::VOICE_ALIAS {
+        fish_audio::cache_identity(text)
+    } else {
+        format!("{voice}:{text}")
+    }
+}
+
 pub struct TtsService {
     cache_dir: PathBuf,
     fish_audio_api_key: String,
@@ -81,7 +89,7 @@ impl TtsService {
     }
     pub async fn generate(&self, text: &str, voice: &str) -> Option<String> {
         use sha2::{Digest, Sha256};
-        let hash = Sha256::digest(format!("{voice}:{text}"));
+        let hash = Sha256::digest(cache_identity(text, voice));
         let path = self.cache_dir.join(format!("{hash:x}.mp3"));
         tokio::fs::create_dir_all(&self.cache_dir).await.ok()?;
         self.prune().await;
@@ -164,6 +172,16 @@ pub async fn spawn_processor(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn low_latency_fish_audio_does_not_reuse_old_cache_or_change_edge_cache() {
+        assert_ne!(cache_identity("Hola", "jacinta"), "jacinta:Hola");
+        assert_eq!(
+            cache_identity("Hola", "jacinta"),
+            fish_audio::cache_identity("Hola")
+        );
+        assert_eq!(cache_identity("Hola", "camila"), "camila:Hola");
+    }
+
     #[tokio::test]
     async fn chat_voices_announce_author_without_truncating_message_or_changing_alerts() {
         let (channel, mut receiver) = crate::test_support::channel("alpha", 1);

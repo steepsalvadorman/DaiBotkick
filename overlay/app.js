@@ -233,8 +233,7 @@
     socket.on('connect_error', () => notify('Sin conexión. Reintentando...'));
     socket.on('connect', () => { version = 0; notify('Conectado. Sincronizando...'); });
     socket.on('disconnect', reason => {
-        clearTimeout(rouletteSpinTimer); clearTimeout(rouletteHideTimer);
-        el('roulette-widget').hidden = true;
+        bingoState = null; el('bingo-widget').hidden = true;
         active = false; stop(); stopSpeech(); queue = []; display(); notify('Sin conexión. Reintentando...');
         renderQueue(); closePanels();
         if (reason === 'io server disconnect') socket.connect();
@@ -254,24 +253,71 @@
         alertTimer = setTimeout(() => el('alert-box').classList.remove('show'), 6000);
     };
     socket.on('kickAlert', showAlert); socket.on('alert', showAlert);
-    let rouletteSpinTimer, rouletteHideTimer;
-    socket.on('rouletteResult', data => {
-        if (!Number.isInteger(data?.slot) || data.slot < 0 || data.slot > 5 || typeof data.lost !== 'boolean' || data.lost !== (data.slot === 0)) return;
-        clearTimeout(rouletteSpinTimer); clearTimeout(rouletteHideTimer);
-        const widget = el('roulette-widget'), wheel = el('roulette-wheel');
-        widget.hidden = false;
-        el('roulette-user').textContent = data.user || 'Participante';
-        el('roulette-result').textContent = 'Girando…';
-        widget.setAttribute('data-result', 'spinning');
-        wheel.style.animation = 'none';
-        void wheel.offsetWidth;
-        wheel.style.setProperty('--roulette-angle', `${1440 - data.slot * 60}deg`);
-        wheel.style.animation = 'roulette-spin 2.4s cubic-bezier(.15,.7,.2,1) forwards';
-        rouletteSpinTimer = setTimeout(() => {
-            widget.setAttribute('data-result', data.lost ? 'lost' : 'won');
-            el('roulette-result').textContent = data.lost ? 'Pierdes esta ronda' : 'Ganas esta ronda';
-            rouletteHideTimer = setTimeout(() => { widget.hidden = true; }, 5000);
-        }, 2400);
+    let bingoState = null, bingoShown = true;
+    const bingoLabel = number => `${'BINGO'[Math.floor((number - 1) / 15)]}-${number}`;
+    const bingoCells = [];
+    for (let group = 0; group < 5; group++) {
+        const row = document.createElement('div'); row.className = 'bingo-board-row';
+        const label = document.createElement('b'); label.textContent = 'BINGO'[group]; row.append(label);
+        for (let n = group * 15 + 1; n <= group * 15 + 15; n++) {
+            const cell = document.createElement('span'); cell.textContent = String(n);
+            row.append(cell); bingoCells[n] = cell;
+        }
+        el('bingo-board').append(row);
+    }
+    el('bingo-toggle').addEventListener('click', () => {
+        bingoShown = !bingoShown;
+        el('bingo-toggle').setAttribute('aria-pressed', String(bingoShown));
+        el('bingo-widget').hidden = !bingoShown || !bingoState || bingoState.phase === 'idle';
+    });
+    socket.on('bingoState', data => {
+        const number = n => Number.isInteger(n) && n >= 1 && n <= 75;
+        if (!data || !Number.isSafeInteger(data.round) || data.round < 0 ||
+            !['idle', 'open', 'running', 'exhausted', 'won'].includes(data.phase) ||
+            !Array.isArray(data.drawn) || data.drawn.length > 75 || !data.drawn.every(number) ||
+            new Set(data.drawn).size !== data.drawn.length || !Number.isInteger(data.participants) ||
+            data.participants < 0 || data.participants > 1000 ||
+            (data.phase === 'won' && (typeof data.winner !== 'string' || !Array.isArray(data.card) ||
+                data.card.length !== 25 || !data.card.every(n => n === 0 || number(n)) ||
+                !Array.isArray(data.line) || data.line.length !== 5 || !data.line.every(n => n === 0 || data.drawn.includes(n))))) {
+            notify('No se pudo mostrar el bingo: estado inválido del servidor.');
+            return;
+        }
+        const previous = bingoState;
+        bingoState = data;
+        const widget = el('bingo-widget');
+        widget.hidden = !bingoShown || data.phase === 'idle';
+        widget.setAttribute('data-phase', data.phase);
+        el('bingo-count').textContent = `${data.drawn.length} / 75`;
+        el('bingo-participants').textContent = `${data.participants} cartones`;
+        el('bingo-status').textContent = data.phase === 'won' ? `¡Bingo! ${data.winner}` :
+            ({ idle: 'Esperando partida', open: 'Inscripciones abiertas', running: 'Una bola cada 10 s', exhausted: 'Todas las bolas sorteadas' })[data.phase];
+        el('bingo-help').textContent = data.phase === 'won' ? 'Línea verificada en el servidor' :
+            data.phase === 'open' ? 'Recibe tu cartón con !carton' : 'Fila, columna o diagonal: !bingo';
+        const latest = data.drawn.at(-1);
+        const ball = el('bingo-ball');
+        ball.textContent = latest ? bingoLabel(latest) : '—';
+        if (latest && (previous?.round !== data.round || previous?.drawn.at(-1) !== latest)) {
+            ball.style.animation = 'none'; void ball.offsetWidth; ball.style.animation = '';
+            ball.classList.add('bingo-ball-arrival');
+        }
+        for (let n = 1; n <= 75; n++) {
+            bingoCells[n].classList.toggle('called', data.drawn.includes(n));
+            bingoCells[n].classList.toggle('latest', n === latest);
+            bingoCells[n].setAttribute('aria-label', `${bingoLabel(n)}${data.drawn.includes(n) ? ', sorteado' : ', pendiente'}`);
+        }
+        el('bingo-history').textContent = data.drawn.length ? `Últimas: ${data.drawn.slice(-5).map(bingoLabel).join(' · ')}` : '75 bolas · Sin repeticiones · Centro libre';
+        const card = el('bingo-winning-card'); card.replaceChildren(); card.hidden = data.phase !== 'won';
+        if (data.phase === 'won') {
+            for (const letter of 'BINGO') {
+                const heading = document.createElement('b'); heading.textContent = letter; card.append(heading);
+            }
+            data.card.forEach(n => {
+                const cell = document.createElement('span'); cell.textContent = n === 0 ? '★' : String(n);
+                cell.classList.toggle('winning', data.line.includes(n));
+                card.append(cell);
+            });
+        }
     });
     const speeches = []; let speech = null, speechTimer;
     function stopSpeech() {

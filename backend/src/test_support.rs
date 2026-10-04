@@ -143,6 +143,7 @@ pub fn channel(
             follow_goal: AtomicU64::new(100),
             video_queue: Arc::new(RwLock::new(crate::queue::VideoQueue::new())),
             tts_tx,
+            bingo: Mutex::new(crate::bingo::Bingo::default()),
             sorteo: Arc::new(Mutex::new(SorteoState {
                 open: false,
                 participants: Vec::new(),

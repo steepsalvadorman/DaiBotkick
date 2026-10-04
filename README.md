@@ -34,6 +34,8 @@ Si el navegador bloquea autoplay, interactúa con la fuente de OBS. La pantalla 
 
 La topbar del overlay queda a 4 px del borde superior del lienzo y muestra el nombre del canal sin etiquetas de sistema. El panel `music` se despliega desde la barra cuando el reproductor autorizado tiene contenido visible y se repliega al vaciar la cola, ocultarlo o desconectarse. La transición se desactiva si el navegador solicita movimiento reducido.
 
+Las esquinas inferiores llevan dos discos vintage azul Aero parcialmente recortados, limitados a los últimos 42 px del lienzo para dejar libre el chat. Son decorativos, estáticos y no interceptan clics.
+
 Para usar el mouse, haz clic derecho en la fuente de navegador de OBS y selecciona **Interactuar**. Los botones de la topbar permiten mostrar/ocultar el reproductor sin parar el audio, alternar el chat (también con `?chat=0`), consultar la cola y ajustar el volumen de música (no el TTS). Escape cierra los menús. Estas preferencias son locales a esa fuente y se restablecen al recargar; no otorgan permisos de panel. La imagen compuesta de OBS no es una ventana interactiva encima del juego: los clics del juego no llegan al overlay.
 
 La fuente autorizada también puede reiniciar la canción actual, pausar/reanudar y pasar a la siguiente mediante el avance validado por ID y versión. El vinilo y las barras de la topbar se animan durante la reproducción (son decorativos, no un analizador de audio). Reiniciar conserva la pausa; el límite de diez minutos por video sigue contando durante las pausas. Una vista pública no puede usar estos controles.
@@ -48,13 +50,26 @@ La fuente autorizada también puede reiniciar la canción actual, pausar/reanuda
 | `!misongs` | Ver tus videos; 15 s por usuario |
 | `!dai TEXTO`, `!dalia TEXTO`, `!jorge TEXTO`, `!alex TEXTO` | TTS; cooldown compartido de 15 s |
 | `!dado`, `!8ball PREGUNTA` | Entretenimiento |
-| `!ruleta` | Ruleta virtual Aero: 6 casillas, 1 resultado perdedor, sin sanciones. Animación en el overlay; cooldown global de 15 segundos. |
+| `!ruleta` / `!bingo abrir` | Dueño: abrir un bingo de 75 bolas e inscripciones |
+| `!carton` | Generar y registrar un cartón 5×5; repetir devuelve el mismo cartón |
+| `!bingo iniciar` / `!bingo cancelar` | Dueño: cerrar inscripciones e iniciar bolas cada 10 s, o cancelar |
+| `!bingo` | Reclamar victoria: el servidor comprueba fila, columna o diagonal del cartón registrado |
 | `!participar` / `!sorteo` | Entrar al sorteo abierto |
 | `!uptime` | Tiempo desde el inicio real del stream, si está disponible |
 | `!seguidores` | Total y meta, si Kick proporciona ese dato |
 | `!discord`, `!redes`, `!pc`, `!horario`, `!comandos` | Información |
 
 Solo la identidad del broadcaster, verificada por su ID en el webhook firmado, puede usar `!von`, `!voff`, `!vstop`, `!skip` / `!next` y `!sorteo abrir|cerrar|ganador`. El skip modifica la cola en el backend incluso sin overlay conectado.
+
+### Bingo Aero
+
+El dueño abre con `!bingo abrir` (o `!ruleta`). Los participantes escriben `!carton` antes del inicio: el bot publica cinco filas en orden B-I-N-G-O, con `*` como centro libre. Las columnas usan los rangos 1–15, 16–30, 31–45, 46–60 y 61–75. Hay un único cartón por usuario, hasta 1000 participantes, y un cooldown compartido de 5 s para sus comandos de bingo.
+
+`!bingo iniciar` cierra inscripciones y saca una bola cada 10 segundos sin repetir, incluso sin OBS conectado. El overlay muestra un bombo de cristal, la última bola, cinco resultados recientes y las 75 casillas iluminadas; el botón `bingo` de la topbar permite ocultarlo localmente. Al reconectar recibe el estado completo.
+
+Para ganar se escribe **`!bingo`**, sin números ni nombre ajeno. El servidor verifica el cartón del autor contra las bolas realmente sorteadas y acepta únicamente la primera reclamación válida de fila, columna o diagonal. Detiene el sorteo, anuncia al ganador en chat y muestra su cartón con la línea ganadora resaltada. Una reclamación falsa explica el rechazo y no cambia la partida. Tras las 75 bolas aún se puede reclamar.
+
+`!bingo cancelar` limpia la partida; tras una victoria se puede abrir otra. Las partidas son temporales y por canal: **reiniciar el backend o reconectar la cuenta de Kick cancela la partida y sus cartones**. No se guardan en PostgreSQL ni otorgan premios o sanciones automáticamente.
 
 Las respuestas y la meta son campos por canal en PostgreSQL: `cmd_discord`, `cmd_redes`, `cmd_pc`, `cmd_horario`, `follow_goal`. Una reautorización conserva esos valores. No se leen de variables `CMD_*`.
 

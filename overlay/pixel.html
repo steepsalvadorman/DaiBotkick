@@ -27,6 +27,7 @@
             <span id="desktop-date" class="desktop-date">Cargando fecha…</span>
         </div>
         <span class="topbar-spacer"></span>
+        <button id="bingo-toggle" class="music-anchor" type="button" aria-pressed="true" aria-controls="bingo-widget" title="Mostrar u ocultar el bingo"><span class="aero-app-orb" aria-hidden="true">◉</span> bingo</button>
         <div id="music-transport" class="aero-control-cluster music-transport" role="group" aria-label="Reproducción musical" data-state="idle">
             <span class="vinyl-record" aria-hidden="true"></span>
             <span class="music-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
@@ -105,15 +106,20 @@
         </div>
     </section>
 
-    <section id="roulette-widget" hidden aria-label="Ruleta virtual Aero" aria-live="polite">
-        <div class="aero-window-title"><span class="aero-app-orb" aria-hidden="true">↻</span> Ruleta Aero <span class="roulette-caption">JUEGO VIRTUAL</span></div>
-        <div class="roulette-content">
-            <div class="roulette-wheel" id="roulette-wheel" aria-hidden="true"><span class="roulette-hub">AERO</span></div>
-            <div class="roulette-info">
-                <div id="roulette-user"></div>
-                <div id="roulette-result">Girando…</div>
-                <small>6 casillas · Sin sanciones</small>
+    <section id="bingo-widget" hidden aria-label="Bingo Aero">
+        <div class="aero-window-title"><span class="aero-app-orb" aria-hidden="true">◉</span> bingo <span id="bingo-count" class="bingo-caption">0 / 75</span></div>
+        <div class="bingo-content">
+            <div class="bingo-draw">
+                <div class="bingo-drum" aria-hidden="true"><i></i><i></i><i></i><span id="bingo-ball">—</span></div>
+                <div class="bingo-info" role="status">
+                    <strong id="bingo-status">Esperando partida</strong>
+                    <span id="bingo-participants">0 cartones</span>
+                    <small id="bingo-help">Tu cartón: !carton · Reclamar: !bingo</small>
+                </div>
             </div>
+            <div id="bingo-history" aria-label="Últimas bolas"></div>
+            <div id="bingo-board" aria-label="Tablero de bolas sorteadas"></div>
+            <div id="bingo-winning-card" hidden aria-label="Cartón ganador verificado"></div>
         </div>
     </section>
 
@@ -123,6 +129,8 @@
         <div class="tip"><span class="tip-label">ENVÍA UN SALUDO</span><b>!dai</b> / <b>!dalia</b> / <b>!jorge</b> / <b>!alex</b> + texto</div>
         <div class="tip"><span class="tip-label">SÍGUENOS</span><b class="kick-channel-url">kick.com/seniordai</b></div>
     </div>
+    <div class="corner-record corner-record-left" aria-hidden="true"><span class="corner-record-disc"><i></i></span></div>
+    <div class="corner-record corner-record-right" aria-hidden="true"><span class="corner-record-disc"><i></i></span></div>
     </main>
 
     <script src="/app.js"></script>

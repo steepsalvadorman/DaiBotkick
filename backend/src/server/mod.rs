@@ -53,6 +53,9 @@ pub fn setup(io: &socketioxide::SocketIo, global: Arc<AppState>) {
             let q = ch.video_queue.read().await;
             socket.emit("syncQueue", serde_json::json!({"items":q.items,"version":q.version})).ok();
             drop(q);
+            let bingo = ch.bingo.lock().await;
+            socket.emit("bingoState", bingo.snapshot()).ok();
+            drop(bingo);
             let followers = ch.followers_known.load(Ordering::Relaxed).then(|| ch.followers.load(Ordering::Relaxed));
             socket.emit("followersUpdate", serde_json::json!({"count":followers})).ok();
             let (dc, dg) = (ch.clone(), global.clone());

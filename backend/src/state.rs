@@ -39,6 +39,7 @@ pub struct ChannelState {
     pub video_queue: Arc<RwLock<VideoQueue>>,
     pub tts_tx: mpsc::Sender<tts::TtsQueueItem>,
     pub sorteo: Arc<Mutex<SorteoState>>,
+    pub bingo: Mutex<crate::bingo::Bingo>,
     pub cooldown: Arc<Mutex<CooldownManager>>,
     /// Textos de !discord, !redes, !pc y !horario; el streamer los cambia con !set.
     pub commands: RwLock<ChannelCommands>,

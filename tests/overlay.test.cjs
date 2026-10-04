@@ -145,6 +145,13 @@ test('top area is a single desktop bar without stream status cards', () => {
     assert.match(html, /id="stream-title-display"[^>]*>seniordai</);
     assert.match(html, /id="music-anchor"/);
 });
+test('vintage corner records are decorative and cannot capture mouse interaction', () => {
+    const html = fs.readFileSync(__dirname + '/../overlay/pixel.html', 'utf8');
+    const css = fs.readFileSync(__dirname + '/../overlay/style.css', 'utf8');
+    assert.match(html, /class="corner-record corner-record-left" aria-hidden="true"/);
+    assert.match(html, /class="corner-record corner-record-right" aria-hidden="true"/);
+    assert.match(css, /\.corner-record \{[^}]*height: 42px;[^}]*overflow: hidden;[^}]*pointer-events: none;/);
+});
 test('music unfolds only for the active visible queue and retracts on hide or disconnect', () => {
     const app = overlay();
     app.handlers.config({ channel_name: 'SeniorDai' });
@@ -164,27 +171,54 @@ test('music unfolds only for the active visible queue and retracts on hide or di
     assert.equal(app.get('media-widget').getAttribute('data-shown'), 'false');
     assert.equal(app.get('music-anchor').getAttribute('data-playing'), 'false');
 });
-test('roulette validates server results, animates and renders users as text', () => {
+test('bingo renders drawn numbers, preserves local visibility and verifies winner presentation safely', () => {
     const app = overlay();
-    app.handlers.rouletteResult({ user: '<img>', slot: 2, lost: false });
-    assert.equal(app.get('roulette-widget').hidden, false);
-    assert.equal(app.get('roulette-user').textContent, '<img>');
-    assert.equal(app.get('roulette-result').textContent, 'Girando…');
-    assert.equal(app.get('roulette-wheel').style['--roulette-angle'], '1320deg');
-    [...app.timers.values()].at(-1)();
-    assert.equal(app.get('roulette-result').textContent, 'Ganas esta ronda');
-    [...app.timers.values()].at(-1)();
-    assert.equal(app.get('roulette-widget').hidden, true);
-    app.handlers.rouletteResult({ user: 'viewer', slot: 0, lost: true });
-    [...app.timers.values()].at(-1)();
-    assert.equal(app.get('roulette-result').textContent, 'Pierdes esta ronda');
-    const count = app.timers.size;
-    app.handlers.rouletteResult({ slot: 9, lost: false });
-    app.handlers.rouletteResult({ slot: 1, lost: true });
-    assert.equal(app.timers.size, count);
+    const state = { round: 1, phase: 'open', drawn: [], participants: 2, winner: null, line: [], card: null };
+    app.handlers.bingoState(state);
+    assert.equal(app.get('bingo-widget').hidden, false);
+    assert.equal(app.get('bingo-board').children.length, 5);
+    assert.equal(app.get('bingo-board').children[0].children.length, 16);
+    assert.equal(app.get('bingo-status').textContent, 'Inscripciones abiertas');
+    app.handlers.bingoState({ ...state, phase: 'running', drawn: [1, 22, 75] });
+    assert.equal(app.get('bingo-ball').textContent, 'O-75');
+    assert.equal(app.get('bingo-count').textContent, '3 / 75');
+    assert.equal(app.get('bingo-board').children[0].children[1].classList.contains('called'), true);
+    assert.equal(app.get('bingo-board').children[4].children[15].classList.contains('latest'), true);
+    app.get('bingo-toggle').listeners.click();
+    app.handlers.bingoState({ ...state, phase: 'running', drawn: [1, 22, 75, 34] });
+    assert.equal(app.get('bingo-widget').hidden, true);
+    app.get('bingo-toggle').listeners.click();
+    assert.equal(app.get('bingo-widget').hidden, false);
+    const card = Array.from({ length: 25 }, (_, i) => (i % 5) * 15 + Math.floor(i / 5) + 1);
+    card[12] = 0;
+    const line = card.slice(0, 5);
+    app.handlers.bingoState({ ...state, phase: 'won', drawn: line, winner: '<img>', card, line });
+    assert.equal(app.get('bingo-status').textContent, '¡Bingo! <img>');
+    assert.equal(app.get('bingo-winning-card').hidden, false);
+    assert.equal(app.get('bingo-winning-card').children.length, 30);
+    assert.equal(app.get('bingo-winning-card').children.filter(cell => cell.classList.contains('winning')).length, 5);
+    app.handlers.bingoState({ ...state, round: 2 });
+    assert.equal(app.get('bingo-winning-card').hidden, true);
+    assert.equal(app.get('bingo-ball').textContent, '—');
+    assert.equal(app.get('bingo-board').children[0].children[1].classList.contains('called'), false);
     app.handlers.disconnect('transport close');
-    assert.equal(app.get('roulette-widget').hidden, true);
-    assert.equal(app.timers.size, 0);
+    assert.equal(app.get('bingo-widget').hidden, true);
+    assert.equal(app.emitted.length, 0);
+});
+test('bingo rejects invalid numbers and winners and restores a public view from a snapshot', () => {
+    const app = overlay('');
+    const state = { round: 3, phase: 'running', drawn: [5, 30], participants: 1 };
+    app.handlers.bingoState(state);
+    assert.equal(app.get('bingo-ball').textContent, 'I-30');
+    for (const data of [{ ...state, drawn: [5, 5] }, { ...state, drawn: [76] },
+        { ...state, phase: 'won', card: [], line: [], winner: 'fake' }, { ...state, participants: -1 }]) {
+        app.handlers.bingoState(data);
+        assert.equal(app.get('bingo-ball').textContent, 'I-30');
+        assert.match(app.context.document.body.children[0].textContent, /bingo.*inválido/);
+    }
+    app.handlers.bingoState({ ...state, phase: 'idle', drawn: [] });
+    assert.equal(app.get('bingo-widget').hidden, true);
+    assert.equal(app.emitted.length, 0);
 });
 test('public overlay cannot play media, TTS or emit queue advances', () => {
     const app = overlay('');

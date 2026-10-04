@@ -33,6 +33,7 @@ pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) -> Result<(),
         follow_goal: AtomicU64::new(row.follow_goal.max(0) as u64),
         video_queue: Arc::new(RwLock::new(queue)),
         tts_tx,
+        bingo: Mutex::new(crate::bingo::Bingo::default()),
         sorteo: Arc::new(Mutex::new(SorteoState {
             open: false,
             participants: Vec::new(),

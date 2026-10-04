@@ -381,7 +381,12 @@ pub async fn handle(
         } else {
             cmd_low.trim_start_matches('!').to_string()
         };
-        tts::enqueue(ch, text, &voice);
+        if !tts::enqueue_chat(ch, username, text, &voice) {
+            sender::send(
+                "No se pudo agregar tu mensaje de voz: usa hasta 350 caracteres y vuelve a intentar si la cola está llena.",
+                ch, global,
+            ).await;
+        }
     }
 }
 

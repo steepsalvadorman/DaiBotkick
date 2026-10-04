@@ -8,9 +8,41 @@ pub struct TtsQueueItem {
     pub voice: String,
 }
 pub fn enqueue(ch: &crate::state::ChannelState, text: &str, voice: &str) -> bool {
+    enqueue_with_limit(ch, text, voice, 350)
+}
+
+pub fn enqueue_chat(
+    ch: &crate::state::ChannelState,
+    username: &str,
+    text: &str,
+    voice: &str,
+) -> bool {
+    if text.trim().is_empty() || text.chars().count() > 350 {
+        return false;
+    }
+    let name: String = username
+        .chars()
+        .take(40)
+        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+        .collect();
+    let name = name.split_whitespace().collect::<Vec<_>>().join(" ");
+    let name = if name.is_empty() {
+        "Un participante"
+    } else {
+        &name
+    };
+    enqueue_with_limit(ch, &format!("{name} dice: {}", text.trim()), voice, 397)
+}
+
+fn enqueue_with_limit(
+    ch: &crate::state::ChannelState,
+    text: &str,
+    voice: &str,
+    limit: usize,
+) -> bool {
     if ch.cancel.is_cancelled()
         || text.trim().is_empty()
-        || text.chars().count() > 350
+        || text.chars().count() > limit
         || !edge_tts::is_valid_voice(voice)
     {
         return false;
@@ -110,6 +142,61 @@ pub async fn spawn_processor(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn chat_voices_announce_author_without_truncating_message_or_changing_alerts() {
+        let (channel, mut receiver) = crate::test_support::channel("alpha", 1);
+        for &(voice, _) in edge_tts::VOICES {
+            assert!(enqueue_chat(&channel, "Senior_Dai", " Hola mundo ", voice));
+            let item = receiver.recv().await.unwrap();
+            assert_eq!(item.text, "Senior Dai dice: Hola mundo");
+            assert_eq!(item.voice, voice);
+        }
+        let message = "ñ".repeat(350);
+        assert!(enqueue_chat(&channel, &"a".repeat(60), &message, "camila"));
+        let item = receiver.recv().await.unwrap();
+        assert_eq!(item.text, format!("{} dice: {message}", "a".repeat(40)));
+        assert_eq!(item.text.chars().count(), 397);
+        assert!(!enqueue_chat(
+            &channel,
+            "viewer",
+            &"x".repeat(351),
+            "camila"
+        ));
+        assert!(!enqueue_chat(&channel, "viewer", " ", "camila"));
+        assert!(!enqueue_chat(&channel, "viewer", "Hola", "unknown"));
+        assert!(enqueue_chat(&channel, "___", "Hola", "camila"));
+        assert_eq!(
+            receiver.recv().await.unwrap().text,
+            "Un participante dice: Hola"
+        );
+        assert!(enqueue(&channel, "Gracias por el follow", "dalia"));
+        assert_eq!(receiver.recv().await.unwrap().text, "Gracias por el follow");
+    }
+
+    #[tokio::test]
+    async fn chat_command_aliases_all_include_the_sender() {
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .connect_lazy("postgres://unused:unused@127.0.0.1/unused")
+            .unwrap();
+        let app = crate::test_support::app(pool);
+        let (channel, mut receiver) = crate::test_support::channel("alpha", 1);
+        *channel.channel_id.write().await = None;
+        for (command, voice) in [
+            ("!s", "camila"),
+            ("!dai", "camila"),
+            ("!camila", "camila"),
+            ("!jacinta", "jacinta"),
+            ("!dalia", "dalia"),
+            ("!jorge", "jorge"),
+            ("!alex", "alex"),
+        ] {
+            crate::commands::handle("Ana_7", &format!("{command} Hola"), true, &channel, &app)
+                .await;
+            let item = receiver.try_recv().unwrap();
+            assert_eq!(item.text, "Ana 7 dice: Hola");
+            assert_eq!(item.voice, voice);
+        }
+    }
     #[tokio::test]
     async fn tts_rejects_long_invalid_and_excess_requests() {
         let (channel, _receiver) = crate::test_support::channel("alpha", 1);

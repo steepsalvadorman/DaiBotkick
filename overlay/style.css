@@ -567,9 +567,17 @@ body { color: #f5f4f8; }
 }
 .msg-text {
     margin-top: 5px;
+    font-family: 'DM Sans', 'Segoe UI', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
     font-size: 23px;
     line-height: 1.2;
     text-shadow: var(--outline);
+}
+.chat-emote {
+    display: inline-block;
+    width: 1.25em;
+    height: 1.25em;
+    object-fit: contain;
+    vertical-align: -.25em;
 }
 
 #media-widget {

@@ -9,6 +9,7 @@ function overlay(hash = '#token=private', search = '?ch=alpha', options = {}) {
         addEventListener(name, callback) { this.listeners[name] = callback; }
         append(...nodes) { for (const node of nodes) { node.parent = this; this.children.push(node); } }
         replaceChildren(...nodes) { this.children = []; this.append(...nodes); }
+        replaceWith(node) { const index = this.parent.children.indexOf(this); this.parent.children.splice(index, 1, node); node.parent = this.parent; }
         get firstChild() { return this.children[0]; }
         remove() { this.parent.children.splice(this.parent.children.indexOf(this), 1); }
         setAttribute(name, value) { this.attributes[name] = value; }
@@ -97,6 +98,25 @@ test('external chat, config and titles are rendered as literal text', () => {
     app.handlers.playbackRole({ active: true });
     app.handlers.syncQueue({ items: [item('one')], version: 1 });
     assert.match(app.get('video-title').children[0].textContent, /<img/);
+});
+test('chat preserves Unicode emoji and renders Kick emotes safely with explicit image failure fallback', () => {
+    const app = overlay();
+    const emoji = 'Hola 😀 💙 👨‍👩‍👧‍👦';
+    app.handlers.chatMessage({ user: 'viewer', content: emoji });
+    assert.equal(app.get('chat-messages').children[0].children[1].textContent, emoji);
+    app.handlers.chatMessage({ user: 'viewer', content: 'Hola [emote:37226:KEKW] 😀 [emote:4148074:<img>] fin' });
+    const text = app.get('chat-messages').children[1].children[1];
+    assert.equal(text.children[0].textContent, 'Hola ');
+    assert.equal(text.children[1].src, 'https://files.kick.com/emotes/37226/fullsize');
+    assert.equal(text.children[1].alt, 'KEKW');
+    assert.equal(text.children[2].textContent, ' 😀 ');
+    assert.equal(text.children[3].alt, '<img>');
+    assert.equal(text.children[4].textContent, ' fin');
+    text.children[1].listeners.error();
+    assert.equal(text.children[1].textContent, ':KEKW:');
+    assert.match(app.context.document.body.children[0].textContent, /No se pudo cargar el emote KEKW/);
+    app.handlers.chatMessage({ user: 'viewer', content: '[emote:https://evil.example:x] <script>' });
+    assert.equal(app.get('chat-messages').children[2].children[1].textContent, '[emote:https://evil.example:x] <script>');
 });
 test('topbar controls toggle local panels, chat and player without changing queue permissions', () => {
     const app = overlay('#token=private', '?ch=alpha&chat=0');

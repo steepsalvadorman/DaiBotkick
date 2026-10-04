@@ -36,6 +36,8 @@ La topbar del overlay queda a 4 px del borde superior del lienzo y muestra el no
 
 Las esquinas inferiores llevan dos discos vintage azul Aero parcialmente recortados, limitados a los últimos 42 px del lienzo para dejar libre el chat. Son decorativos, estáticos y no interceptan clics.
 
+El chat conserva emojis Unicode y convierte los emotes de Kick (`[emote:ID:NOMBRE]`) en imágenes del CDN oficial, incluidos emotes animados. Si una imagen falla, muestra su nombre y un aviso. El resto del mensaje se renderiza como texto, nunca como HTML.
+
 Para usar el mouse, haz clic derecho en la fuente de navegador de OBS y selecciona **Interactuar**. Los botones de la topbar permiten mostrar/ocultar el reproductor sin parar el audio, alternar el chat (también con `?chat=0`), consultar la cola y ajustar el volumen de música (no el TTS). Escape cierra los menús. Estas preferencias son locales a esa fuente y se restablecen al recargar; no otorgan permisos de panel. La imagen compuesta de OBS no es una ventana interactiva encima del juego: los clics del juego no llegan al overlay.
 
 La fuente autorizada también puede reiniciar la canción actual, pausar/reanudar y pasar a la siguiente mediante el avance validado por ID y versión. El vinilo y las barras de la topbar se animan durante la reproducción (son decorativos, no un analizador de audio). Reiniciar conserva la pausa; el límite de diez minutos por video sigue contando durante las pausas. Una vista pública no puede usar estos controles.
@@ -48,7 +50,7 @@ La fuente autorizada también puede reiniciar la canción actual, pausar/reanuda
 | `!cola` | Ver próximos videos; 30 s global |
 | `!quitarme` | Quitar tu primer video |
 | `!misongs` | Ver tus videos; 15 s por usuario |
-| `!dai TEXTO`, `!dalia TEXTO`, `!jorge TEXTO`, `!alex TEXTO` | TTS; cooldown compartido de 15 s |
+| `!dai TEXTO`, `!dalia TEXTO`, `!jorge TEXTO`, `!alex TEXTO` | TTS: «usuario dice: texto»; cooldown compartido de 15 s |
 | `!dado`, `!8ball PREGUNTA` | Entretenimiento |
 | `!ruleta` / `!bingo abrir` | Dueño: abrir un bingo de 75 bolas e inscripciones |
 | `!carton` | Generar y registrar un cartón 5×5; repetir devuelve el mismo cartón |
@@ -74,6 +76,8 @@ Para ganar se escribe **`!bingo`**, sin números ni nombre ajeno. El servidor ve
 Las respuestas y la meta son campos por canal en PostgreSQL: `cmd_discord`, `cmd_redes`, `cmd_pc`, `cmd_horario`, `follow_goal`. Una reautorización conserva esos valores. No se leen de variables `CMD_*`.
 
 Se aceptan videos directos MP4/WebM/MOV/M4V por HTTPS, con validación de URL y rechazo de direcciones locales literales. Un host DNS externo puede resolver o redirigir a otra dirección; usa enlaces de proveedores de confianza. La cola admite 100 elementos. TTS admite 350 caracteres, 32 pendientes por canal y dos síntesis simultáneas en el proceso. La síntesis tiene timeout de 30 s; la caché conserva hasta aproximadamente 256 archivos durante 24 h y puede regenerarse.
+
+Todos los comandos de voz del chat (incluidos `!s`, `!camila` y `!jacinta`) anuncian al autor con «usuario dice: mensaje» en la voz elegida. Para pronunciarlo, se utilizan hasta 40 caracteres del nombre y se sustituyen separadores y símbolos por espacios. El prefijo no consume los 350 caracteres del mensaje. Las alertas automáticas y el TTS del panel conservan su texto original.
 
 ## Desarrollo local
 

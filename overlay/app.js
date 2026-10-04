@@ -238,11 +238,32 @@
         renderQueue(); closePanels();
         if (reason === 'io server disconnect') socket.connect();
     });
+    function renderChatContent(target, content) {
+        const pattern = /\[emote:(\d{1,20}):([^\]\r\n]{1,100})\]/g;
+        let offset = 0;
+        for (const match of content.matchAll(pattern)) {
+            target.append(document.createTextNode(content.slice(offset, match.index)));
+            const image = document.createElement('img');
+            image.className = 'chat-emote';
+            image.alt = match[2]; image.title = match[2];
+            image.src = `https://files.kick.com/emotes/${match[1]}/fullsize`;
+            image.referrerPolicy = 'no-referrer';
+            image.addEventListener('error', () => {
+                image.replaceWith(document.createTextNode(`:${match[2]}:`));
+                notify(`No se pudo cargar el emote ${match[2]} de Kick.`);
+            }, { once: true });
+            target.append(image);
+            offset = match.index + match[0].length;
+        }
+        if (offset === 0) target.textContent = content;
+        else target.append(document.createTextNode(content.slice(offset)));
+    }
     socket.on('chatMessage', data => {
         el('chat-empty').hidden = true;
         const item = document.createElement('div'); item.className = 'msg';
         const user = document.createElement('div'); user.className = 'msg-user'; user.textContent = `▶ ${data.user || ''}`;
-        const text = document.createElement('div'); text.className = 'msg-text'; text.textContent = data.content || '';
+        const text = document.createElement('div'); text.className = 'msg-text';
+        renderChatContent(text, typeof data.content === 'string' ? data.content : '');
         item.append(user, text); const body = el('chat-messages'); body.append(item);
         while (body.children.length > 4) body.firstChild.remove();
     });

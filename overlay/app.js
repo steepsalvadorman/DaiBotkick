@@ -17,58 +17,8 @@
             weekday: 'long', day: 'numeric', month: 'long',
         }).format(now);
     }
-    function weatherSummary(code, isDay) {
-        if (code === 0) return [isDay ? '☀' : '☾', 'Despejado'];
-        if (code === 1) return [isDay ? '🌤' : '☁', 'Mayormente despejado'];
-        if (code === 2) return ['⛅', 'Parcialmente nublado'];
-        if (code === 3) return ['☁', 'Nublado'];
-        if (code === 45 || code === 48) return ['〰', 'Neblina'];
-        if (code >= 51 && code <= 57) return ['☂', 'Llovizna'];
-        if (code >= 61 && code <= 67) return ['☂', 'Lluvia'];
-        if (code >= 71 && code <= 77) return ['❄', 'Nieve'];
-        if (code >= 80 && code <= 82) return ['☂', 'Chubascos'];
-        if (code === 85 || code === 86) return ['❄', 'Chubascos de nieve'];
-        if (code >= 95) return ['ϟ', 'Tormenta'];
-        return ['◌', 'Clima variable'];
-    }
-    async function loadWeather() {
-        if (!navigator.geolocation) {
-            el('weather-description').textContent = 'Ubicación no disponible';
-            el('weather-note').textContent = 'La fuente del navegador no permite geolocalización';
-            return;
-        }
-        el('weather-note').textContent = 'Esperando permiso de ubicación…';
-        navigator.geolocation.getCurrentPosition(async position => {
-            try {
-                const { latitude, longitude } = position.coords;
-                const url = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}&current=temperature_2m,weather_code,is_day&timezone=auto`;
-                const response = await fetch(url);
-                if (!response.ok) throw new Error(`Clima no disponible (${response.status})`);
-                const current = (await response.json()).current;
-                if (!current || !Number.isFinite(current.temperature_2m) || !Number.isFinite(current.weather_code)) {
-                    throw new Error('La respuesta del clima está incompleta');
-                }
-                const [symbol, description] = weatherSummary(current.weather_code, current.is_day !== 0);
-                el('weather-symbol').textContent = symbol;
-                el('weather-description').textContent = description;
-                el('weather-temperature').textContent = `${Math.round(current.temperature_2m)}°`;
-                el('weather-place').textContent = 'TU UBICACIÓN';
-                el('weather-note').textContent = 'DATOS ACTUALES · OPEN-METEO';
-            } catch (error) {
-                el('weather-description').textContent = 'Clima no disponible';
-                el('weather-note').textContent = 'Revisa la conexión e inténtalo más tarde';
-            }
-        }, error => {
-            el('weather-description').textContent = 'Ubicación no disponible';
-            el('weather-note').textContent = error.code === 1
-                ? 'Permite la ubicación en las propiedades del navegador'
-                : 'No se pudo determinar la ubicación del dispositivo';
-        }, { enableHighAccuracy: false, maximumAge: 600000, timeout: 15000 });
-    }
     updateClock();
-    loadWeather();
     setInterval(updateClock, 1000);
-    setInterval(loadWeather, 1800000);
     function fit() {
         const scale = Math.min(innerWidth / 1920, innerHeight / 1080);
         document.body.style.transform = `scale(${scale})`;

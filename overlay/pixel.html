@@ -13,10 +13,12 @@
 <body>
 
     <main aria-label="Overlay del stream">
-    <!-- Una única barra de escritorio: canal, reloj, clima y controles del sistema -->
+    <!-- Una única barra de escritorio: foto del canal, reloj y controles -->
     <header id="hud" class="system-topbar" aria-label="Barra superior del escritorio">
         <div class="topbar-start">
-            <span class="brand-mark" aria-hidden="true">GR</span>
+            <img class="brand-mark channel-avatar" id="channel-avatar"
+                 src="https://files.kick.com/images/user/19296849/profile_image/conversion/a7442606-c033-4d1b-a6a2-d1fa33e5c321-fullsize.webp"
+                 alt="Foto de perfil de SeniorDai">
             <span class="topbar-system-name">AERO<span>OS</span></span>
         </div>
         <span class="topbar-divider" aria-hidden="true"></span>
@@ -28,15 +30,6 @@
         <div class="topbar-clock">
             <time id="desktop-clock" class="desktop-clock">00:00</time>
             <span id="desktop-date" class="desktop-date">Cargando fecha…</span>
-        </div>
-        <span class="topbar-divider" aria-hidden="true"></span>
-        <div class="topbar-weather" aria-label="Clima local">
-            <span class="weather-symbol" id="weather-symbol" aria-hidden="true">◌</span>
-            <span class="weather-copy">
-                <span class="weather-description" id="weather-description">Consultando el clima…</span>
-                <span class="weather-note" id="weather-note">Permite la ubicación del dispositivo</span>
-            </span>
-            <span class="weather-temperature" id="weather-temperature">--°</span>
         </div>
         <span class="topbar-spacer"></span>
         <div class="topbar-tray" aria-label="Estado del sistema">
@@ -89,14 +82,6 @@
         <div class="tip"><span class="tip-label">PIDE MÚSICA</span>Escribe <b>!play</b> + link de YouTube</div>
         <div class="tip"><span class="tip-label">ENVÍA UN SALUDO</span><b>!dai</b> / <b>!dalia</b> / <b>!jorge</b> / <b>!alex</b> + texto</div>
         <div class="tip"><span class="tip-label">SÍGUENOS</span><b class="kick-channel-url">kick.com/seniordai</b></div>
-    </div>
-    <div id="desktop-dock" aria-label="Barra del escritorio">
-        <span class="dock-logo">GR</span>
-        <span class="dock-separator"></span>
-        <span class="dock-app active"><i class="dock-app-icon">◷</i> STREAM</span>
-        <span class="dock-app"><i class="dock-app-icon">☼</i> CLIMA</span>
-        <span class="dock-app"><i class="dock-app-icon">♫</i> MÚSICA</span>
-        <span class="dock-system"><span class="system-dot"></span> SISTEMA EN LÍNEA</span>
     </div>
     </main>
 

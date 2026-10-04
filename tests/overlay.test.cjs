@@ -32,9 +32,9 @@ function overlay(hash = '#token=private', search = '?ch=alpha', options = {}) {
         io: options => { context.options = options; return socket; }, addEventListener() {},
         setTimeout(fn) { timers.set(++timerId, fn); return timerId; }, clearTimeout(id) { timers.delete(id); }, setInterval(fn, delay) { (context.intervals ||= []).push({ fn, delay }); intervalCallback = fn; },
         Audio: class extends Element { constructor(src) { super(); this.src = src; audios.push(this); } },
-        YT: { PlayerState: { PLAYING: 1, ENDED: 0 }, Player: class {
+        YT: { PlayerState: { PLAYING: 1, PAUSED: 2, ENDED: 0 }, Player: class {
             constructor(target, options) { this.options = options; players.push(this); }
-            destroy() { this.destroyed = true; } playVideo() {} setVolume() {}
+            destroy() { this.destroyed = true; } playVideo() { this.paused = false; } pauseVideo() { this.paused = true; } seekTo(time) { this.time = time; } setVolume() {}
         } },
     };
     context.window = context;
@@ -43,6 +43,52 @@ function overlay(hash = '#token=private', search = '?ch=alpha', options = {}) {
 }
 const item = (id, url = 'https://cdn.example/video.mp4') => ({ id, title: '<img src=x onerror=alert(1)>', user: 'viewer', url });
 
+test('music transport pauses, resumes, restarts and skips direct media safely', async () => {
+    const app = overlay();
+    app.handlers.playbackRole({ active: true });
+    app.handlers.syncQueue({ items: [item('one')], version: 1 });
+    const video = app.get('direct-video');
+    video.onplaying();
+    assert.equal(app.get('music-transport').getAttribute('data-state'), 'playing');
+    app.get('music-pause').listeners.click();
+    assert.equal(video.paused, true);
+    assert.equal(app.get('music-transport').getAttribute('data-state'), 'paused');
+    video.currentTime = 40;
+    app.get('music-restart').listeners.click();
+    assert.equal(video.currentTime, 0);
+    assert.equal(video.paused, true);
+    app.get('music-pause').listeners.click();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(video.paused, false);
+    video.onplaying();
+    app.get('music-next').listeners.click();
+    app.get('music-next').listeners.click();
+    assert.equal(app.emitted.length, 1);
+    assert.equal(app.emitted[0][1].id, 'one');
+    app.handlers.disconnect('transport close');
+    assert.equal(app.get('music-pause').disabled, true);
+    assert.equal(app.get('music-transport').getAttribute('data-state'), 'idle');
+});
+test('YouTube transport uses player methods and public transport remains disabled', async () => {
+    const app = overlay();
+    app.handlers.playbackRole({ active: true });
+    app.handlers.syncQueue({ items: [{ ...item('yt'), videoId: 'dQw4w9WgXcQ' }], version: 1 });
+    await new Promise(resolve => setImmediate(resolve));
+    const player = app.players[0];
+    player.options.events.onReady({ target: player });
+    player.options.events.onStateChange({ data: 1 });
+    app.get('music-pause').listeners.click();
+    assert.equal(player.paused, true);
+    app.get('music-restart').listeners.click();
+    assert.equal(player.time, 0);
+    app.get('music-pause').listeners.click();
+    assert.equal(player.paused, false);
+    const publicApp = overlay('');
+    publicApp.handlers.syncQueue({ items: [item('one')], version: 1 });
+    publicApp.get('music-next').listeners.click();
+    assert.equal(publicApp.emitted.length, 0);
+    assert.equal(publicApp.get('music-pause').disabled, true);
+});
 test('external chat, config and titles are rendered as literal text', () => {
     const app = overlay();
     app.handlers.config({ channel_name: '<script>', kick_url: 'kick.com/a' });

@@ -33,7 +33,50 @@
     let active = false, queue = [], version = 0, playingId = null, pending = false, visible = true;
     let player = null, timer, retry, generation = 0, apiPromise;
     let musicShown = true, musicVolume = 25;
+    let mediaReady = false, paused = false, actuallyPlaying = false;
     const media = el('media-widget'), youtube = el('youtube-player'), direct = el('direct-video');
+    function updateTransport() {
+        const usable = Boolean(active && queue.length && playingId === queue[0].id && mediaReady);
+        el('music-restart').disabled = !usable || pending;
+        el('music-pause').disabled = !usable || pending;
+        el('music-next').disabled = !active || !queue.length || pending;
+        el('music-transport').setAttribute('data-state', usable && actuallyPlaying && !paused ? 'playing' : usable ? 'paused' : 'idle');
+        const label = paused ? 'Reanudar' : 'Pausar';
+        el('music-pause').setAttribute('aria-label', label);
+        el('music-pause').setAttribute('title', label);
+        el('music-pause-icon').setAttribute('d', paused ? 'M7 4l14 8-14 8Z' : 'M6 5h4v14H6Zm8 0h4v14h-4Z');
+    }
+    async function resumeMedia() {
+        paused = false;
+        updateTransport();
+        if (queue[0]?.videoId) player.playVideo();
+        else {
+            const run = generation;
+            try { await direct.play(); }
+            catch (error) {
+                if (run !== generation) return;
+                paused = true; actuallyPlaying = false; updateTransport();
+                notify(`No se pudo reanudar la música: ${error.message}`);
+            }
+        }
+    }
+    el('music-pause').addEventListener('click', () => {
+        if (el('music-pause').disabled) return;
+        if (paused) { resumeMedia(); return; }
+        paused = true; actuallyPlaying = false;
+        if (queue[0]?.videoId) player.pauseVideo(); else direct.pause();
+        updateTransport();
+    });
+    el('music-restart').addEventListener('click', () => {
+        if (el('music-restart').disabled) return;
+        if (queue[0]?.videoId) player.seekTo(0, true); else direct.currentTime = 0;
+    });
+    el('music-next').addEventListener('click', () => {
+        if (!el('music-next').disabled) finish(playingId);
+    });
+    direct.onplaying = () => { if (active && playingId) { actuallyPlaying = true; paused = false; updateTransport(); } };
+    direct.onpause = () => { actuallyPlaying = false; updateTransport(); };
+    direct.onwaiting = () => { actuallyPlaying = false; updateTransport(); };
     el('chat-toggle').addEventListener('click', () => {
         chatShown = !chatShown;
         document.body.classList.toggle('no-chat', !chatShown);
@@ -91,10 +134,12 @@
     }
     renderQueue();
     function stop() {
+        mediaReady = false; paused = false; actuallyPlaying = false;
         generation++; clearTimeout(timer); clearTimeout(retry);
         direct.onended = direct.onerror = null; direct.pause(); direct.removeAttribute('src'); direct.load();
         if (player) { player.destroy(); player = null; }
         youtube.replaceChildren(); playingId = null; pending = false;
+        updateTransport();
     }
     function display() {
         const shown = Boolean(queue.length && visible && active && musicShown);
@@ -103,6 +148,7 @@
         el('music-anchor').setAttribute('data-playing', String(shown));
         el('queue-indicator').style.display = queue.length > 1 ? 'inline-block' : 'none';
         el('queue-indicator').textContent = `+${Math.max(0, queue.length - 1)} EN COLA`;
+        updateTransport();
     }
     function loadAPI() {
         if (window.YT?.Player) return Promise.resolve();
@@ -118,7 +164,7 @@
     }
     function finish(id) {
         if (!active || pending || playingId !== id || queue[0]?.id !== id || !socket.connected) return;
-        pending = true; socket.emit('advanceQueue', { id, version });
+        pending = true; updateTransport(); socket.emit('advanceQueue', { id, version });
         retry = setTimeout(() => { pending = false; finish(id); }, 5000);
     }
     async function playHead() {
@@ -138,10 +184,13 @@
                     width: '100%', height: '100%', videoId: item.videoId,
                     playerVars: { autoplay: 1, playsinline: 1, controls: 0, rel: 0, origin: location.origin },
                     events: {
-                        onReady: event => { if (run === generation) { event.target.setVolume(musicVolume); event.target.playVideo(); } },
+                        onReady: event => { if (run === generation) { mediaReady = true; updateTransport(); event.target.setVolume(musicVolume); event.target.playVideo(); } },
                         onStateChange: event => {
                             if (run !== generation) return;
-                            if (event.data === YT.PlayerState.PLAYING) notify('');
+                            actuallyPlaying = event.data === YT.PlayerState.PLAYING;
+                            if (actuallyPlaying) { paused = false; notify(''); }
+                            if (event.data === YT.PlayerState.PAUSED) paused = true;
+                            updateTransport();
                             if (event.data === YT.PlayerState.ENDED) finish(item.id);
                         },
                         onError: () => { if (run === generation) finish(item.id); },
@@ -151,6 +200,7 @@
             } catch (error) { if (run === generation) { notify(error.message); finish(item.id); } }
         } else if (item.url) {
             youtube.style.display = 'none'; direct.style.display = 'block'; direct.src = item.url; direct.volume = musicVolume / 100;
+            mediaReady = true; updateTransport();
             direct.onended = direct.onerror = () => finish(item.id);
             try { await direct.play(); } catch (error) {
                 if (run !== generation) return;
@@ -179,7 +229,7 @@
     socket.on('toggleVideo', data => { visible = Boolean(data.showVideo); display(); });
     socket.on('playerAvailable', () => { if (token && !active) { socket.disconnect(); socket.connect(); } });
     socket.on('channelError', message => notify(String(message)));
-    socket.on('operationError', message => { clearTimeout(retry); pending = false; notify(String(message)); });
+    socket.on('operationError', message => { clearTimeout(retry); pending = false; updateTransport(); notify(String(message)); });
     socket.on('connect_error', () => notify('Sin conexión. Reintentando...'));
     socket.on('connect', () => { version = 0; notify('Conectado. Sincronizando...'); });
     socket.on('disconnect', reason => {
@@ -244,7 +294,9 @@
         if (!active || typeof data.audioBase64 !== 'string' || data.audioBase64.length > 6 * 1024 * 1024 || speeches.length >= 32) return;
         speeches.push(data.audioBase64); playSpeech();
     });
-    addEventListener('pointerdown', () => {
-        if (active) { player?.playVideo(); if (direct.getAttribute('src')) direct.play().catch(() => {}); playSpeech(); }
+    addEventListener('pointerdown', event => {
+        if (event.target?.closest('button, input')) return;
+        if (active) { if (mediaReady && !paused) resumeMedia(); playSpeech(); }
     });
+    updateTransport();
 })();

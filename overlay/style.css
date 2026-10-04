@@ -55,6 +55,53 @@ body {
     background: linear-gradient(180deg, rgba(4, 22, 46, 0.5), rgba(86, 149, 193, 0.12));
     box-shadow: inset 0 2px 4px rgba(0, 8, 24, 0.35), 0 1px 0 rgba(202, 233, 255, 0.16);
 }
+.music-transport { gap: 4px; }
+.vinyl-record {
+    position: relative;
+    width: 29px;
+    height: 29px;
+    margin: 0 4px;
+    border: 1px solid #83abc7;
+    border-radius: 50%;
+    background:
+        repeating-radial-gradient(circle, transparent 0 2px, rgba(155, 182, 202, 0.2) 2px 3px),
+        conic-gradient(#14202c, #6b8090, #0c1723, #415363, #14202c);
+    box-shadow: inset 0 1px 2px #becfda, 0 2px 4px #061424;
+    animation: vinyl-spin 3s linear infinite;
+    animation-play-state: paused;
+}
+.vinyl-record::after {
+    position: absolute;
+    inset: 9px;
+    border: 2px solid #81d3f5;
+    border-radius: 50%;
+    background: #173c65;
+    content: "";
+}
+.music-bars { display: flex; align-items: end; gap: 2px; height: 19px; margin-right: 5px; }
+.music-bars i {
+    width: 3px;
+    height: 16px;
+    border-radius: 2px;
+    background: linear-gradient(#d4f7ff, #52b6e4);
+    box-shadow: 0 0 5px rgba(107, 217, 255, 0.4);
+    transform-origin: bottom;
+    animation: music-bars 0.7s ease-in-out infinite alternate;
+    animation-play-state: paused;
+}
+.music-bars i:nth-child(2) { height: 11px; animation-delay: -0.3s; }
+.music-bars i:nth-child(3) { height: 19px; animation-delay: -0.5s; }
+.music-bars i:nth-child(4) { height: 9px; animation-delay: -0.1s; }
+.music-transport[data-state="playing"] .vinyl-record,
+.music-transport[data-state="playing"] .music-bars i { animation-play-state: running; }
+.music-transport[data-state="idle"] .vinyl-record,
+.music-transport[data-state="idle"] .music-bars { opacity: 0.45; }
+.topbar-button.aero-icon-button:disabled { opacity: 0.4; cursor: default; filter: saturate(0.3); }
+@keyframes vinyl-spin { to { transform: rotate(360deg); } }
+@keyframes music-bars { to { transform: scaleY(0.3); } }
+@media (prefers-reduced-motion: reduce) {
+    .vinyl-record, .music-bars i { animation: none; }
+}
 .topbar-button.aero-icon-button {
     position: relative;
     display: grid;

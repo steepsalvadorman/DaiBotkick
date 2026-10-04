@@ -27,6 +27,13 @@
             <span id="desktop-date" class="desktop-date">Cargando fecha…</span>
         </div>
         <span class="topbar-spacer"></span>
+        <div id="music-transport" class="aero-control-cluster music-transport" role="group" aria-label="Reproducción musical" data-state="idle">
+            <span class="vinyl-record" aria-hidden="true"></span>
+            <span class="music-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+            <button id="music-restart" class="topbar-button aero-icon-button" type="button" disabled aria-label="Reiniciar canción" title="Reiniciar canción"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h2v14H5Zm14 0v14L8 12Z"/></svg></button>
+            <button id="music-pause" class="topbar-button aero-icon-button" type="button" disabled aria-label="Pausar" title="Pausar"><svg viewBox="0 0 24 24" aria-hidden="true"><path id="music-pause-icon" d="M6 5h4v14H6Zm8 0h4v14h-4Z"/></svg></button>
+            <button id="music-next" class="topbar-button aero-icon-button" type="button" disabled aria-label="Siguiente canción" title="Siguiente canción"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 5h2v14h-2ZM5 5l11 7-11 7Z"/></svg></button>
+        </div>
         <div class="aero-control-cluster" role="group" aria-label="Controles del overlay">
             <button id="chat-toggle" class="topbar-button aero-icon-button" type="button" aria-label="Mostrar u ocultar el chat" aria-pressed="true" title="Mostrar u ocultar el chat">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 3v-3a2 2 0 0 1-2-2V6a2 2 0 0 1 3-2Z"/><path class="icon-detail" d="M7 9h10M7 13h6"/></svg>

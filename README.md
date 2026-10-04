@@ -34,7 +34,9 @@ Si el navegador bloquea autoplay, interactúa con la fuente de OBS. La pantalla 
 
 La topbar del overlay queda a 4 px del borde superior del lienzo y muestra el nombre del canal sin etiquetas de sistema. El panel `music` se despliega desde la barra cuando el reproductor autorizado tiene contenido visible y se repliega al vaciar la cola, ocultarlo o desconectarse. La transición se desactiva si el navegador solicita movimiento reducido.
 
-Para usar el mouse, haz clic derecho en la fuente de navegador de OBS y selecciona **Interactuar**. Los botones de la topbar permiten mostrar/ocultar el reproductor sin parar el audio, alternar el chat (también con `?chat=0`), consultar la cola y ajustar el volumen de música (no el TTS). Escape cierra los menús. Los controles son locales a esa fuente y se restablecen al recargar; no otorgan permisos para modificar la cola. La imagen compuesta de OBS no es una ventana interactiva encima del juego: los clics del juego no llegan al overlay.
+Para usar el mouse, haz clic derecho en la fuente de navegador de OBS y selecciona **Interactuar**. Los botones de la topbar permiten mostrar/ocultar el reproductor sin parar el audio, alternar el chat (también con `?chat=0`), consultar la cola y ajustar el volumen de música (no el TTS). Escape cierra los menús. Estas preferencias son locales a esa fuente y se restablecen al recargar; no otorgan permisos de panel. La imagen compuesta de OBS no es una ventana interactiva encima del juego: los clics del juego no llegan al overlay.
+
+La fuente autorizada también puede reiniciar la canción actual, pausar/reanudar y pasar a la siguiente mediante el avance validado por ID y versión. El vinilo y las barras de la topbar se animan durante la reproducción (son decorativos, no un analizador de audio). Reiniciar conserva la pausa; el límite de diez minutos por video sigue contando durante las pausas. Una vista pública no puede usar estos controles.
 
 ## Comandos
 

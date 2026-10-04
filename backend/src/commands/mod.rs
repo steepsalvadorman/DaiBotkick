@@ -74,6 +74,14 @@ pub async fn handle(
     }
 
     match cmd.as_str() {
+        "!voces" => global_cmd!("!voces", {
+            sender::send(
+                &tts::voice_list(!global.config.fish_audio_api_key.trim().is_empty()),
+                ch,
+                global,
+            )
+            .await;
+        }),
         "!discord" => global_cmd!("!discord", {
             info(ch, global, "discord", "💬 Discord").await;
         }),
@@ -88,7 +96,7 @@ pub async fn handle(
         }),
         "!comandos" | "!help" | "!ayuda" | "!commands" => global_cmd!("!comandos", {
             sender::send(
-                "📋 Comandos: !play [url o canción] · !s/!dalia/!jorge/!alex/!narrador/!epico/!comedia/!jacinta [texto TTS] · !quitarme · !misongs · !dado · !carton · !bingo · !8ball [pregunta] · !sorteo · !uptime · !cola · !discord · !redes · !pc · !horario",
+                "📋 Comandos: !play [url o canción] · !voces · !s/!dalia/!jorge/!alex/!narrador/!epico/!comedia/!jacinta [texto TTS] · !quitarme · !misongs · !dado · !carton · !bingo · !8ball [pregunta] · !sorteo · !uptime · !cola · !discord · !redes · !pc · !horario",
                 ch, global,
             ).await;
         }),

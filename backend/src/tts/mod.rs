@@ -66,6 +66,23 @@ pub fn is_valid_voice(voice: &str) -> bool {
     edge_tts::is_valid_voice(voice) || voice == fish_audio::VOICE_ALIAS
 }
 
+pub fn voice_list(fish_audio_enabled: bool) -> String {
+    let mut commands = vec!["!s / !dai / !camila".to_string()];
+    commands.extend(
+        edge_tts::VOICES
+            .iter()
+            .filter(|(alias, _)| *alias != "camila")
+            .map(|(alias, _)| format!("!{alias}")),
+    );
+    if fish_audio_enabled {
+        commands.push(format!("!{}", fish_audio::VOICE_ALIAS));
+    }
+    format!(
+        "Voces disponibles: {}. Usa el comando seguido de tu mensaje, por ejemplo: !s Hola stream. Máximo 350 caracteres; cooldown compartido de 15 s.",
+        commands.join(" · ")
+    )
+}
+
 fn cache_identity(text: &str, voice: &str) -> String {
     if voice == fish_audio::VOICE_ALIAS {
         fish_audio::cache_identity(text)
@@ -172,6 +189,20 @@ pub async fn spawn_processor(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn voice_list_matches_registered_aliases_and_fish_configuration() {
+        let without_fish = voice_list(false);
+        for &(alias, _) in edge_tts::VOICES {
+            assert!(without_fish.contains(&format!("!{alias}")));
+        }
+        assert!(without_fish.contains("!s / !dai / !camila"));
+        assert!(!without_fish.contains("!jacinta"));
+        assert!(voice_list(true).contains("!jacinta"));
+        assert!(without_fish.contains("!s Hola stream"));
+        assert!(without_fish.contains("350 caracteres"));
+        assert!(without_fish.contains("15 s"));
+    }
+
     #[test]
     fn low_latency_fish_audio_does_not_reuse_old_cache_or_change_edge_cache() {
         assert_ne!(cache_identity("Hola", "jacinta"), "jacinta:Hola");

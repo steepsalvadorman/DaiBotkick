@@ -54,6 +54,7 @@ La fuente autorizada también puede reiniciar la canción actual, pausar/reanuda
 | `!cola` | Ver próximos videos; 30 s global |
 | `!quitarme` | Quitar tu primer video |
 | `!misongs` | Ver tus videos; 15 s por usuario |
+| `!voces` | Listar las voces y cómo usarlas; 20 s global. Incluye `!jacinta` si Fish Audio tiene clave configurada |
 | `!dai TEXTO`, `!dalia TEXTO`, `!jorge TEXTO`, `!alex TEXTO` | Voces TTS oficiales; cooldown compartido de 15 s |
 | `!narrador TEXTO`, `!epico TEXTO`, `!comedia TEXTO` | Voces TTS oficiales con prosodia genérica; «usuario dice: texto» |
 | `!jacinta TEXTO` | Voz autorizada de Fish Audio; requiere `FISH_AUDIO_API_KEY` |

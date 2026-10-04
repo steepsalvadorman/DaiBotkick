@@ -986,6 +986,12 @@ async fn every_documented_chat_command_responds() {
 
     // Información y configuración con !set
     says!("ana", "!comandos", false, "!s/!dalia/!jorge/!alex");
+    says!("ana", "!voces", false, "Voces disponibles:");
+    assert!(!last().await.contains("!jacinta"));
+    silent!("pedro", "!voces", false);
+    Arc::get_mut(&mut app).unwrap().config.fish_audio_api_key = "test-key".into();
+    says!("dai", "!VOCES", true, "!jacinta");
+    assert!(tts.try_recv().is_err());
     says!("ana", "!discord", false, "aún no configuró !discord");
     silent!("ana", "!set discord https://evil.example", false);
     says!(

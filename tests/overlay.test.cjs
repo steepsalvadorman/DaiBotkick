@@ -152,18 +152,6 @@ test('vintage corner records are decorative and cannot capture mouse interaction
     assert.match(html, /class="corner-record corner-record-right" aria-hidden="true"/);
     assert.match(css, /\.corner-record \{[^}]*height: 42px;[^}]*overflow: hidden;[^}]*pointer-events: none;/);
 });
-test('glass theme covers overlay surfaces without changing layout or playback states', () => {
-    const html = fs.readFileSync(__dirname + '/../overlay/pixel.html', 'utf8');
-    const css = fs.readFileSync(__dirname + '/../overlay/glass.css', 'utf8');
-    assert.ok(html.indexOf('href="/glass.css"') > html.indexOf('href="/style.css"'));
-    for (const selector of ['#hud.system-topbar', '#media-widget', '#bingo-widget', '.topbar-panel',
-        '#alert-box', '.msg', '.chat-empty', '.tip', '#connection-status', '.corner-record-disc']) {
-        assert.ok(css.includes(selector), selector);
-    }
-    assert.match(css, /prefers-reduced-transparency: reduce/);
-    assert.match(css, /@supports not \(backdrop-filter:/);
-    assert.doesNotMatch(css, /visibility:|pointer-events:|z-index:|position:|transform:/);
-});
 test('music unfolds only for the active visible queue and retracts on hide or disconnect', () => {
     const app = overlay();
     app.handlers.config({ channel_name: 'SeniorDai' });

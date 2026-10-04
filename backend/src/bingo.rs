@@ -8,6 +8,32 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 pub type Card = [u8; 25];
 
+fn card_message(user: &str, card: &Card) -> String {
+    let letters = ['B', 'I', 'N', 'G', 'O'];
+    let rows: Vec<String> = card
+        .chunks(5)
+        .enumerate()
+        .map(|(index, row)| {
+            let cells: Vec<String> = row
+                .iter()
+                .enumerate()
+                .map(|(col, number)| {
+                    if *number == 0 {
+                        "LIBRE".to_string()
+                    } else {
+                        format!("{}{number}", letters[col])
+                    }
+                })
+                .collect();
+            format!("Fila {} [{}]", index + 1, cells.join(" "))
+        })
+        .collect();
+    format!(
+        "{user}, tu cartón: {}. Marca las bolas que salgan; LIBRE ya cuenta. Ganas con una fila, columna o diagonal completa. Escribe !bingo y el bot lo verifica. Repite !carton para consultar el mismo cartón.",
+        rows.join(" | ")
+    )
+}
+
 #[derive(Default)]
 pub struct Bingo {
     round: u64,
@@ -141,8 +167,7 @@ impl Bingo {
             }
             "carton" => {
                 let card = self.register(user)?;
-                let rows: Vec<String> = card.chunks(5).map(|row| row.iter().map(|n| if *n == 0 { "*".into() } else { n.to_string() }).collect::<Vec<_>>().join("-")).collect();
-                Ok((format!("{user}, tu cartón B-I-N-G-O (filas): {}. * = centro libre. Escribe !bingo cuando completes una línea.", rows.join(" / ")), None))
+                Ok((card_message(user, &card), None))
             }
             "iniciar" => {
                 let round = self.start()?;
@@ -243,6 +268,31 @@ pub async fn handle(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn card_message_labels_rows_numbers_free_center_and_claim_instructions() {
+        let card = [
+            12, 20, 36, 56, 61, 1, 19, 40, 53, 71, 7, 22, 0, 51, 65, 4, 29, 43, 58, 74, 8, 17, 32,
+            46, 66,
+        ];
+        assert_eq!(
+            card_message("SeniorDai", &card),
+            "SeniorDai, tu cartón: Fila 1 [B12 I20 N36 G56 O61] | Fila 2 [B1 I19 N40 G53 O71] | Fila 3 [B7 I22 LIBRE G51 O65] | Fila 4 [B4 I29 N43 G58 O74] | Fila 5 [B8 I17 N32 G46 O66]. Marca las bolas que salgan; LIBRE ya cuenta. Ganas con una fila, columna o diagonal completa. Escribe !bingo y el bot lo verifica. Repite !carton para consultar el mismo cartón."
+        );
+    }
+
+    #[test]
+    fn repeated_card_command_displays_the_same_registered_card_during_play() {
+        let mut game = Bingo::default();
+        game.open().unwrap();
+        let (original, _) = game.command("viewer", "carton", false).unwrap();
+        let card = game.cards["viewer"];
+        game.start().unwrap();
+        let (repeated, _) = game.command("viewer", "carton", false).unwrap();
+        assert_eq!(repeated, original);
+        assert_eq!(game.cards["viewer"], card);
+        assert_eq!(game.cards.len(), 1);
+    }
 
     #[tokio::test]
     async fn chat_dispatch_starts_automatic_draw_and_cancel_clears_the_game() {

@@ -72,7 +72,7 @@ Solo la identidad del broadcaster, verificada por su ID en el webhook firmado, p
 
 ### Bingo Aero
 
-El dueño abre con `!bingo abrir` (o `!ruleta`). Los participantes escriben `!carton` antes del inicio: el bot publica cinco filas en orden B-I-N-G-O, con `*` como centro libre. Las columnas usan los rangos 1–15, 16–30, 31–45, 46–60 y 61–75. Hay un único cartón por usuario, hasta 1000 participantes, y un cooldown compartido de 5 s para sus comandos de bingo.
+El dueño abre con `!bingo abrir` (o `!ruleta`). Los participantes escriben `!carton` antes del inicio: el bot publica cinco filas numeradas, con cada bola identificada por su letra (por ejemplo, `Fila 1 [B12 I20 N36 G56 O61]`) y `LIBRE` en el centro, que ya cuenta como marcado. El mensaje explica cómo marcar y reclamar una fila, columna o diagonal; repetir `!carton` permite consultar el mismo cartón incluso durante la partida. Las columnas usan los rangos 1–15, 16–30, 31–45, 46–60 y 61–75. Hay un único cartón por usuario, hasta 1000 participantes, y un cooldown compartido de 5 s para sus comandos de bingo.
 
 `!bingo iniciar` cierra inscripciones y saca una bola cada 10 segundos sin repetir, incluso sin OBS conectado. El overlay muestra un bombo de cristal, la última bola, cinco resultados recientes y las 75 casillas iluminadas; el botón `bingo` de la topbar permite ocultarlo localmente. Al reconectar recibe el estado completo.
 

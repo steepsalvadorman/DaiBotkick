@@ -23,6 +23,7 @@ pub struct GlobalConfig {
     pub overlay_dir: String,
     pub base_url: String,
     pub tts_cache_dir: String,
+    pub fish_audio_api_key: String,
 }
 
 /// Estado de un canal específico (un streamer).

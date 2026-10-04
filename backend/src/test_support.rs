@@ -25,6 +25,7 @@ pub fn app_with_io(db: sqlx::PgPool, io: socketioxide::SocketIo) -> Arc<AppState
                 .join("daibot_test")
                 .to_string_lossy()
                 .into_owned(),
+            fish_audio_api_key: String::new(),
         },
         http: reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(5))

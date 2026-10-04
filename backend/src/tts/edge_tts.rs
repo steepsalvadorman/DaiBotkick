@@ -9,7 +9,9 @@ pub const VOICES: &[(&str, &str)] = &[
     ("jorge", "es-MX-JorgeNeural"),
     ("camila", "es-PE-CamilaNeural"),
     ("alex", "es-PE-AlexNeural"),
-    ("jacinta", "es-PE-CamilaNeural"),
+    ("narrador", "es-MX-JorgeNeural"),
+    ("epico", "es-ES-AlvaroNeural"),
+    ("comedia", "es-MX-DaliaNeural"),
 ];
 
 pub fn voice_name(id: &str) -> &'static str {
@@ -22,6 +24,23 @@ pub fn voice_name(id: &str) -> &'static str {
 
 pub fn is_valid_voice(id: &str) -> bool {
     VOICES.iter().any(|(k, _)| *k == id)
+}
+
+pub fn rate(id: &str) -> &'static str {
+    match id {
+        "narrador" => "+12%",
+        "epico" => "-8%",
+        "comedia" => "+8%",
+        _ => "+0%",
+    }
+}
+
+pub fn pitch(id: &str) -> &'static str {
+    match id {
+        "epico" => "-12Hz",
+        "comedia" => "+8Hz",
+        _ => "+0Hz",
+    }
 }
 
 /// Busca edge-tts: primero en el Python bundled junto al exe, luego en el PATH.
@@ -54,6 +73,10 @@ pub async fn synthesize(text: &str, voice_id: &str) -> Result<Vec<u8>, String> {
     let mut cmd = make_edge_tts_cmd();
     cmd.arg("--voice")
         .arg(vname)
+        .arg("--rate")
+        .arg(rate(voice_id))
+        .arg("--pitch")
+        .arg(pitch(voice_id))
         .arg("--text")
         .arg(text)
         .arg("--write-media")
@@ -106,7 +129,17 @@ mod tests {
         assert_eq!(voice_name("dalia"), "es-MX-DaliaNeural");
         assert_eq!(voice_name("jorge"), "es-MX-JorgeNeural");
         assert_eq!(voice_name("alex"), "es-PE-AlexNeural");
-        assert_eq!(voice_name("jacinta"), "es-PE-CamilaNeural");
+        assert_eq!(voice_name("narrador"), "es-MX-JorgeNeural");
+        assert_eq!(voice_name("epico"), "es-ES-AlvaroNeural");
+        assert_eq!(voice_name("comedia"), "es-MX-DaliaNeural");
+    }
+
+    #[test]
+    fn generic_voice_styles_use_only_authorized_tts_voices_and_prosody() {
+        assert_eq!((rate("narrador"), pitch("narrador")), ("+12%", "+0Hz"));
+        assert_eq!((rate("epico"), pitch("epico")), ("-8%", "-12Hz"));
+        assert_eq!((rate("comedia"), pitch("comedia")), ("+8%", "+8Hz"));
+        assert_eq!((rate("jorge"), pitch("jorge")), ("+0%", "+0Hz"));
     }
 
     #[test]
@@ -128,5 +161,8 @@ mod tests {
         assert!(!is_valid_voice("s"));
         assert!(!is_valid_voice("español"));
         assert!(!is_valid_voice("es-PE-CamilaNeural")); // nombre completo, no alias
+        assert!(!is_valid_voice("messi"));
+        assert!(!is_valid_voice("ronaldo"));
+        assert!(!is_valid_voice("arthas"));
     }
 }

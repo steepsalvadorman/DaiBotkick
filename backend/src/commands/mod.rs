@@ -88,7 +88,7 @@ pub async fn handle(
         }),
         "!comandos" | "!help" | "!ayuda" | "!commands" => global_cmd!("!comandos", {
             sender::send(
-                "📋 Comandos: !play [url] · !s/!dalia/!jorge/!alex [texto TTS] · !quitarme · !misongs · !dado · !carton · !bingo · !8ball [pregunta] · !sorteo · !uptime · !cola · !discord · !redes · !pc · !horario",
+                "📋 Comandos: !play [url o canción] · !s/!dalia/!jorge/!alex/!narrador/!epico/!comedia/!jacinta [texto TTS] · !quitarme · !misongs · !dado · !carton · !bingo · !8ball [pregunta] · !sorteo · !uptime · !cola · !discord · !redes · !pc · !horario",
                 ch, global,
             ).await;
         }),
@@ -375,10 +375,7 @@ pub async fn handle(
     }
     let cmd_low = cmd_word.to_lowercase();
     let camila = cmd_low == "!s" || cmd_low == "!dai";
-    let is_tts = camila
-        || cmd_low
-            .strip_prefix('!')
-            .is_some_and(tts::edge_tts::is_valid_voice);
+    let is_tts = camila || cmd_low.strip_prefix('!').is_some_and(tts::is_valid_voice);
     if is_tts {
         if !is_owner {
             let ok = { ch.cooldown.lock().await.consume_user(username, "!dai", 15) };

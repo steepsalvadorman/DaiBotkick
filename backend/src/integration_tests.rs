@@ -1092,12 +1092,19 @@ async fn every_documented_chat_command_responds() {
         ("u2", "!dalia hola", "dalia"),
         ("u3", "!jorge hola", "jorge"),
         ("u4", "!alex hola", "alex"),
+        ("u5", "!narrador hola", "narrador"),
+        ("u6", "!epico hola", "epico"),
+        ("u7", "!comedia hola", "comedia"),
+        ("u8", "!jacinta hola", "jacinta"),
     ] {
         handle(user, msg, false, &ch, &app).await;
         let item = tts
             .try_recv()
             .unwrap_or_else(|_| panic!("{msg} no generó TTS"));
-        assert_eq!((item.voice.as_str(), item.text.as_str()), (voice, "hola"));
+        assert_eq!(
+            (item.voice.as_str(), item.text.as_str()),
+            (voice, format!("{user} dice: hola").as_str())
+        );
     }
 
     drop(server);

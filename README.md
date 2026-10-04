@@ -54,7 +54,9 @@ La fuente autorizada también puede reiniciar la canción actual, pausar/reanuda
 | `!cola` | Ver próximos videos; 30 s global |
 | `!quitarme` | Quitar tu primer video |
 | `!misongs` | Ver tus videos; 15 s por usuario |
-| `!dai TEXTO`, `!dalia TEXTO`, `!jorge TEXTO`, `!alex TEXTO` | TTS: «usuario dice: texto»; cooldown compartido de 15 s |
+| `!dai TEXTO`, `!dalia TEXTO`, `!jorge TEXTO`, `!alex TEXTO` | Voces TTS oficiales; cooldown compartido de 15 s |
+| `!narrador TEXTO`, `!epico TEXTO`, `!comedia TEXTO` | Voces TTS oficiales con prosodia genérica; «usuario dice: texto» |
+| `!jacinta TEXTO` | Voz autorizada de Fish Audio; requiere `FISH_AUDIO_API_KEY` |
 | `!dado`, `!8ball PREGUNTA` | Entretenimiento |
 | `!ruleta` / `!bingo abrir` | Dueño: abrir un bingo de 75 bolas e inscripciones |
 | `!carton` | Generar y registrar un cartón 5×5; repetir devuelve el mismo cartón |
@@ -81,7 +83,7 @@ Las respuestas y la meta son campos por canal en PostgreSQL: `cmd_discord`, `cmd
 
 Se aceptan videos directos MP4/WebM/MOV/M4V por HTTPS, con validación de URL y rechazo de direcciones locales literales. Un host DNS externo puede resolver o redirigir a otra dirección; usa enlaces de proveedores de confianza. La cola admite 100 elementos. TTS admite 350 caracteres, 32 pendientes por canal y dos síntesis simultáneas en el proceso. La síntesis tiene timeout de 30 s; la caché conserva hasta aproximadamente 256 archivos durante 24 h y puede regenerarse.
 
-Todos los comandos de voz del chat (incluidos `!s`, `!camila` y `!jacinta`) anuncian al autor con «usuario dice: mensaje» en la voz elegida. Para pronunciarlo, se utilizan hasta 40 caracteres del nombre y se sustituyen separadores y símbolos por espacios. El prefijo no consume los 350 caracteres del mensaje. Las alertas automáticas y el TTS del panel conservan su texto original.
+Todos los comandos de voz del chat (incluidos `!s` y `!camila`) anuncian al autor con «usuario dice: mensaje» en la voz elegida. `!narrador`, `!epico` y `!comedia` son perfiles genéricos originales que ajustan voces oficiales de Edge TTS. `!jacinta` usa el modelo autorizado de Fish Audio configurado para esta voz y requiere la variable secreta `FISH_AUDIO_API_KEY`; el ID del modelo se incluye en el backend y la clave nunca debe guardarse en el repositorio. Para pronunciar el nombre, se utilizan hasta 40 caracteres y se sustituyen separadores y símbolos por espacios. El prefijo no consume los 350 caracteres del mensaje. Las alertas automáticas y el TTS del panel conservan su texto original.
 
 ## Desarrollo local
 

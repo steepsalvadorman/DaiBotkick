@@ -116,6 +116,7 @@ async fn main() {
                 .to_string_lossy()
                 .into_owned()
         }),
+        fish_audio_api_key: std::env::var("FISH_AUDIO_API_KEY").unwrap_or_default(),
     };
 
     if config.client_id.is_empty() || config.client_secret.is_empty() {

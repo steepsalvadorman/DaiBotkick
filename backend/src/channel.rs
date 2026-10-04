@@ -61,7 +61,10 @@ pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) -> Result<(),
     global.channels.insert(slug.clone(), ch.clone());
     // Reconnect existing sockets so they acquire the new state and authorization.
     global.io.to(slug.clone()).disconnect().ok();
-    let service = Arc::new(tts::TtsService::new(&global.config.tts_cache_dir));
+    let service = Arc::new(tts::TtsService::new(
+        &global.config.tts_cache_dir,
+        &global.config.fish_audio_api_key,
+    ));
     let (io, cancel, slots) = (
         global.io.clone(),
         ch.cancel.clone(),

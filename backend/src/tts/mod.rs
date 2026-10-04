@@ -1,4 +1,5 @@
 pub mod edge_tts;
+pub mod fish_audio;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::{mpsc, Semaphore};
@@ -43,7 +44,7 @@ fn enqueue_with_limit(
     if ch.cancel.is_cancelled()
         || text.trim().is_empty()
         || text.chars().count() > limit
-        || !edge_tts::is_valid_voice(voice)
+        || !is_valid_voice(voice)
     {
         return false;
     }
@@ -61,13 +62,21 @@ fn enqueue_with_limit(
     true
 }
 
+pub fn is_valid_voice(voice: &str) -> bool {
+    edge_tts::is_valid_voice(voice) || voice == fish_audio::VOICE_ALIAS
+}
+
 pub struct TtsService {
     cache_dir: PathBuf,
+    fish_audio_api_key: String,
+    http: reqwest::Client,
 }
 impl TtsService {
-    pub fn new(cache_dir: &str) -> Self {
+    pub fn new(cache_dir: &str, fish_audio_api_key: &str) -> Self {
         Self {
             cache_dir: PathBuf::from(cache_dir),
+            fish_audio_api_key: fish_audio_api_key.to_string(),
+            http: reqwest::Client::new(),
         }
     }
     pub async fn generate(&self, text: &str, voice: &str) -> Option<String> {
@@ -79,7 +88,20 @@ impl TtsService {
         if let Ok(bytes) = tokio::fs::read(&path).await {
             return Some(STANDARD.encode(bytes));
         }
-        match edge_tts::synthesize(text, voice).await {
+        let result = if voice == fish_audio::VOICE_ALIAS {
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(30),
+                fish_audio::synthesize(&self.http, &self.fish_audio_api_key, text),
+            )
+            .await
+            {
+                Ok(result) => result,
+                Err(_) => Err("Fish Audio timeout".to_string()),
+            }
+        } else {
+            edge_tts::synthesize(text, voice).await
+        };
+        match result {
             Ok(bytes) => {
                 let _ = tokio::fs::write(path, &bytes).await;
                 Some(STANDARD.encode(bytes))
@@ -145,7 +167,10 @@ mod tests {
     #[tokio::test]
     async fn chat_voices_announce_author_without_truncating_message_or_changing_alerts() {
         let (channel, mut receiver) = crate::test_support::channel("alpha", 1);
-        for &(voice, _) in edge_tts::VOICES {
+        for &(voice, _) in edge_tts::VOICES.iter().chain(std::iter::once(&(
+            fish_audio::VOICE_ALIAS,
+            fish_audio::MODEL_ID,
+        ))) {
             assert!(enqueue_chat(&channel, "Senior_Dai", " Hola mundo ", voice));
             let item = receiver.recv().await.unwrap();
             assert_eq!(item.text, "Senior Dai dice: Hola mundo");
@@ -185,10 +210,13 @@ mod tests {
             ("!s", "camila"),
             ("!dai", "camila"),
             ("!camila", "camila"),
-            ("!jacinta", "jacinta"),
             ("!dalia", "dalia"),
             ("!jorge", "jorge"),
             ("!alex", "alex"),
+            ("!narrador", "narrador"),
+            ("!epico", "epico"),
+            ("!comedia", "comedia"),
+            ("!jacinta", fish_audio::VOICE_ALIAS),
         ] {
             crate::commands::handle("Ana_7", &format!("{command} Hola"), true, &channel, &app)
                 .await;

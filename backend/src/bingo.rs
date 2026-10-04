@@ -8,37 +8,13 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 pub type Card = [u8; 25];
 
-fn card_message(user: &str, card: &Card) -> String {
-    let letters = ['B', 'I', 'N', 'G', 'O'];
-    let rows: Vec<String> = card
-        .chunks(5)
-        .enumerate()
-        .map(|(index, row)| {
-            let cells: Vec<String> = row
-                .iter()
-                .enumerate()
-                .map(|(col, number)| {
-                    if *number == 0 {
-                        "LIBRE".to_string()
-                    } else {
-                        format!("{}{number}", letters[col])
-                    }
-                })
-                .collect();
-            format!("Fila {} [{}]", index + 1, cells.join(" "))
-        })
-        .collect();
-    format!(
-        "{user}, tu cartón: {}. Marca las bolas que salgan; LIBRE ya cuenta. Ganas con una fila, columna o diagonal completa. Escribe !bingo y el bot lo verifica. Repite !carton para consultar el mismo cartón.",
-        rows.join(" | ")
-    )
-}
-
 #[derive(Default)]
 pub struct Bingo {
     round: u64,
     phase: &'static str,
     cards: HashMap<String, Card>,
+    card_tokens: HashMap<String, String>,
+    token_users: HashMap<String, String>,
     remaining: Vec<u8>,
     drawn: Vec<u8>,
     winner: Option<String>,
@@ -90,6 +66,8 @@ impl Bingo {
         self.round += 1;
         self.phase = "open";
         self.cards.clear();
+        self.card_tokens.clear();
+        self.token_users.clear();
         self.drawn.clear();
         self.winner = None;
         self.line.clear();
@@ -110,8 +88,31 @@ impl Bingo {
             return Err("El bingo ya tiene 1000 participantes.");
         }
         let card = generate_card();
+        let token = uuid::Uuid::new_v4().simple().to_string();
+        self.card_tokens.insert(key.clone(), token.clone());
+        self.token_users.insert(token, key.clone());
         self.cards.insert(key, card);
         Ok(card)
+    }
+
+    fn card_link(&self, user: &str, base_url: &str, slug: &str) -> String {
+        let token = &self.card_tokens[&user.to_lowercase()];
+        let fragment = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("ch", slug)
+            .append_pair("token", token)
+            .finish();
+        format!("{}/bingo.html#{fragment}", base_url.trim_end_matches('/'))
+    }
+
+    fn personal_snapshot(&self, token: &str) -> Option<serde_json::Value> {
+        let user = self.token_users.get(token)?;
+        let card = self.cards.get(user)?;
+        Some(serde_json::json!({
+            "user": user, "round": self.round, "phase": self.phase,
+            "card": card, "drawn": self.drawn, "winner": self.winner,
+            "ready": matches!(self.phase, "running" | "exhausted")
+                && winning_line(card, &self.drawn).is_some()
+        }))
     }
 
     fn start(&mut self) -> Result<u64, &'static str> {
@@ -166,8 +167,8 @@ impl Bingo {
                 Ok(("Bingo abierto: escribe !carton para recibir tu cartón. Victoria por fila, columna o diagonal.".into(), None))
             }
             "carton" => {
-                let card = self.register(user)?;
-                Ok((card_message(user, &card), None))
+                self.register(user)?;
+                Ok(("Cartón registrado.".into(), None))
             }
             "iniciar" => {
                 let round = self.start()?;
@@ -177,6 +178,8 @@ impl Bingo {
                 self.phase = "idle";
                 self.round += 1;
                 self.cards.clear();
+                self.card_tokens.clear();
+                self.token_users.clear();
                 self.drawn.clear();
                 self.remaining.clear();
                 self.winner = None;
@@ -214,7 +217,16 @@ pub async fn handle(
         return true;
     }
     let mut game = ch.bingo.lock().await;
-    let result = game.command(user, args, owner);
+    let result = game.command(user, args, owner).map(|(message, round)| {
+        if args == "carton" {
+            (format!(
+                "{user}, abre tu cartón y marca tus números aquí: {} . Para reclamar una línea, escribe !bingo en este chat. Quien tenga el enlace puede ver tu cartón.",
+                game.card_link(user, &app.config.base_url, &ch.slug)
+            ), round)
+        } else {
+            (message, round)
+        }
+    });
     let start = result.as_ref().ok().and_then(|(_, round)| *round);
     if result.is_ok() {
         ns_emit(app, &ch.slug, "bingoState", game.snapshot());
@@ -265,20 +277,78 @@ pub async fn handle(
     true
 }
 
+pub async fn personal_card(
+    axum::extract::State(app): axum::extract::State<Arc<AppState>>,
+    axum::extract::Path(slug): axum::extract::Path<String>,
+    headers: axum::http::HeaderMap,
+) -> axum::response::Response {
+    use axum::{http::StatusCode, response::IntoResponse};
+    let token = headers
+        .get("x-bingo-token")
+        .and_then(|value| value.to_str().ok());
+    let Some(token) = token
+        .filter(|token| token.len() == 32 && token.bytes().all(|byte| byte.is_ascii_hexdigit()))
+    else {
+        return (
+            StatusCode::NOT_FOUND,
+            "Cartón no disponible. Usa !carton en el chat.",
+        )
+            .into_response();
+    };
+    let channel = app.channels.get(&slug).map(|entry| entry.clone());
+    let snapshot = if let Some(channel) = channel {
+        if channel.cancel.is_cancelled() {
+            None
+        } else {
+            channel.bingo.lock().await.personal_snapshot(token)
+        }
+    } else {
+        None
+    };
+    let mut response = match snapshot {
+        Some(snapshot) => axum::Json(snapshot).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            "Este cartón ya no está disponible. Usa !carton en el chat.",
+        )
+            .into_response(),
+    };
+    response
+        .headers_mut()
+        .insert("cache-control", "no-store".parse().unwrap());
+    response
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn card_message_labels_rows_numbers_free_center_and_claim_instructions() {
-        let card = [
-            12, 20, 36, 56, 61, 1, 19, 40, 53, 71, 7, 22, 0, 51, 65, 4, 29, 43, 58, 74, 8, 17, 32,
-            46, 66,
-        ];
+    fn personal_links_are_stable_private_and_expire_between_rounds() {
+        let mut game = Bingo::default();
+        game.open().unwrap();
+        let card = game.register("SeniorDai").unwrap();
+        let token = game.card_tokens["seniordai"].clone();
         assert_eq!(
-            card_message("SeniorDai", &card),
-            "SeniorDai, tu cartón: Fila 1 [B12 I20 N36 G56 O61] | Fila 2 [B1 I19 N40 G53 O71] | Fila 3 [B7 I22 LIBRE G51 O65] | Fila 4 [B4 I29 N43 G58 O74] | Fila 5 [B8 I17 N32 G46 O66]. Marca las bolas que salgan; LIBRE ya cuenta. Ganas con una fila, columna o diagonal completa. Escribe !bingo y el bot lo verifica. Repite !carton para consultar el mismo cartón."
+            game.card_link("SeniorDai", "https://example.com/", "alpha"),
+            format!("https://example.com/bingo.html#ch=alpha&token={token}")
         );
+        assert_eq!(
+            game.personal_snapshot(&token).unwrap()["card"],
+            serde_json::json!(card)
+        );
+        assert!(game.personal_snapshot("invalid").is_none());
+        assert!(!game.snapshot().to_string().contains(&token));
+        game.register("SENIORDAI").unwrap();
+        assert_eq!(game.card_tokens["seniordai"], token);
+        game.register("other").unwrap();
+        assert_ne!(game.card_tokens["other"], token);
+        game.command("owner", "cancelar", true).unwrap();
+        assert!(game.personal_snapshot(&token).is_none());
+        game.open().unwrap();
+        game.register("SeniorDai").unwrap();
+        assert_ne!(game.card_tokens["seniordai"], token);
+        assert!(game.personal_snapshot(&token).is_none());
     }
 
     #[test]
@@ -292,6 +362,60 @@ mod tests {
         assert_eq!(repeated, original);
         assert_eq!(game.cards["viewer"], card);
         assert_eq!(game.cards.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn personal_card_endpoint_limits_access_and_validates_real_draws() {
+        use axum::{
+            extract::{Path, State},
+            http::{HeaderMap, StatusCode},
+        };
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .connect_lazy("postgres://test:test@127.0.0.1/unused")
+            .unwrap();
+        let app = crate::test_support::app(pool);
+        let (channel, _) = crate::test_support::channel("alpha", 1);
+        app.channels.insert("alpha".into(), channel.clone());
+        let token;
+        {
+            let mut game = channel.bingo.lock().await;
+            game.open().unwrap();
+            let card = game.register("viewer").unwrap();
+            token = game.card_tokens["viewer"].clone();
+            game.start().unwrap();
+            assert_eq!(game.personal_snapshot(&token).unwrap()["ready"], false);
+            game.drawn = card[..5].to_vec();
+            assert_eq!(game.personal_snapshot(&token).unwrap()["ready"], true);
+            assert!(game.claim("other").is_err());
+        }
+        let mut headers = HeaderMap::new();
+        let missing =
+            personal_card(State(app.clone()), Path("alpha".into()), headers.clone()).await;
+        assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+        headers.insert("x-bingo-token", token.parse().unwrap());
+        let response =
+            personal_card(State(app.clone()), Path("alpha".into()), headers.clone()).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["cache-control"], "no-store");
+        let bytes = axum::body::to_bytes(response.into_body(), 8192)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body["user"], "viewer");
+        assert_eq!(body["ready"], true);
+        let wrong_channel =
+            personal_card(State(app.clone()), Path("other".into()), headers.clone()).await;
+        assert_eq!(wrong_channel.status(), StatusCode::NOT_FOUND);
+        channel
+            .bingo
+            .lock()
+            .await
+            .command("owner", "cancelar", true)
+            .unwrap();
+        let expired =
+            personal_card(State(app.clone()), Path("alpha".into()), headers.clone()).await;
+        assert_eq!(expired.status(), StatusCode::NOT_FOUND);
+        assert!(channel.bingo.lock().await.cards.is_empty());
     }
 
     #[tokio::test]

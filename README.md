@@ -60,7 +60,7 @@ La fuente autorizada también puede reiniciar la canción actual, pausar/reanuda
 | `!jacinta TEXTO` | Voz autorizada de Fish Audio; requiere `FISH_AUDIO_API_KEY` |
 | `!dado`, `!8ball PREGUNTA` | Entretenimiento |
 | `!ruleta` / `!bingo abrir` | Dueño: abrir un bingo de 75 bolas e inscripciones |
-| `!carton` | Generar y registrar un cartón 5×5; repetir devuelve el mismo cartón |
+| `!carton` | Registrar un cartón 5×5 y recibir el enlace personal para verlo y marcarlo; repetir devuelve el mismo enlace |
 | `!bingo iniciar` / `!bingo cancelar` | Dueño: cerrar inscripciones e iniciar bolas cada 10 s, o cancelar |
 | `!bingo` | Reclamar victoria: el servidor comprueba fila, columna o diagonal del cartón registrado |
 | `!participar` / `!sorteo` | Entrar al sorteo abierto |
@@ -72,7 +72,11 @@ Solo la identidad del broadcaster, verificada por su ID en el webhook firmado, p
 
 ### Bingo Aero
 
-El dueño abre con `!bingo abrir` (o `!ruleta`). Los participantes escriben `!carton` antes del inicio: el bot publica cinco filas numeradas, con cada bola identificada por su letra (por ejemplo, `Fila 1 [B12 I20 N36 G56 O61]`) y `LIBRE` en el centro, que ya cuenta como marcado. El mensaje explica cómo marcar y reclamar una fila, columna o diagonal; repetir `!carton` permite consultar el mismo cartón incluso durante la partida. Las columnas usan los rangos 1–15, 16–30, 31–45, 46–60 y 61–75. Hay un único cartón por usuario, hasta 1000 participantes, y un cooldown compartido de 5 s para sus comandos de bingo.
+El dueño abre con `!bingo abrir` (o `!ruleta`). Los participantes escriben `!carton` antes del inicio: el bot responde con un enlace personal a una página Aero con su cartón 5×5. El chat no abre pestañas automáticamente; cada participante pulsa su enlace. La página permite marcar/desmarcar números, guarda las marcas en ese navegador si el almacenamiento está disponible y señala las bolas sorteadas consultando el servidor cada 3 segundos. `LIBRE` ya cuenta. Repetir `!carton` devuelve el mismo enlace incluso durante la partida.
+
+El enlace no requiere iniciar sesión: **cualquiera que lo tenga puede ver el cartón**, pero no reclamar una victoria por su dueño. Su token aleatorio solo permite consultar el cartón y queda invalidado al cancelar, abrir otra partida, reiniciar el backend o reconectar el canal. Se envía en el fragmento del enlace y en un encabezado al consultar `/api/bingo/:slug`, no en parámetros de la URL de la API. Configura `BASE_URL` con la URL pública HTTPS del backend para que los espectadores puedan abrir sus enlaces; `localhost` solo sirve en tu computadora.
+
+Las marcas manuales son una ayuda visual y no modifican el cartón ni las bolas sorteadas. La página indica si las bolas reales completan una línea, pero el participante debe escribir `!bingo` en el chat para reclamar y el servidor vuelve a verificarlo. Las columnas usan los rangos 1–15, 16–30, 31–45, 46–60 y 61–75. Hay un único cartón por usuario, hasta 1000 participantes, y un cooldown compartido de 5 s para sus comandos de bingo.
 
 `!bingo iniciar` cierra inscripciones y saca una bola cada 10 segundos sin repetir, incluso sin OBS conectado. El overlay muestra un bombo de cristal, la última bola, cinco resultados recientes y las 75 casillas iluminadas; el botón `bingo` de la topbar permite ocultarlo localmente. Al reconectar recibe el estado completo.
 

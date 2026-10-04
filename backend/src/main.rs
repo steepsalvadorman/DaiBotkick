@@ -211,6 +211,7 @@ async fn main() {
         .route("/healthz", axum::routing::get(|| async { StatusCode::OK }))
         .route("/readyz", axum::routing::get(ready))
         .route("/metrics", axum::routing::get(metrics))
+        .route("/api/bingo/:slug", axum::routing::get(bingo::personal_card))
         .layer(axum::extract::DefaultBodyLimit::max(256 * 1024))
         .with_state(state.clone())
         .fallback_service(ServeDir::new(&overlay_dir))
@@ -254,7 +255,9 @@ async fn response_headers(
     request: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
-    let private = request.uri().path().starts_with("/auth");
+    let private = request.uri().path().starts_with("/auth")
+        || request.uri().path().starts_with("/api/bingo/")
+        || request.uri().path() == "/bingo.html";
     let mut response = next.run(request).await;
     response
         .headers_mut()

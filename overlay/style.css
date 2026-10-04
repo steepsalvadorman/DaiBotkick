@@ -836,6 +836,7 @@ body { color: #f5f4f8; }
     backdrop-filter: blur(18px) saturate(1.4);
 }
 #media-widget {
+    width: 330px;
     right: 12px;
     z-index: 45;
     opacity: 0;
@@ -905,8 +906,17 @@ body { color: #f5f4f8; }
     box-shadow: 0 1px 0 rgba(215, 242, 255, 0.25);
 }
 #media-widget .media-info {
+    padding: 10px 13px 12px;
     background: linear-gradient(180deg, rgba(103, 167, 215, 0.14), transparent 45%);
 }
+#media-widget .aero-window-title { height: 30px; font-size: 12px; }
+#media-widget .aero-app-orb { width: 20px; height: 20px; }
+#media-widget #video-title { margin-top: 6px; font-size: 19px; }
+#media-widget .media-meta { margin-top: 8px; padding-top: 8px; gap: 8px; }
+#media-widget .requester-box { gap: 6px; }
+#media-widget .requester-label { font-size: 12px; }
+#media-widget #video-requester { font-size: 16px; }
+#media-widget #queue-indicator { padding: 5px 6px; font-size: 8px; }
 #media-widget .media-label, #media-widget #video-requester { color: #9bdeff; }
 #media-widget .requester-label { color: #adcce5; }
 #media-widget #queue-indicator {

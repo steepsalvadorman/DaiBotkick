@@ -30,6 +30,31 @@
         <div class="stat-chip"><span class="label">SEGUIDORES</span><span class="val" id="followers-count">0</span></div>
     </div>
 
+    <!-- Reloj y clima locales: la ubicación se solicita al navegador -->
+    <section id="desktop-widget" aria-label="Reloj y clima local">
+        <div class="desktop-widget-top">
+            <span class="desktop-eyebrow"><span class="aero-dot"></span> ESCRITORIO · LOCAL</span>
+            <span class="desktop-window-controls" aria-hidden="true"><i></i><i></i><i></i></span>
+        </div>
+        <div class="desktop-clock-row">
+            <div>
+                <time id="desktop-clock" class="desktop-clock">00:00</time>
+                <div id="desktop-date" class="desktop-date">Cargando fecha…</div>
+            </div>
+            <div class="clock-orb" aria-hidden="true"><span></span></div>
+        </div>
+        <div class="weather-divider"></div>
+        <div class="weather-row">
+            <div class="weather-symbol" id="weather-symbol" aria-hidden="true">◌</div>
+            <div class="weather-copy">
+                <div class="weather-place" id="weather-place">TU UBICACIÓN</div>
+                <div class="weather-description" id="weather-description">Consultando el clima…</div>
+            </div>
+            <div class="weather-temperature" id="weather-temperature">--°</div>
+        </div>
+        <div class="weather-note" id="weather-note">Permite la ubicación en la fuente del navegador</div>
+    </section>
+
     <!-- Mensajes del chat -->
     <section id="chat-widget" aria-label="Chat en vivo">
         <div class="widget-heading">
@@ -72,6 +97,14 @@
         <div class="tip"><span class="tip-label">PIDE MÚSICA</span>Escribe <b>!play</b> + link de YouTube</div>
         <div class="tip"><span class="tip-label">ENVÍA UN SALUDO</span><b>!dai</b> / <b>!dalia</b> / <b>!jorge</b> / <b>!alex</b> + texto</div>
         <div class="tip"><span class="tip-label">SÍGUENOS</span><b class="kick-channel-url">kick.com/seniordai</b></div>
+    </div>
+    <div id="desktop-dock" aria-label="Barra del escritorio">
+        <span class="dock-logo">GR</span>
+        <span class="dock-separator"></span>
+        <span class="dock-app active"><i class="dock-app-icon">◷</i> STREAM</span>
+        <span class="dock-app"><i class="dock-app-icon">☼</i> CLIMA</span>
+        <span class="dock-app"><i class="dock-app-icon">♫</i> MÚSICA</span>
+        <span class="dock-system"><span class="system-dot"></span> SISTEMA EN LÍNEA</span>
     </div>
     </main>
 

@@ -28,8 +28,10 @@ function overlay(hash = '#token=private', search = '?ch=alpha', options = {}) {
         document: { body: new Element(), head: new Element(), getElementById: get, createElement: () => new Element(), createTextNode: text => ({ textContent: text }), querySelectorAll: () => [] },
         location: { hash, search, origin: 'https://bot.example' },
         innerWidth: 1920, innerHeight: 1080, URLSearchParams, Date, Promise,
+        navigator: { geolocation: options.geolocation ? { getCurrentPosition: options.geolocation } : undefined },
+        fetch: options.fetch || (() => Promise.reject(new Error('No weather service configured'))),
         io: options => { context.options = options; return socket; }, addEventListener() {},
-        setTimeout(fn) { timers.set(++timerId, fn); return timerId; }, clearTimeout(id) { timers.delete(id); }, setInterval(fn) { intervalCallback = fn; },
+        setTimeout(fn) { timers.set(++timerId, fn); return timerId; }, clearTimeout(id) { timers.delete(id); }, setInterval(fn, delay) { (context.intervals ||= []).push({ fn, delay }); intervalCallback = fn; },
         Audio: class extends Element { constructor(src) { super(); this.src = src; audios.push(this); } },
         YT: { PlayerState: { PLAYING: 1, ENDED: 0 }, Player: class {
             constructor(target, options) { this.options = options; players.push(this); }
@@ -57,6 +59,8 @@ test('overlay starts with useful defaults and replaces the welcome when data arr
     assert.equal(app.get('followers-count').textContent, '0');
     assert.equal(app.get('uptime').textContent, '00:00:00');
     assert.equal(app.get('live-status').textContent, 'EN ESPERA');
+    assert.match(app.get('desktop-clock').textContent, /^\d{2}:\d{2}$/);
+    assert.ok(app.get('desktop-date').textContent.length > 0);
 
     app.handlers.viewerCount({ count: 12 });
     app.handlers.followersUpdate({ count: 6 });
@@ -77,6 +81,31 @@ test('overlay starts with useful defaults and replaces the welcome when data arr
     app.handlers.chatMessage({ user: 'viewer', content: '¡Hola!' });
     assert.equal(app.get('chat-empty').hidden, true);
     assert.equal(app.get('chat-messages').children[0].children[1].textContent, '¡Hola!');
+});
+test('weather uses device coordinates and shows current conditions', async () => {
+    let requestedUrl;
+    const app = overlay('#token=private', '?ch=alpha', {
+        geolocation(success) {
+            success({ coords: { latitude: 37.77, longitude: -122.42 } });
+        },
+        async fetch(url) {
+            requestedUrl = url;
+            return { ok: true, async json() { return { current: { temperature_2m: 18.6, weather_code: 2, is_day: 1 } }; } };
+        },
+    });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.match(requestedUrl, /latitude=37\.77/);
+    assert.match(requestedUrl, /longitude=-122\.42/);
+    assert.equal(app.get('weather-temperature').textContent, '19°');
+    assert.equal(app.get('weather-description').textContent, 'Parcialmente nublado');
+    assert.equal(app.get('weather-note').textContent, 'DATOS ACTUALES · OPEN-METEO');
+});
+test('weather explains when device location permission is denied', () => {
+    const app = overlay('#token=private', '?ch=alpha', {
+        geolocation(_success, error) { error({ code: 1 }); },
+    });
+    assert.equal(app.get('weather-description').textContent, 'Ubicación no disponible');
+    assert.match(app.get('weather-note').textContent, /Permite la ubicación/);
 });
 test('public overlay cannot play media, TTS or emit queue advances', () => {
     const app = overlay('');

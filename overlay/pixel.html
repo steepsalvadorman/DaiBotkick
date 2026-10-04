@@ -3,63 +3,75 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=1920">
-    <title>GorilinRix — Pixel Overlay</title>
+    <title>GorilinRix — Stream Overlay</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
     <script src="/sio.js"></script>
     <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 
-    <!-- HUD — esquina superior izquierda, compacto -->
-    <div id="hud">
-        <div class="live-badge"><div class="live-dot"></div>LIVE</div>
-        <div class="stat-chip"><span class="label">VIEWERS</span><span class="val" id="viewers">--</span></div>
-        <div class="stat-chip"><span class="label">TIEMPO</span><span class="val" id="uptime">00:00:00</span></div>
-        <div class="stat-chip"><span class="label">SEGUIDORES</span><span class="val" id="followers-count">--</span></div>
-        <!-- El nombre del canal ya lo muestra Kick; se conserva para app.js -->
-        <div id="stream-title-display" class="stream-title" data-text="GORILINRIX" hidden>
+    <main aria-label="Overlay del stream">
+    <!-- Identidad del canal y métricas en vivo -->
+    <div id="hud" aria-label="Estado del stream">
+        <div class="brand-card">
+            <div class="brand-mark" aria-hidden="true">GR</div>
+            <div class="brand-copy">
+                <span class="brand-kicker">TRANSMISIÓN EN DIRECTO</span>
+                <div id="stream-title-display" class="stream-title" data-text="GORILINRIX">
             <span class="accent">GORILIN</span>RIX
+                </div>
+            </div>
         </div>
+        <div class="live-badge"><span class="live-dot"></span><span>EN VIVO</span></div>
+        <div class="stat-chip"><span class="label">AUDIENCIA</span><span class="val" id="viewers">--</span></div>
+        <div class="stat-chip"><span class="label">EN DIRECTO</span><span class="val" id="uptime">00:00:00</span></div>
+        <div class="stat-chip"><span class="label">SEGUIDORES</span><span class="val" id="followers-count">--</span></div>
     </div>
 
-    <!-- CHAT — abajo a la izquierda, sin panel fijo; los mensajes se desvanecen solos -->
-    <div id="chat-widget">
+    <!-- Mensajes del chat -->
+    <section id="chat-widget" aria-label="Chat en vivo">
+        <div class="widget-heading">
+            <span class="heading-mark" aria-hidden="true"></span>
+            <span>CHAT EN VIVO</span>
+            <span class="heading-live">ACTIVO</span>
+        </div>
         <div class="chat-body" id="chat-messages"></div>
-    </div>
+    </section>
 
-    <!-- ALERTA — arriba al centro -->
-    <div id="alert-box">
-        <div class="alert-header">⚡ NUEVA ALERTA</div>
+    <!-- Alertas de la comunidad -->
+    <section id="alert-box" aria-label="Alerta del stream" aria-live="polite">
+        <div class="alert-header"><span class="alert-spark" aria-hidden="true">✦</span> NUEVA ALERTA</div>
         <div class="alert-body" id="alert-text"></div>
-    </div>
+    </section>
 
-    <!-- MEDIA — solo aparece cuando hay video en cola -->
-    <div id="media-widget" style="opacity:0;transform:scale(0.9);visibility:hidden;">
+    <!-- Música y solicitudes; no se muestra ninguna videocámara -->
+    <section id="media-widget" aria-label="Música y solicitudes" style="opacity:0;transform:scale(0.9);visibility:hidden;">
         <div id="video-container">
             <div id="youtube-player"></div>
             <video id="direct-video" autoplay></video>
         </div>
         <div class="media-info">
-            <div class="media-label">▶ SONANDO</div>
+            <div class="media-label"><span class="equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i></span> AHORA SUENA</div>
             <div id="video-title">---</div>
             <div class="media-meta">
                 <div class="requester-box">
-                    <span class="requester-label">PEDIDO POR</span>
+                    <span class="requester-label">SOLICITADO POR</span>
                     <span id="video-requester">---</span>
                 </div>
                 <span id="queue-indicator"></span>
             </div>
         </div>
-    </div>
+    </section>
 
-    <!-- AVISOS — abajo a la derecha, rotan sin desplazarse -->
-    <div id="tips">
-        <div class="tip">Escribe <b>!play</b> + link de YouTube para pedir una canción</div>
-        <div class="tip">Escribe <b>!dai</b> / <b>!dalia</b> / <b>!jorge</b> / <b>!alex</b> + texto para TTS</div>
-        <div class="tip">Síguenos en <b class="kick-channel-url">kick.com/seniordai</b></div>
+    <!-- Consejos rotativos con comandos útiles -->
+    <div id="tips" aria-label="Comandos y redes">
+        <div class="tip"><span class="tip-label">PIDE MÚSICA</span>Escribe <b>!play</b> + link de YouTube</div>
+        <div class="tip"><span class="tip-label">ENVÍA UN SALUDO</span><b>!dai</b> / <b>!dalia</b> / <b>!jorge</b> / <b>!alex</b> + texto</div>
+        <div class="tip"><span class="tip-label">SÍGUENOS</span><b class="kick-channel-url">kick.com/seniordai</b></div>
     </div>
+    </main>
 
     <script src="/app.js"></script>
 </body>

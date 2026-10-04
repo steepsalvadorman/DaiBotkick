@@ -73,8 +73,24 @@
     async function refresh() {
         try {
             const response = await fetch(`/api/bingo/${encodeURIComponent(channel)}`, {
-                headers: { 'x-bingo-token': token }, cache: 'no-store'
+                headers: { 'x-bingo-token': token }, cache: 'no-store', credentials: 'same-origin'
             });
+            if (response.status === 401 || response.status === 403) {
+                stopped = true;
+                snapshot = null;
+                cells = [];
+                el('card').replaceChildren();
+                el('title').textContent = 'Tu cartón personal';
+                el('last').textContent = '—';
+                el('drawn').textContent = 'Inicia sesión para consultar las bolas.';
+                el('claim').textContent = 'Tu cartón solo se muestra a su dueño.';
+                el('claim').classList.toggle('ready', false);
+                el('login').hidden = false;
+                el('status').textContent = 'Acceso privado con Kick';
+                throw new Error(response.status === 401
+                    ? 'Inicia sesión con la cuenta de Kick con la que solicitaste !carton.'
+                    : 'Este cartón pertenece a otra cuenta. Cambia de cuenta en Kick y vuelve a iniciar sesión.');
+            }
             if (response.status === 404) {
                 stopped = true;
                 el('status').textContent = 'Cartón no disponible';
@@ -105,5 +121,6 @@
     } catch { storageError(); }
     el('chat').href = `https://kick.com/${encodeURIComponent(channel)}`;
     el('chat').hidden = false;
+    el('login').href = `/auth/bingo?${new URLSearchParams({ ch: channel, token })}`;
     refresh();
 })();

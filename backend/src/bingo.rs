@@ -220,7 +220,7 @@ pub async fn handle(
     let result = game.command(user, args, owner).map(|(message, round)| {
         if args == "carton" {
             (format!(
-                "{user}, abre tu cartón y marca tus números aquí: {} . Para reclamar una línea, escribe !bingo en este chat. Quien tenga el enlace puede ver tu cartón.",
+                "{user}, abre tu cartón aquí: {} . Inicia sesión con tu cuenta de Kick para verlo y marcarlo. Reclama con !bingo en este chat.",
                 game.card_link(user, &app.config.base_url, &ch.slug)
             ), round)
         } else {
@@ -283,6 +283,13 @@ pub async fn personal_card(
     headers: axum::http::HeaderMap,
 ) -> axum::response::Response {
     use axum::{http::StatusCode, response::IntoResponse};
+    let Some(username) = app.bingo_auth.username(&headers).await else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            "Inicia sesión con Kick para ver tu cartón.",
+        )
+            .into_response();
+    };
     let token = headers
         .get("x-bingo-token")
         .and_then(|value| value.to_str().ok());
@@ -300,7 +307,19 @@ pub async fn personal_card(
         if channel.cancel.is_cancelled() {
             None
         } else {
-            channel.bingo.lock().await.personal_snapshot(token)
+            let game = channel.bingo.lock().await;
+            if game
+                .token_users
+                .get(token)
+                .is_some_and(|owner| owner != &username)
+            {
+                return (
+                    StatusCode::FORBIDDEN,
+                    "Este cartón pertenece a otra cuenta de Kick.",
+                )
+                    .into_response();
+            }
+            game.personal_snapshot(token)
         }
     } else {
         None
@@ -389,6 +408,15 @@ mod tests {
             assert!(game.claim("other").is_err());
         }
         let mut headers = HeaderMap::new();
+        headers.insert("x-bingo-token", token.parse().unwrap());
+        let anonymous =
+            personal_card(State(app.clone()), Path("alpha".into()), headers.clone()).await;
+        assert_eq!(anonymous.status(), StatusCode::UNAUTHORIZED);
+        let mut other = crate::bingo_auth::tests::session_headers(&app.bingo_auth, "other").await;
+        other.insert("x-bingo-token", token.parse().unwrap());
+        let forbidden = personal_card(State(app.clone()), Path("alpha".into()), other).await;
+        assert_eq!(forbidden.status(), StatusCode::FORBIDDEN);
+        headers = crate::bingo_auth::tests::session_headers(&app.bingo_auth, "viewer").await;
         let missing =
             personal_card(State(app.clone()), Path("alpha".into()), headers.clone()).await;
         assert_eq!(missing.status(), StatusCode::NOT_FOUND);

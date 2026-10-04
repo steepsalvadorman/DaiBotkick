@@ -1,6 +1,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 mod auth;
 mod bingo;
+mod bingo_auth;
 mod channel;
 mod commands;
 mod config;
@@ -178,6 +179,7 @@ async fn main() {
         search_slots: Semaphore::new(2),
         webhook_key,
         metrics: Arc::new(state::Metrics::default()),
+        bingo_auth: bingo_auth::ViewerAuth::default(),
     });
 
     // Registrar el namespace Socket.IO único (rooms por canal)
@@ -207,6 +209,11 @@ async fn main() {
         .route("/", axum::routing::get(auth::start_oauth))
         .route("/auth/kick", axum::routing::get(auth::redirect_to_kick))
         .route("/auth/callback", axum::routing::get(auth::handle_callback))
+        .route("/auth/bingo", axum::routing::get(bingo_auth::login))
+        .route(
+            "/auth/bingo/callback",
+            axum::routing::get(bingo_auth::callback),
+        )
         .route("/kick_webhook", axum::routing::post(webhook::receive))
         .route("/healthz", axum::routing::get(|| async { StatusCode::OK }))
         .route("/readyz", axum::routing::get(ready))

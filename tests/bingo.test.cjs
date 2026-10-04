@@ -95,3 +95,22 @@ test('missing links do not fetch, network errors retry and winner text is safe',
     assert.equal(app.timers.length, 0);
     assert.ok(app.get('card').children.every(cell => cell.disabled));
 });
+
+test('private cards require Kick login and hide previous data when a session expires', async () => {
+    const anonymous = await page([{ status: 401 }]);
+    assert.equal(anonymous.get('card').children.length, 0);
+    assert.equal(anonymous.get('login').hidden, false);
+    assert.equal(anonymous.get('login').href, `/auth/bingo?ch=alpha&token=${token}`);
+    assert.equal(anonymous.timers.length, 0);
+    assert.match(anonymous.get('error').textContent, /Inicia sesión/);
+    assert.equal(anonymous.requests[0].options.credentials, 'same-origin');
+    const wrong = await page([{ status: 403 }]);
+    assert.match(wrong.get('error').textContent, /otra cuenta/);
+    assert.equal(wrong.get('card').children.length, 0);
+    const expired = await page([{ status: 200, body: state() }, { status: 401 }]);
+    assert.equal(expired.get('card').children.length, 25);
+    await expired.timers.shift()();
+    assert.equal(expired.get('card').children.length, 0);
+    assert.equal(expired.get('title').textContent, 'Tu cartón personal');
+    assert.equal(expired.timers.length, 0);
+});

@@ -43,6 +43,7 @@ pub fn app_with_io(db: sqlx::PgPool, io: socketioxide::SocketIo) -> Arc<AppState
         search_slots: Semaphore::new(2),
         webhook_key: crate::webhook::public_key(),
         metrics: Arc::new(crate::state::Metrics::default()),
+        bingo_auth: crate::bingo_auth::ViewerAuth::default(),
     })
 }
 

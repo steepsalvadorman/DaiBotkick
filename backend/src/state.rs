@@ -73,6 +73,7 @@ pub struct AppState {
     pub search_slots: Semaphore,
     pub webhook_key: rsa::RsaPublicKey,
     pub metrics: Arc<Metrics>,
+    pub bingo_auth: crate::bingo_auth::ViewerAuth,
 }
 
 #[derive(Default)]

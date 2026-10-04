@@ -805,3 +805,204 @@ body { color: #f5f4f8; }
 @media (prefers-reduced-motion: reduce) {
     .live-dot, .equalizer i { animation: none; }
 }
+
+/* The top of the canvas is one desktop chrome bar, not a stream HUD. */
+#hud.system-topbar {
+    position: absolute;
+    top: 22px;
+    right: 30px;
+    left: 30px;
+    z-index: 50;
+    display: flex;
+    height: 78px;
+    align-items: center;
+    gap: 19px;
+    padding: 0 22px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.86);
+    border-radius: 20px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.76) 0%, rgba(255, 255, 255, 0.12) 17%, transparent 43%),
+        linear-gradient(100deg, rgba(234, 252, 255, 0.94), rgba(191, 233, 242, 0.91) 40%, rgba(222, 248, 243, 0.94));
+    box-shadow:
+        inset 0 2px 0 rgba(255, 255, 255, 0.98),
+        inset 0 -3px 8px rgba(53, 139, 162, 0.16),
+        0 12px 34px rgba(0, 18, 34, 0.3),
+        0 2px 5px rgba(255, 255, 255, 0.55);
+    color: #16445a;
+    backdrop-filter: blur(18px) saturate(1.45);
+}
+
+#hud.system-topbar::before {
+    position: absolute;
+    top: -34px;
+    left: 4%;
+    width: 92%;
+    height: 47px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.48);
+    content: "";
+    filter: blur(14px);
+    pointer-events: none;
+}
+
+.topbar-start, .topbar-channel, .topbar-clock, .topbar-weather, .topbar-tray {
+    position: relative;
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+}
+.topbar-start { gap: 11px; }
+.topbar-start .brand-mark {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+    border-radius: 13px;
+    font-size: 13px;
+}
+.topbar-system-name {
+    color: #225367;
+    font-family: var(--pixel);
+    font-size: 10px;
+    letter-spacing: 0.6px;
+}
+.topbar-system-name span { color: #1e9d91; }
+.topbar-divider {
+    position: relative;
+    width: 1px;
+    height: 38px;
+    flex: 0 0 1px;
+    background: linear-gradient(180deg, transparent, rgba(28, 91, 114, 0.27), transparent);
+}
+.topbar-channel {
+    min-width: 150px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+.topbar-channel-kicker {
+    color: #628797;
+    font-family: var(--pixel);
+    font-size: 8px;
+    letter-spacing: 0.7px;
+}
+#hud .stream-title {
+    max-width: 210px;
+    color: #17475b;
+    font-family: var(--text);
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+}
+#hud .stream-title .accent { color: #168f84; }
+.topbar-clock {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+}
+#hud .desktop-clock {
+    color: #17445a;
+    font-size: 29px;
+    font-weight: 700;
+    letter-spacing: -1px;
+    line-height: 1;
+}
+#hud .desktop-date {
+    margin: 0;
+    color: #628797;
+    font-size: 11px;
+    font-weight: 600;
+}
+.topbar-weather { gap: 9px; }
+#hud .weather-symbol {
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+    border-radius: 13px;
+    font-size: 23px;
+}
+#hud .weather-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+#hud .weather-description {
+    max-width: 180px;
+    margin: 0;
+    color: #28596c;
+    font-size: 13px;
+    font-weight: 700;
+}
+#hud .weather-note {
+    max-width: 190px;
+    overflow: hidden;
+    padding: 0;
+    color: #688b98;
+    font-family: var(--text);
+    font-size: 10px;
+    letter-spacing: 0;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+#hud .weather-temperature {
+    color: #16485c;
+    font-size: 27px;
+    font-weight: 700;
+    letter-spacing: -1px;
+}
+.topbar-spacer { position: relative; min-width: 12px; flex: 1; }
+.topbar-tray {
+    gap: 13px;
+    padding: 8px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.78);
+    border-radius: 13px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.67), rgba(177, 220, 230, 0.4));
+    box-shadow: inset 0 1px 0 #fff, 0 2px 5px rgba(36, 105, 127, 0.1);
+}
+.tray-icon {
+    color: #36798b;
+    font-size: 15px;
+    text-shadow: 0 1px 0 #fff;
+}
+.tray-battery {
+    position: relative;
+    width: 19px;
+    height: 10px;
+    border: 1px solid #5791a0;
+    border-radius: 3px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+.tray-battery::after {
+    position: absolute;
+    top: 2px;
+    right: -3px;
+    width: 2px;
+    height: 4px;
+    border-radius: 0 2px 2px 0;
+    background: #5791a0;
+    content: "";
+}
+.tray-battery i {
+    position: absolute;
+    inset: 2px;
+    border-radius: 1px;
+    background: linear-gradient(90deg, #52c98d, #a6ed9d);
+}
+.tray-system {
+    color: #4b7787;
+    font-family: var(--pixel);
+    font-size: 7px;
+    line-height: 1.5;
+}
+
+#desktop-widget { display: none; }
+
+@media (max-width: 1100px) {
+    #hud.system-topbar { gap: 11px; padding: 0 13px; }
+    .topbar-start { gap: 7px; }
+    .topbar-system-name, .topbar-channel-kicker, .topbar-divider:nth-of-type(2),
+    .topbar-tray .tray-icon, .tray-battery { display: none; }
+    .topbar-channel { min-width: 115px; }
+    #hud .stream-title { max-width: 145px; font-size: 14px; }
+}

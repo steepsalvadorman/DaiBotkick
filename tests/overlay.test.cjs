@@ -55,32 +55,18 @@ test('external chat, config and titles are rendered as literal text', () => {
 });
 test('overlay starts with useful defaults and replaces the welcome when data arrives', () => {
     const app = overlay();
-    assert.equal(app.get('viewers').textContent, '0');
-    assert.equal(app.get('followers-count').textContent, '0');
-    assert.equal(app.get('uptime').textContent, '00:00:00');
-    assert.equal(app.get('live-status').textContent, 'EN ESPERA');
     assert.match(app.get('desktop-clock').textContent, /^\d{2}:\d{2}$/);
     assert.ok(app.get('desktop-date').textContent.length > 0);
-
-    app.handlers.viewerCount({ count: 12 });
-    app.handlers.followersUpdate({ count: 6 });
-    assert.equal(app.get('viewers').textContent, 12);
-    assert.equal(app.get('followers-count').textContent, 6);
-    app.handlers.viewerCount({ count: null });
-    app.handlers.followersUpdate({ count: null });
-    assert.equal(app.get('viewers').textContent, 0);
-    assert.equal(app.get('followers-count').textContent, 0);
-
-    app.handlers.streamStatus({ live: true, startedAt: '2026-10-04T12:00:00.000Z' });
-    assert.equal(app.get('live-status').textContent, 'EN VIVO');
-    app.handlers.streamStatus({ live: false, startedAt: null });
-    assert.equal(app.get('live-status').textContent, 'EN ESPERA');
-    app.intervalCallback()();
-    assert.equal(app.get('uptime').textContent, '00:00:00');
 
     app.handlers.chatMessage({ user: 'viewer', content: '¡Hola!' });
     assert.equal(app.get('chat-empty').hidden, true);
     assert.equal(app.get('chat-messages').children[0].children[1].textContent, '¡Hola!');
+});
+test('top area is a single desktop bar without stream status cards', () => {
+    const html = fs.readFileSync(__dirname + '/../overlay/pixel.html', 'utf8');
+    assert.match(html, /<header id="hud" class="system-topbar"/);
+    assert.doesNotMatch(html, /id="desktop-widget"|id="live-status"|id="viewers"|id="followers-count"|id="uptime"/);
+    assert.doesNotMatch(html, /class="stat-chip"|class="live-badge/);
 });
 test('weather uses device coordinates and shows current conditions', async () => {
     let requestedUrl;

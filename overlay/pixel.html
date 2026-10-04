@@ -13,47 +13,39 @@
 <body>
 
     <main aria-label="Overlay del stream">
-    <!-- Identidad del canal y métricas en vivo -->
-    <div id="hud" aria-label="Estado del stream">
-        <div class="brand-card">
-            <div class="brand-mark" aria-hidden="true">GR</div>
-            <div class="brand-copy">
-                <span class="brand-kicker">TRANSMISIÓN EN DIRECTO</span>
-                <div id="stream-title-display" class="stream-title" data-text="GORILINRIX">
-            <span class="accent">GORILIN</span>RIX
-                </div>
-            </div>
+    <!-- Una única barra de escritorio: canal, reloj, clima y controles del sistema -->
+    <header id="hud" class="system-topbar" aria-label="Barra superior del escritorio">
+        <div class="topbar-start">
+            <span class="brand-mark" aria-hidden="true">GR</span>
+            <span class="topbar-system-name">AERO<span>OS</span></span>
         </div>
-        <div class="live-badge is-waiting" id="live-badge"><span class="live-dot"></span><span id="live-status">EN ESPERA</span></div>
-        <div class="stat-chip"><span class="label">AUDIENCIA</span><span class="val" id="viewers">0</span></div>
-        <div class="stat-chip"><span class="label">EN DIRECTO</span><span class="val" id="uptime">00:00:00</span></div>
-        <div class="stat-chip"><span class="label">SEGUIDORES</span><span class="val" id="followers-count">0</span></div>
-    </div>
-
-    <!-- Reloj y clima locales: la ubicación se solicita al navegador -->
-    <section id="desktop-widget" aria-label="Reloj y clima local">
-        <div class="desktop-widget-top">
-            <span class="desktop-eyebrow"><span class="aero-dot"></span> ESCRITORIO · LOCAL</span>
-            <span class="desktop-window-controls" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="topbar-divider" aria-hidden="true"></span>
+        <div class="topbar-channel">
+            <span class="topbar-channel-kicker">ESCRITORIO</span>
+            <span id="stream-title-display" class="stream-title" data-text="GORILINRIX">GORILINRIX</span>
         </div>
-        <div class="desktop-clock-row">
-            <div>
-                <time id="desktop-clock" class="desktop-clock">00:00</time>
-                <div id="desktop-date" class="desktop-date">Cargando fecha…</div>
-            </div>
-            <div class="clock-orb" aria-hidden="true"><span></span></div>
+        <span class="topbar-divider" aria-hidden="true"></span>
+        <div class="topbar-clock">
+            <time id="desktop-clock" class="desktop-clock">00:00</time>
+            <span id="desktop-date" class="desktop-date">Cargando fecha…</span>
         </div>
-        <div class="weather-divider"></div>
-        <div class="weather-row">
-            <div class="weather-symbol" id="weather-symbol" aria-hidden="true">◌</div>
-            <div class="weather-copy">
-                <div class="weather-place" id="weather-place">TU UBICACIÓN</div>
-                <div class="weather-description" id="weather-description">Consultando el clima…</div>
-            </div>
-            <div class="weather-temperature" id="weather-temperature">--°</div>
+        <span class="topbar-divider" aria-hidden="true"></span>
+        <div class="topbar-weather" aria-label="Clima local">
+            <span class="weather-symbol" id="weather-symbol" aria-hidden="true">◌</span>
+            <span class="weather-copy">
+                <span class="weather-description" id="weather-description">Consultando el clima…</span>
+                <span class="weather-note" id="weather-note">Permite la ubicación del dispositivo</span>
+            </span>
+            <span class="weather-temperature" id="weather-temperature">--°</span>
         </div>
-        <div class="weather-note" id="weather-note">Permite la ubicación en la fuente del navegador</div>
-    </section>
+        <span class="topbar-spacer"></span>
+        <div class="topbar-tray" aria-label="Estado del sistema">
+            <span class="tray-icon" aria-label="Conexión">◉</span>
+            <span class="tray-icon" aria-label="Audio">◖</span>
+            <span class="tray-battery" aria-label="Energía"><i></i></span>
+            <span class="tray-system">SISTEMA<br>LISTO</span>
+        </div>
+    </header>
 
     <!-- Mensajes del chat -->
     <section id="chat-widget" aria-label="Chat en vivo">

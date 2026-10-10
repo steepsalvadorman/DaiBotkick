@@ -182,7 +182,8 @@ test('overlay starts with useful defaults and replaces the welcome when data arr
 test('top area is a single desktop bar without stream status cards', () => {
     const html = fs.readFileSync(__dirname + '/../overlay/pixel.html', 'utf8');
     assert.match(html, /<header id="hud" class="system-topbar"/);
-    assert.match(html, /id="channel-avatar"[\s\S]*?files\.kick\.com\/images\/user\/19296849\/profile_image/);
+    assert.match(html, /id="channel-avatar"\s+src="\/cuchurruminrix\.svg"\s+alt="CuchurruminRix, ninja veloz electrónico y programador"/);
+    assert.doesNotMatch(html, /files\.kick\.com\/images\/user\/19296849\/profile_image/);
     assert.doesNotMatch(html, /id="desktop-widget"|id="desktop-dock"|id="weather-description"|id="weather-temperature"/);
     assert.doesNotMatch(html, /api\.open-meteo|geolocation/);
     assert.doesNotMatch(html, /class="stat-chip"|class="live-badge/);

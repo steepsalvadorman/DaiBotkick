@@ -1119,8 +1119,11 @@ body { color: #f5f4f8; }
 
 .channel-avatar {
     display: block;
-    object-fit: cover;
+    object-fit: contain;
     object-position: center;
+    background: #101526;
+    border-color: #927bff;
+    box-shadow: 0 0 8px #927bff45;
 }
 
 @media (max-width: 1100px) {

@@ -12,7 +12,7 @@ pub struct ChannelInfo {
 /// desde clientes que no son navegadores.
 pub async fn get_channel_info(http: &reqwest::Client, channel: &str, token: &str) -> Option<ChannelInfo> {
     if token.is_empty() {
-        warn!("No hay access_token — corre gorilinrix --login para autenticar");
+        warn!("No hay access_token — corre daibot --login para autenticar");
         return None;
     }
     try_public_api(http, channel, token).await
@@ -46,4 +46,3 @@ async fn try_public_api(http: &reqwest::Client, channel: &str, token: &str) -> O
 
     Some(ChannelInfo { channel_id, chatroom_id, slug })
 }
-

@@ -9,10 +9,14 @@ const state = (changes = {}) => ({ user: '<img src=x>', round: 1, phase: 'runnin
 
 test('bingo page uses the channel mascot and the simple Bingo name', () => {
     const html = fs.readFileSync(__dirname + '/../overlay/bingo.html', 'utf8');
+    const mascot = fs.readFileSync(__dirname + '/../overlay/cuchurruminrix.svg', 'utf8');
     assert.match(html, /<title>Bingo<\/title>/);
     assert.match(html, /<h1>Bingo<\/h1>/);
-    assert.match(html, /src="gorilinrix\.svg" alt="GorilinRix, mascota del canal"/);
-    assert.ok(fs.existsSync(__dirname + '/../overlay/gorilinrix.svg'));
+    assert.match(html, /src="cuchurruminrix\.svg" alt="CuchurruminRix, bebé mamut y mascota del canal"/);
+    assert.ok(fs.existsSync(__dirname + '/../overlay/cuchurruminrix.svg'));
+    assert.match(mascot, /aria-labelledby="crx-title crx-desc"/);
+    assert.match(mascot, /<title id="crx-title">CuchurruminRix, un bebé mamut original<\/title>/);
+    assert.doesNotMatch(mascot, /gorila/i);
     assert.ok(!html.includes('Bingo Aero'));
 });
 

@@ -186,7 +186,7 @@ test('top area is a single desktop bar without stream status cards', () => {
     assert.doesNotMatch(html, /id="desktop-widget"|id="desktop-dock"|id="weather-description"|id="weather-temperature"/);
     assert.doesNotMatch(html, /api\.open-meteo|geolocation/);
     assert.doesNotMatch(html, /class="stat-chip"|class="live-badge/);
-    assert.doesNotMatch(html, /AERO<span>OS|ESCRITORIO|GORILINRIX|Aero Music/);
+    assert.doesNotMatch(html, /AERO<span>OS|ESCRITORIO|CUCHURRUMINRIX|Aero Music/);
     assert.match(html, /id="stream-title-display"[^>]*>seniordai</);
     assert.match(html, /id="music-anchor"/);
 });

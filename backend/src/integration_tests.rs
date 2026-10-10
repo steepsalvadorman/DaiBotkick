@@ -64,7 +64,7 @@ async fn oauth_pkce_browser_binding_reauthorization_and_failures() {
     assert_eq!(
         [a.0, b.0]
             .iter()
-            .filter(|page| page.contains("¡GorilinRix conectado"))
+            .filter(|page| page.contains("¡CuchurruminRix conectado"))
             .count(),
         1
     );

@@ -1,4 +1,4 @@
-# GorilinRix: revisión, pruebas y despliegue
+# CuchurruminRix: revisión, pruebas y despliegue
 
 Revisión del código disponible el 3 de octubre de 2026. El diagnóstico siguiente conserva la situación encontrada antes de los cambios; consulta el estado actualizado aquí y el README para operar la versión nueva.
 

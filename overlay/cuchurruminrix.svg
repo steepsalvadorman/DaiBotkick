@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="crx-title crx-desc">
+  <title id="crx-title">CuchurruminRix, un bebé mamut original</title>
+  <desc id="crx-desc">Mascota original: bebé mamut turquesa con flequillo violeta, orejas grandes, trompa enroscada, colmillitos y bufanda verde de la marca.</desc>
+  <defs>
+    <radialGradient id="crx-skin" gradientUnits="userSpaceOnUse" cx="112" cy="78" r="100">
+      <stop offset="0" stop-color="#b8f5e8"/>
+      <stop offset=".55" stop-color="#7fd8c8"/>
+      <stop offset="1" stop-color="#4fb3aa"/>
+    </radialGradient>
+    <radialGradient id="crx-body" cx="45%" cy="30%" r="75%">
+      <stop offset="0" stop-color="#9ae6d8"/>
+      <stop offset="1" stop-color="#46a69f"/>
+    </radialGradient>
+    <linearGradient id="crx-ear" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6cc9bd"/>
+      <stop offset="1" stop-color="#3a958f"/>
+    </linearGradient>
+    <linearGradient id="crx-ear-in" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b59cf0"/>
+      <stop offset="1" stop-color="#7a5fc4"/>
+    </linearGradient>
+    <linearGradient id="crx-hair" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a98bf2"/>
+      <stop offset="1" stop-color="#6a4fb8"/>
+    </linearGradient>
+    <linearGradient id="crx-scarf" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7dff4f"/>
+      <stop offset="1" stop-color="#36c80c"/>
+    </linearGradient>
+    <linearGradient id="crx-tusk" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fffbea"/>
+      <stop offset="1" stop-color="#f1d79a"/>
+    </linearGradient>
+  </defs>
+
+  <g stroke="#12343d" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+    <!-- ground shadow -->
+    <ellipse cx="128" cy="236" rx="70" ry="8" fill="#0a1a20" opacity=".22" stroke="none"/>
+
+    <!-- tail -->
+    <path d="M178 196 C192 194 198 186 200 178" fill="none"/>
+    <path d="M196 170 C204 172 206 180 200 184 C196 180 194 176 196 170 Z" fill="#7a5fc4" stroke-width="3"/>
+
+    <!-- body -->
+    <path d="M80 178 C80 152 102 140 128 140 C154 140 176 152 176 178 C176 206 160 222 128 222 C96 222 80 206 80 178 Z" fill="url(#crx-body)"/>
+    <path d="M82 170 l-7 5 6 3 -6 6 7 2 M174 170 l7 5 -6 3 6 6 -7 2" fill="none" stroke-width="3"/>
+    <ellipse cx="128" cy="190" rx="26" ry="22" fill="#b8f5e8" opacity=".55" stroke="none"/>
+
+    <!-- rear legs -->
+    <path d="M80 193 C73 195 71 205 74 217 C77 228 85 232 94 228 C101 225 102 217 98 207 L93 195 Z" fill="url(#crx-body)"/>
+    <path d="M176 193 C183 195 185 205 182 217 C179 228 171 232 162 228 C155 225 154 217 158 207 L163 195 Z" fill="url(#crx-body)"/>
+
+    <!-- front legs -->
+    <path d="M87 164 C78 164 73 172 75 182 L78 191 C81 199 92 201 98 195 C103 190 100 182 97 178 L96 167 Z" fill="url(#crx-body)"/>
+    <path d="M169 164 C178 164 183 172 181 182 L178 191 C175 199 164 201 158 195 C153 190 156 182 159 178 L160 167 Z" fill="url(#crx-body)"/>
+    <path d="M82 190 l1 4 M90 191 l1 4 M166 191 l-1 4 M174 190 l-1 4 M81 222 v3 M89 222 v3 M167 222 v3 M175 222 v3" fill="none" stroke="#12343d" stroke-width="2.5"/>
+
+    <!-- ears -->
+    <path d="M78 76 C52 60 18 70 14 104 C10 138 36 160 62 150 C74 146 82 134 84 120 Z" fill="url(#crx-ear)"/>
+    <path d="M70 88 C52 80 32 88 30 108 C28 128 44 140 60 134 C68 130 72 120 72 112 Z" fill="url(#crx-ear-in)" stroke="none"/>
+    <path d="M178 76 C204 60 238 70 242 104 C246 138 220 160 194 150 C182 146 174 134 172 120 Z" fill="url(#crx-ear)"/>
+    <path d="M186 88 C204 80 224 88 226 108 C228 128 212 140 196 134 C188 130 184 120 184 112 Z" fill="url(#crx-ear-in)" stroke="none"/>
+
+    <!-- head -->
+    <path d="M128 40 C170 40 192 70 192 104 C192 138 166 160 128 160 C90 160 64 138 64 104 C64 70 86 40 128 40 Z" fill="url(#crx-skin)"/>
+
+    <!-- hair tuft -->
+    <path d="M98 58 C96 40 110 26 124 34 C126 20 146 16 152 30 C164 26 172 40 164 52 C170 58 166 68 158 66 C150 58 140 56 132 60 C122 54 110 56 104 64 C98 66 96 62 98 58 Z" fill="url(#crx-hair)"/>
+
+    <!-- scarf -->
+    <path d="M78 146 C100 160 156 160 178 146 C182 152 182 160 178 166 C156 178 100 178 78 166 C74 160 74 152 78 146 Z" fill="url(#crx-scarf)"/>
+    <path d="M150 166 L158 200 C159 204 156 206 152 205 L140 202 C137 201 136 198 137 195 L140 170 Z" fill="url(#crx-scarf)"/>
+    <path d="M143 194 l12 3" fill="none" stroke="#e9ffd9" stroke-width="3"/>
+
+    <!-- tusks -->
+    <path d="M106 128 C96 134 92 146 98 156 C102 150 108 144 116 140 Z" fill="url(#crx-tusk)" stroke-width="3"/>
+    <path d="M150 128 C160 134 164 146 158 156 C154 150 148 144 140 140 Z" fill="url(#crx-tusk)" stroke-width="3"/>
+
+    <!-- trunk -->
+    <path d="M114 104 C114 126 113 142 116 156 C118 172 132 180 144 174 C154 169 154 156 146 152 C140 149 134 154 137 160 C134 160 131 156 132 150 C134 138 142 122 142 104 Z" fill="url(#crx-skin)"/>
+  </g>
+
+  <!-- face -->
+  <ellipse cx="100" cy="100" rx="9" ry="11" fill="#12343d"/>
+  <ellipse cx="156" cy="100" rx="9" ry="11" fill="#12343d"/>
+  <circle cx="103" cy="96" r="3.6" fill="#fff"/>
+  <circle cx="159" cy="96" r="3.6" fill="#fff"/>
+  <circle cx="97.5" cy="105" r="1.6" fill="#fff" opacity=".8"/>
+  <circle cx="153.5" cy="105" r="1.6" fill="#fff" opacity=".8"/>
+  <path d="M92 82 Q100 76 108 80 M148 80 Q156 76 164 82" fill="none" stroke="#12343d" stroke-width="3" stroke-linecap="round"/>
+  <ellipse cx="84" cy="122" rx="10" ry="6" fill="#ff8fb1" opacity=".6"/>
+  <ellipse cx="172" cy="122" rx="10" ry="6" fill="#ff8fb1" opacity=".6"/>
+  <ellipse cx="81" cy="120" rx="2.5" ry="1.5" fill="#fff0f5" opacity=".8"/>
+  <ellipse cx="169" cy="120" rx="2.5" ry="1.5" fill="#fff0f5" opacity=".8"/>
+
+  <!-- highlights & sparkle -->
+  <circle cx="214" cy="46.5" r="17" fill="#ffd166" opacity=".12"/>
+  <path d="M214 34 l3.5 9 9 3.5-9 3.5-3.5 9-3.5-9-9-3.5 9-3.5z" fill="#ffd166" stroke="#12343d" stroke-width="2" stroke-linejoin="round"/>
+  <circle cx="40" cy="44" r="4" fill="#53fc18" stroke="#12343d" stroke-width="2"/>
+  <circle cx="40" cy="44" r="9" fill="#b9ff9b" opacity=".15"/>
+  <circle cx="30" cy="174" r="14" fill="#d5c3ff" opacity=".12"/>
+  <path d="M30 164 Q32 172 40 174 Q32 176 30 184 Q28 176 20 174 Q28 172 30 164 Z" fill="#d5c3ff"/>
+  <circle cx="225" cy="194" r="11" fill="#ffbed7" opacity=".12"/>
+  <path d="M225 187 Q226.5 192.5 232 194 Q226.5 195.5 225 201 Q223.5 195.5 218 194 Q223.5 192.5 225 187 Z" fill="#ffbed7"/>
+  <circle cx="49" cy="191" r="2.5" fill="#ffbed7" opacity=".85"/>
+  <circle cx="231" cy="167" r="2" fill="#ffd166" opacity=".85"/>
+</svg>

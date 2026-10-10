@@ -60,7 +60,17 @@
             el('card').replaceChildren(...cells);
         }
         const label = number => `${letters[Math.floor((number - 1) / 15)]}${number}`;
-        el('last').textContent = data.drawn.length ? label(data.drawn.at(-1)) : '—';
+        const last = el('last');
+        const lastLabel = data.drawn.length ? label(data.drawn.at(-1)) : '—';
+        const newDraw = data.drawn.length > 0 && last.textContent !== lastLabel;
+        last.textContent = lastLabel;
+        if (newDraw && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            last.animate([
+                { transform: 'translateY(-8px) scale(0.7)', opacity: 0 },
+                { transform: 'translateY(2px) scale(1.15)', opacity: 1, offset: 0.65 },
+                { transform: 'translateY(0) scale(1)', opacity: 1 }
+            ], { duration: 550, easing: 'ease-out' });
+        }
         el('drawn').textContent = data.drawn.length ? data.drawn.map(label).join(' · ') : 'Esperando el sorteo.';
         el('claim').textContent = data.ready
             ? '¡Tienes una línea con las bolas sorteadas! Escribe !bingo en el chat del stream para reclamar.'

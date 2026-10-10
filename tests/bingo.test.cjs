@@ -22,16 +22,17 @@ test('bingo page uses the channel mascot and the simple Bingo name', () => {
     assert.ok(!html.includes('Bingo Aero'));
 });
 
-async function page(responses, hash = `#ch=alpha&token=${token}`, storage = new Map()) {
+async function page(responses, hash = `#ch=alpha&token=${token}`, storage = new Map(), reducedMotion = false) {
     class Element {
         constructor() {
-            this.children = []; this.listeners = {}; this.attributes = {}; this.textContent = '';
+            this.children = []; this.listeners = {}; this.attributes = {}; this.textContent = ''; this.animations = [];
             const classes = new Set();
             this.classList = { toggle(name, enabled) { if (enabled) classes.add(name); else classes.delete(name); }, contains(name) { return classes.has(name); } };
         }
         setAttribute(name, value) { this.attributes[name] = value; }
         addEventListener(name, fn) { this.listeners[name] = fn; }
         replaceChildren(...children) { this.children = children; }
+        animate(frames, options) { this.animations.push({ frames, options }); }
         set innerHTML(_) { throw new Error('Unsafe HTML'); }
     }
     const elements = new Map(), requests = [], timers = [];
@@ -47,6 +48,10 @@ async function page(responses, hash = `#ch=alpha&token=${token}`, storage = new 
             return { ok: response.status === 200, status: response.status, json: async () => response.body };
         },
         setTimeout: callback => timers.push(callback),
+        matchMedia: query => {
+            assert.equal(query, '(prefers-reduced-motion: reduce)');
+            return { matches: reducedMotion };
+        },
     });
     const settle = async () => { await new Promise(resolve => setImmediate(resolve)); };
     await settle();
@@ -77,6 +82,30 @@ test('personal card displays 25 safe accessible cells, local manual marks and re
     assert.equal(app.requests[0].url, '/api/bingo/alpha');
     assert.equal(app.requests[0].options.headers['x-bingo-token'], token);
     assert.equal(app.requests[0].options.cache, 'no-store');
+});
+
+test('last ball animates only for a new draw and respects reduced motion', async () => {
+    const app = await page([
+        { status: 200, body: state({ drawn: [] }) },
+        { status: 200, body: state() },
+        { status: 200, body: state() },
+        { status: 200, body: state({ drawn: [1, 16] }) }
+    ]);
+    const last = app.get('last');
+    assert.equal(last.animations.length, 0);
+    await app.timers.shift()();
+    assert.equal(last.textContent, 'B1');
+    assert.equal(last.animations.length, 1);
+    await app.timers.shift()();
+    assert.equal(last.animations.length, 1);
+    await app.timers.shift()();
+    assert.equal(last.textContent, 'I16');
+    assert.equal(last.animations.length, 2);
+    assert.equal(last.animations[1].options.duration, 550);
+
+    const reduced = await page([{ status: 200, body: state() }], undefined, new Map(), true);
+    assert.equal(reduced.get('last').textContent, 'B1');
+    assert.equal(reduced.get('last').animations.length, 0);
 });
 
 test('saved marks restore without altering server card and expired links stop polling', async () => {

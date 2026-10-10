@@ -12,11 +12,13 @@ test('bingo page uses the channel mascot and the simple Bingo name', () => {
     const mascot = fs.readFileSync(__dirname + '/../overlay/cuchurruminrix.svg', 'utf8');
     assert.match(html, /<title>Bingo<\/title>/);
     assert.match(html, /<h1>Bingo<\/h1>/);
-    assert.match(html, /src="cuchurruminrix\.svg" alt="CuchurruminRix, bebé mamut y mascota del canal"/);
+    assert.match(html, /src="cuchurruminrix\.svg" alt="CuchurruminRix, ninja veloz electrónico y programador, mascota del canal"/);
     assert.ok(fs.existsSync(__dirname + '/../overlay/cuchurruminrix.svg'));
     assert.match(mascot, /aria-labelledby="crx-title crx-desc"/);
-    assert.match(mascot, /<title id="crx-title">CuchurruminRix, un bebé mamut original<\/title>/);
-    assert.doesNotMatch(mascot, /gorila/i);
+    assert.match(mascot, /<title id="crx-title">CuchurruminRix, ninja veloz electrónico y programador<\/title>/);
+    assert.doesNotMatch(mascot, /gorila|mamut|trompa|colmillo/i);
+    const start = fs.readFileSync(__dirname + '/../backend/src/start.html', 'utf8');
+    assert.match(start, /alt="CuchurruminRix, ninja veloz electrónico y programador"/);
     assert.ok(!html.includes('Bingo Aero'));
 });
 

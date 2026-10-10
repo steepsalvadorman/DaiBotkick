@@ -2,6 +2,8 @@
 
 Bot para varios canales de Kick, con comandos de chat, cola de YouTube/video, TTS, sorteos y overlay para OBS.
 
+La mascota original es **CuchurruminRix**, un ninja veloz electrónico y programador: traje oscuro, visor turquesa, circuitos violetas, bufanda verde y terminal holográfica. Su imagen compartida en `overlay/cuchurruminrix.svg` se usa en la conexión del canal, el bingo, los comandos y los iconos de la aplicación.
+
 ## Funcionamiento
 
 ```text

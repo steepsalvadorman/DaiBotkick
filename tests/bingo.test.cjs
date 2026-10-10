@@ -12,6 +12,7 @@ test('bingo page uses the channel mascot and the simple Bingo name', () => {
     const mascot = fs.readFileSync(__dirname + '/../overlay/cuchurruminrix.svg', 'utf8');
     assert.match(html, /<title>Bingo<\/title>/);
     assert.match(html, /<h1>Bingo<\/h1>/);
+    assert.match(html, /id="draw-burst" class="energy-burst" aria-hidden="true"/);
     assert.match(html, /src="cuchurruminrix\.svg" alt="CuchurruminRix, ninja veloz electrónico y programador, mascota del canal"/);
     assert.ok(fs.existsSync(__dirname + '/../overlay/cuchurruminrix.svg'));
     assert.match(mascot, /aria-labelledby="crx-title crx-desc"/);
@@ -92,20 +93,28 @@ test('last ball animates only for a new draw and respects reduced motion', async
         { status: 200, body: state({ drawn: [1, 16] }) }
     ]);
     const last = app.get('last');
+    const burst = app.get('draw-burst');
     assert.equal(last.animations.length, 0);
+    assert.equal(burst.animations.length, 0);
     await app.timers.shift()();
     assert.equal(last.textContent, 'B1');
     assert.equal(last.animations.length, 1);
+    assert.equal(burst.animations.length, 1);
     await app.timers.shift()();
     assert.equal(last.animations.length, 1);
+    assert.equal(burst.animations.length, 1);
     await app.timers.shift()();
     assert.equal(last.textContent, 'I16');
     assert.equal(last.animations.length, 2);
+    assert.equal(burst.animations.length, 2);
+    assert.equal(burst.animations[1].options.duration, 750);
+    assert.equal(burst.animations[1].frames.at(-1).opacity, 0);
     assert.equal(last.animations[1].options.duration, 550);
 
     const reduced = await page([{ status: 200, body: state() }], undefined, new Map(), true);
     assert.equal(reduced.get('last').textContent, 'B1');
     assert.equal(reduced.get('last').animations.length, 0);
+    assert.equal(reduced.get('draw-burst').animations.length, 0);
 });
 
 test('saved marks restore without altering server card and expired links stop polling', async () => {

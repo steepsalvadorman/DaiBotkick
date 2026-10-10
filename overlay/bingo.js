@@ -66,10 +66,15 @@
         last.textContent = lastLabel;
         if (newDraw && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
             last.animate([
-                { transform: 'translateY(-8px) scale(0.7)', opacity: 0 },
-                { transform: 'translateY(2px) scale(1.15)', opacity: 1, offset: 0.65 },
+                { transform: 'translate(-18px, 8px) rotate(-12deg) scale(0.7)', opacity: 0 },
+                { transform: 'translate(2px, -2px) rotate(4deg) scale(1.2)', opacity: 1, offset: 0.65 },
                 { transform: 'translateY(0) scale(1)', opacity: 1 }
             ], { duration: 550, easing: 'ease-out' });
+            el('draw-burst').animate([
+                { transform: 'scale(0.35) rotate(-15deg)', opacity: 0 },
+                { transform: 'scale(0.8) rotate(0deg)', opacity: 0.35, offset: 0.25 },
+                { transform: 'scale(1.25) rotate(12deg)', opacity: 0 }
+            ], { duration: 750, easing: 'ease-out' });
         }
         el('drawn').textContent = data.drawn.length ? data.drawn.map(label).join(' · ') : 'Esperando el sorteo.';
         el('claim').textContent = data.ready

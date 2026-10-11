@@ -7,20 +7,22 @@
     <link rel="icon" href="/cuchurruminrix.svg" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="/sio.js"></script>
     <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 
     <main aria-label="Overlay del stream">
-    <!-- Una única barra de escritorio: mascota del canal, reloj y controles -->
-    <header id="hud" class="system-topbar" aria-label="Barra superior del escritorio">
+    <header id="hud" class="system-topbar" aria-label="Barra de controles del stream">
         <div class="topbar-start">
             <img class="brand-mark channel-avatar" id="channel-avatar"
                  src="/cuchurruminrix.svg"
                  alt="CuchurruminRix, ninja veloz electrónico y programador">
-            <span id="stream-title-display" class="stream-title">seniordai</span>
+            <span class="brand-copy">
+                <span id="stream-title-display" class="stream-title">seniordai</span>
+                <span class="brand-live" aria-hidden="true">En vivo</span>
+            </span>
         </div>
         <span class="topbar-divider" aria-hidden="true"></span>
         <div class="topbar-clock">
@@ -48,12 +50,6 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h4l6-5v16l-6-5H3Z"/><path class="icon-detail" d="M16 8a6 6 0 0 1 0 8M19 5a10 10 0 0 1 0 14"/></svg>
             </button>
         </div>
-        <div class="topbar-tray" aria-label="Estado del sistema">
-            <span class="tray-icon" aria-label="Conexión">◉</span>
-            <span class="tray-icon" aria-label="Audio">◖</span>
-            <span class="tray-battery" aria-label="Energía"><i></i></span>
-            <span class="tray-system">SISTEMA<br>LISTO</span>
-        </div>
         <button id="music-anchor" class="music-anchor" type="button" aria-pressed="true" title="Mostrar u ocultar el reproductor; el audio continúa"><span class="aero-app-orb" aria-hidden="true">♫</span> music</button>
     </header>
 
@@ -74,8 +70,8 @@
     <section id="chat-widget" aria-label="Chat en vivo">
         <div class="widget-heading">
             <span class="heading-mark" aria-hidden="true"></span>
-            <span>CHAT EN VIVO</span>
-            <span class="heading-live">ACTIVO</span>
+            <span>Chat en vivo</span>
+            <img class="heading-sticker" src="/volt-hand.svg" alt="" aria-hidden="true">
         </div>
         <div class="chat-body" id="chat-messages">
             <div class="chat-empty" id="chat-empty">¡El chat está listo! Sé la primera persona en saludar.</div>
@@ -84,23 +80,24 @@
 
     <!-- Alertas de la comunidad -->
     <section id="alert-box" aria-label="Alerta del stream" aria-live="polite">
-        <div class="alert-header"><span class="alert-spark" aria-hidden="true">✦</span> NUEVA ALERTA</div>
+        <img class="alert-art" src="/volt-hand.svg" alt="" aria-hidden="true">
+        <div class="alert-header"><span class="alert-spark" aria-hidden="true">✦</span> Nueva alerta</div>
         <div class="alert-body" id="alert-text"></div>
     </section>
 
     <!-- Música y solicitudes; no se muestra ninguna videocámara -->
     <section id="media-widget" aria-label="Música y solicitudes" data-shown="false" aria-hidden="true">
-        <div class="aero-window-title"><span class="aero-app-orb" aria-hidden="true">♫</span> music <span class="aero-window-glint" aria-hidden="true"></span></div>
+        <div class="aero-window-title"><span class="aero-app-orb" aria-hidden="true">♫</span> Música <span class="aero-window-glint" aria-hidden="true"></span></div>
         <div id="video-container">
             <div id="youtube-player"></div>
             <video id="direct-video" autoplay></video>
         </div>
         <div class="media-info">
-            <div class="media-label"><span class="equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i></span> AHORA SUENA</div>
+            <div class="media-label"><span class="equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i></span> Ahora suena</div>
             <div id="video-title">---</div>
             <div class="media-meta">
                 <div class="requester-box">
-                    <span class="requester-label">SOLICITADO POR</span>
+                    <span class="requester-label">Pedido por</span>
                     <span id="video-requester">---</span>
                 </div>
                 <span id="queue-indicator"></span>
@@ -108,8 +105,8 @@
         </div>
     </section>
 
-    <section id="bingo-widget" hidden aria-label="Bingo Aero">
-        <div class="aero-window-title"><span class="aero-app-orb" aria-hidden="true">◉</span> bingo <span id="bingo-count" class="bingo-caption">0 / 75</span></div>
+    <section id="bingo-widget" hidden aria-label="Bingo en vivo">
+        <div class="aero-window-title"><span class="aero-app-orb" aria-hidden="true">◉</span> Bingo <span id="bingo-count" class="bingo-caption">0 / 75</span></div>
         <div class="bingo-content">
             <div class="bingo-draw">
                 <div class="bingo-drum" aria-hidden="true"><i></i><i></i><i></i><span id="bingo-ball">—</span></div>
@@ -127,12 +124,12 @@
 
     <!-- Consejos rotativos con comandos útiles -->
     <div id="tips" aria-label="Comandos y redes">
-        <div class="tip"><span class="tip-label">PIDE MÚSICA</span><b>!play</b> + nombre y artista o enlace de YouTube</div>
-        <div class="tip"><span class="tip-label">ENVÍA UN SALUDO</span><b>!dai</b> / <b>!dalia</b> / <b>!jorge</b> / <b>!alex</b> + texto</div>
-        <div class="tip"><span class="tip-label">SÍGUENOS</span><b class="kick-channel-url">kick.com/seniordai</b></div>
+        <div class="tip"><span class="tip-label">Pide música</span><b>!play</b> + nombre y artista o enlace de YouTube</div>
+        <div class="tip"><span class="tip-label">Envía un saludo</span><b>!dai</b> / <b>!dalia</b> / <b>!jorge</b> / <b>!alex</b> + texto</div>
+        <div class="tip"><span class="tip-label">Síguenos</span><b class="kick-channel-url">kick.com/seniordai</b></div>
     </div>
-    <div class="corner-record corner-record-left" aria-hidden="true"><span class="corner-record-disc"><i></i></span></div>
-    <div class="corner-record corner-record-right" aria-hidden="true"><span class="corner-record-disc"><i></i></span></div>
+    <div class="kinetic-corner kinetic-corner-left" aria-hidden="true"></div>
+    <div class="kinetic-corner kinetic-corner-right" aria-hidden="true"></div>
     </main>
 
     <script src="/app.js"></script>

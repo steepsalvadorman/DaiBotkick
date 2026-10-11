@@ -40,7 +40,9 @@
         el('music-restart').disabled = !usable || pending;
         el('music-pause').disabled = !usable || pending;
         el('music-next').disabled = !active || !queue.length || pending;
-        el('music-transport').setAttribute('data-state', usable && actuallyPlaying && !paused ? 'playing' : usable ? 'paused' : 'idle');
+        const state = usable && actuallyPlaying && !paused ? 'playing' : usable ? 'paused' : 'idle';
+        el('music-transport').setAttribute('data-state', state);
+        media.setAttribute('data-state', state);
         const label = paused ? 'Reanudar' : 'Pausar';
         el('music-pause').setAttribute('aria-label', label);
         el('music-pause').setAttribute('title', label);
@@ -147,7 +149,7 @@
         media.setAttribute('aria-hidden', String(!shown));
         el('music-anchor').setAttribute('data-playing', String(shown));
         el('queue-indicator').style.display = queue.length > 1 ? 'inline-block' : 'none';
-        el('queue-indicator').textContent = `+${Math.max(0, queue.length - 1)} EN COLA`;
+        el('queue-indicator').textContent = `+${Math.max(0, queue.length - 1)} en cola`;
         updateTransport();
     }
     function loadAPI() {
@@ -291,7 +293,8 @@
     }
     setInterval(updateEmojiMeter, 5000);
     socket.on('chatMessage', data => {
-        el('chat-empty').hidden = true;
+        const empty = el('chat-empty');
+        if (empty) empty.hidden = true;
         const item = document.createElement('div'); item.className = 'msg';
         const user = document.createElement('div'); user.className = 'msg-user'; user.textContent = `▶ ${data.user || ''}`;
         const text = document.createElement('div'); text.className = 'msg-text';

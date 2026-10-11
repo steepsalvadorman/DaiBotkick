@@ -11,7 +11,7 @@ function overlay(hash = '#token=private', search = '?ch=alpha', options = {}) {
         replaceChildren(...nodes) { this.children = []; this.append(...nodes); }
         replaceWith(node) { const index = this.parent.children.indexOf(this); this.parent.children.splice(index, 1, node); node.parent = this.parent; }
         get firstChild() { return this.children[0]; }
-        remove() { this.parent.children.splice(this.parent.children.indexOf(this), 1); }
+        remove() { this.removed = true; this.parent.children.splice(this.parent.children.indexOf(this), 1); }
         setAttribute(name, value) { this.attributes[name] = value; }
         getAttribute(name) { return this.attributes[name]; }
         removeAttribute(name) { delete this.attributes[name]; if (name === 'src') this.src = ''; }
@@ -27,7 +27,7 @@ function overlay(hash = '#token=private', search = '?ch=alpha', options = {}) {
     const timers = new Map();
     const socket = { connected: true, on(name, callback) { handlers[name] = callback; }, emit(...args) { emitted.push(args); }, disconnect() { calls.push('disconnect'); }, connect() { calls.push('connect'); } };
     const context = {
-        document: { body: new Element(), head: new Element(), getElementById: get, createElement: () => new Element(), createTextNode: text => ({ textContent: text }), querySelectorAll: () => [] },
+        document: { body: new Element(), head: new Element(), getElementById: id => id === 'chat-empty' && get(id).removed ? null : get(id), createElement: () => new Element(), createTextNode: text => ({ textContent: text }), querySelectorAll: () => [] },
         location: { hash, search, origin: 'https://bot.example' },
         innerWidth: 1920, innerHeight: 1080, URLSearchParams, Date, Promise, Intl,
         io: options => { context.options = options; return socket; }, addEventListener() {},
@@ -51,9 +51,11 @@ test('music transport pauses, resumes, restarts and skips direct media safely', 
     const video = app.get('direct-video');
     video.onplaying();
     assert.equal(app.get('music-transport').getAttribute('data-state'), 'playing');
+    assert.equal(app.get('media-widget').getAttribute('data-state'), 'playing');
     app.get('music-pause').listeners.click();
     assert.equal(video.paused, true);
     assert.equal(app.get('music-transport').getAttribute('data-state'), 'paused');
+    assert.equal(app.get('media-widget').getAttribute('data-state'), 'paused');
     video.currentTime = 40;
     app.get('music-restart').listeners.click();
     assert.equal(video.currentTime, 0);
@@ -69,6 +71,7 @@ test('music transport pauses, resumes, restarts and skips direct media safely', 
     app.handlers.disconnect('transport close');
     assert.equal(app.get('music-pause').disabled, true);
     assert.equal(app.get('music-transport').getAttribute('data-state'), 'idle');
+    assert.equal(app.get('media-widget').getAttribute('data-state'), 'idle');
 });
 test('YouTube transport uses player methods and public transport remains disabled', async () => {
     const app = overlay();
@@ -179,6 +182,15 @@ test('overlay starts with useful defaults and replaces the welcome when data arr
     assert.equal(app.get('chat-empty').hidden, true);
     assert.equal(app.get('chat-messages').children[0].children[1].textContent, '¡Hola!');
 });
+test('chat continues receiving messages after its welcome placeholder is removed', () => {
+    const app = overlay();
+    const body = app.get('chat-messages');
+    body.append(app.get('chat-empty'));
+    for (let i = 0; i < 10; i++) app.handlers.chatMessage({ user: `viewer${i}`, content: `Mensaje ${i}` });
+    assert.equal(body.children.length, 4);
+    assert.equal(body.children[0].children[1].textContent, 'Mensaje 6');
+    assert.equal(body.children[3].children[1].textContent, 'Mensaje 9');
+});
 test('top area is a single desktop bar without stream status cards', () => {
     const html = fs.readFileSync(__dirname + '/../overlay/pixel.html', 'utf8');
     assert.match(html, /<header id="hud" class="system-topbar"/);
@@ -191,12 +203,66 @@ test('top area is a single desktop bar without stream status cards', () => {
     assert.match(html, /id="stream-title-display"[^>]*>seniordai</);
     assert.match(html, /id="music-anchor"/);
 });
-test('vintage corner records are decorative and cannot capture mouse interaction', () => {
+test('original kinetic artwork stays decorative and the game canvas stays transparent', () => {
     const html = fs.readFileSync(__dirname + '/../overlay/pixel.html', 'utf8');
     const css = fs.readFileSync(__dirname + '/../overlay/style.css', 'utf8');
-    assert.match(html, /class="corner-record corner-record-left" aria-hidden="true"/);
-    assert.match(html, /class="corner-record corner-record-right" aria-hidden="true"/);
-    assert.match(css, /\.corner-record \{[^}]*height: 42px;[^}]*overflow: hidden;[^}]*pointer-events: none;/);
+    assert.match(html, /class="kinetic-corner kinetic-corner-left" aria-hidden="true"/);
+    assert.match(html, /class="kinetic-corner kinetic-corner-right" aria-hidden="true"/);
+    assert.match(css, /\.kinetic-corner \{[^}]*height: 68px;[^}]*overflow: hidden;[^}]*pointer-events: none;/);
+    assert.match(css, /html, body \{[^}]*background: transparent;/);
+    assert.match(css, /url\('\/kinetic-burst\.svg'\)/);
+    assert.ok(fs.existsSync(__dirname + '/../overlay/kinetic-burst.svg'));
+    const hand = fs.readFileSync(__dirname + '/../overlay/volt-hand.svg', 'utf8');
+    assert.doesNotMatch(hand, /<image|href=|<script|on\w+=/);
+    assert.match(html, /class="heading-sticker" src="\/volt-hand\.svg" alt="" aria-hidden="true"/);
+    assert.match(html, /class="alert-art" src="\/volt-hand\.svg" alt="" aria-hidden="true"/);
+    assert.match(css, /\.heading-sticker \{[^}]*pointer-events: none;/);
+});
+test('visual system pairs comic headings with readable body type and preserves scale and motion', () => {
+    const html = fs.readFileSync(__dirname + '/../overlay/pixel.html', 'utf8');
+    const css = fs.readFileSync(__dirname + '/../overlay/style.css', 'utf8');
+    assert.match(html, /family=Manrope:wght@400;500;600;700&display=swap/);
+    assert.match(html, /family=Bangers&family=Manrope/);
+    assert.match(css, /--display: 'Bangers', 'Impact', 'Haettenschweiler', sans-serif;/);
+    for (const selector of ['#hud .stream-title', '.aero-window-title', '.widget-heading', '.alert-header', '.alert-body', '.tip-label']) {
+        const start = css.indexOf(`${selector} {`);
+        assert.notEqual(start, -1);
+        assert.match(css.slice(start, css.indexOf('}', start)), /font-family: var\(--display\);/);
+    }
+    assert.match(css, /body \{[^}]*font-family: var\(--font\);/);
+    assert.doesNotMatch(html + css, /DM\+Sans|DM Sans|Space Mono|Inter\b|Roboto|Helvetica|Arial/);
+    assert.doesNotMatch(css, /italic|font-weight: (800|900)/);
+    assert.doesNotMatch(css, /gradient\(/);
+    for (const [, size] of css.matchAll(/font-size: ([^;]+);/g)) assert.ok(['12px', '14px', '16px', '18px', '20px', '24px', '30px', '36px', '48px'].includes(size), size);
+    for (const [, radius] of css.matchAll(/border-radius: ([^;]+);/g)) assert.ok(['0', '2px', '4px', '6px', '8px', '12px', '16px', '24px', '9999px'].includes(radius), radius);
+    assert.doesNotMatch(css, /border-(left|right|top|bottom):/);
+    for (const [, rule] of css.matchAll(/(?:transition|animation): ([^;]+);/g)) {
+        if (rule === 'none !important') continue;
+        assert.doesNotMatch(rule, /\b(ease|linear|ease-in|ease-out|ease-in-out)\b/, rule);
+        assert.match(rule, /var\(--(mass|spring|swing)\)/, rule);
+    }
+    assert.match(css, /--mass: cubic-bezier\(0\.32, 0\.72, 0, 1\);/);
+});
+test('nickname reserves room for comic glyph overhang while retaining long-name truncation', () => {
+    const css = fs.readFileSync(__dirname + '/../overlay/style.css', 'utf8');
+    const start = css.indexOf('#hud .stream-title {');
+    const title = css.slice(start, css.indexOf('}', start));
+    assert.match(title, /padding-inline: 4px 8px;/);
+    assert.match(title, /max-width: 240px;/);
+    assert.match(title, /overflow: hidden;/);
+    assert.match(title, /text-overflow: ellipsis;/);
+});
+test('reduced motion leaves one readable tip and disables decorative movement', () => {
+    const css = fs.readFileSync(__dirname + '/../overlay/style.css', 'utf8');
+    const reduced = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'));
+    assert.match(reduced, /animation: none !important; transition: none !important;/);
+    assert.match(reduced, /\.tip \{ display: none; \}/);
+    assert.match(reduced, /\.tip:first-child \{ display: flex; opacity: 1; \}/);
+});
+test('winner presentation replaces the drawn board to leave the chat unobstructed', () => {
+    const css = fs.readFileSync(__dirname + '/../overlay/style.css', 'utf8');
+    assert.match(css, /#bingo-widget\[data-phase="won"\] #bingo-board,\s*#bingo-widget\[data-phase="won"\] #bingo-history \{ display: none; \}/);
+    assert.match(css, /\.chat-body \{[^}]*justify-content: flex-end;/);
 });
 test('music unfolds only for the active visible queue and retracts on hide or disconnect', () => {
     const app = overlay();

@@ -122,7 +122,7 @@ El sistema rechaza de forma explícita las tarjetas redondeadas genéricas de st
 - **Placas cromáticas planas sin degradados:** Superficies macizas en azul eléctrico, amarillo volt, magenta de impacto, turquesa cibernético, blanco papel y tinta negra.
 - **Geometría en cizalla con compensación óptica:** Contenedores inclinados entre `-2deg` y `-10deg` (`skewX`) cuyos textos e iconos internos aplican contrainclinación positiva para preservar la lectura instantánea.
 - **Bordes estructurales y sombras duras:** Contornos de tinta de `3px` a `4px` combinados con sombras desplazadas sólidas (`3px` a `14px`) que codifican categoría y estado.
-- **Ilustración vectorial táctica en bordes:** Arte SVG local (`kinetic-burst.svg`, `volt-hand.svg`) anclado a esquinas y cabeceras con `pointer-events: none`.
+- **Ilustración vectorial táctica y avatar brutalista:** Arte SVG local (`kinetic-burst.svg`) en esquinas y marcos brutalistas (`channel-avatar-sync`) que adaptan cualquier avatar del canal en la topbar, el cabezal del chat y la alerta con `pointer-events: none`.
 
 ## Colors
 

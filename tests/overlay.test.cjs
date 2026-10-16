@@ -212,10 +212,10 @@ test('original kinetic artwork stays decorative and the game canvas stays transp
     assert.match(css, /html, body \{[^}]*background: transparent;/);
     assert.match(css, /url\('\/kinetic-burst\.svg'\)/);
     assert.ok(fs.existsSync(__dirname + '/../overlay/kinetic-burst.svg'));
-    const hand = fs.readFileSync(__dirname + '/../overlay/volt-hand.svg', 'utf8');
+    const hand = fs.readFileSync(__dirname + '/../overlay/cuchurruminrix.svg', 'utf8');
     assert.doesNotMatch(hand, /<image|href=|<script|on\w+=/);
-    assert.match(html, /class="heading-sticker" src="\/volt-hand\.svg" alt="" aria-hidden="true"/);
-    assert.match(html, /class="alert-art" src="\/volt-hand\.svg" alt="" aria-hidden="true"/);
+    assert.match(html, /class="heading-sticker channel-avatar-sync" src="\/cuchurruminrix\.svg" alt="" aria-hidden="true"/);
+    assert.match(html, /class="alert-art channel-avatar-sync" src="\/cuchurruminrix\.svg" alt="" aria-hidden="true"/);
     assert.match(css, /\.heading-sticker \{[^}]*pointer-events: none;/);
 });
 test('visual system pairs comic headings with readable body type and preserves scale and motion', () => {

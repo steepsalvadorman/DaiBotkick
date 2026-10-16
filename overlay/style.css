@@ -148,10 +148,11 @@ button:focus-visible, input:focus-visible {
     width: 46px;
     height: 46px;
     padding: 2px;
-    object-fit: contain;
+    object-fit: cover;
     border: 3px solid var(--ink);
     border-radius: 2px;
     background: var(--ink);
+    box-shadow: 3px 3px 0 var(--turquoise);
     transform: skewX(6deg);
 }
 .brand-copy { display: flex; flex-direction: column; min-width: 0; transform: skewX(6deg); }
@@ -326,16 +327,16 @@ button:focus-visible, input:focus-visible {
 .music-anchor:hover .aero-app-orb, .music-anchor[data-playing="true"] .aero-app-orb { color: var(--ink); }
 .music-anchor:hover .aero-app-orb .icon-detail, .music-anchor[data-playing="true"] .aero-app-orb .icon-detail { fill: var(--yellow); }
 
-/* Rotor octogonal brutalista: gira a golpes con masa cuando suena música. */
+/* Disco con estrella: gira a golpes con masa cuando suena música. */
 .vinyl-record {
     position: relative;
     width: 32px;
     height: 32px;
     margin: 0 4px;
     border: 3px solid var(--paper);
-    border-radius: 4px;
+    border-radius: 9999px;
     background: var(--yellow);
-    transform: rotate(45deg);
+    transform: skewX(6deg);
     animation: disc-spin 1400ms var(--mass) infinite paused;
 }
 .vinyl-record::after {
@@ -481,11 +482,17 @@ body.no-chat #chat-widget { display: none; }
 }
 .heading-sticker {
     position: absolute;
-    right: -10px;
-    bottom: -12px;
+    right: -12px;
+    bottom: -10px;
     width: 58px;
     height: 58px;
-    transform: skewX(10deg) rotate(12deg);
+    padding: 3px;
+    object-fit: cover;
+    border: 3px solid var(--ink);
+    border-radius: 4px;
+    background: var(--blue-deep);
+    box-shadow: 4px 4px 0 var(--magenta), -3px -3px 0 var(--turquoise);
+    transform: skewX(10deg) rotate(8deg);
     pointer-events: none;
     animation: sticker-bob 2400ms var(--swing) infinite alternate;
 }
@@ -875,14 +882,20 @@ body.no-chat #chat-widget { display: none; }
 }
 .alert-art {
     position: absolute;
-    left: -52px;
-    top: -42px;
-    width: 180px;
-    height: 180px;
-    transform: skewX(6deg) rotate(-14deg) scale(.6);
+    left: -36px;
+    top: -28px;
+    width: 148px;
+    height: 148px;
+    padding: 6px;
+    object-fit: cover;
+    border: 4px solid var(--ink);
+    border-radius: 4px;
+    background: var(--yellow);
+    box-shadow: 8px 8px 0 var(--ink), -6px -6px 0 var(--turquoise);
+    transform: skewX(6deg) rotate(-10deg) scale(.6);
     transition: transform 900ms var(--spring) 120ms;
 }
-#alert-box.show .alert-art { transform: skewX(6deg) rotate(-8deg) scale(1); }
+#alert-box.show .alert-art { transform: skewX(6deg) rotate(-6deg) scale(1); }
 .alert-header {
     display: inline-flex;
     align-items: center;
@@ -1006,8 +1019,8 @@ body.no-chat #chat-widget { display: none; }
 }
 @keyframes msg-out { to { opacity: 0; transform: translateX(-24px) skewX(-8deg); } }
 @keyframes live-pulse { 0%, 100% { transform: rotate(45deg) scale(1); } 50% { transform: rotate(45deg) scale(.5); } }
-@keyframes sticker-bob { from { transform: skewX(10deg) rotate(12deg) translateY(0); } to { transform: skewX(10deg) rotate(4deg) translateY(-4px); } }
-@keyframes disc-spin { from { transform: rotate(45deg); } to { transform: rotate(225deg); } }
+@keyframes sticker-bob { from { transform: skewX(10deg) rotate(8deg) translateY(0); } to { transform: skewX(10deg) rotate(2deg) translateY(-4px); } }
+@keyframes disc-spin { from { transform: skewX(6deg) rotate(0); } to { transform: skewX(6deg) rotate(180deg); } }
 @keyframes music-bars { to { transform: scaleY(.3); } }
 @keyframes burst-turn { from { transform: rotate(-8deg); } to { transform: rotate(8deg); } }
 @keyframes volt-arc {

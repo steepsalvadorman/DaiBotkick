@@ -3,6 +3,14 @@
     'use strict';
     const el = id => document.getElementById(id);
     const channel = new URLSearchParams(location.search).get('ch') || '';
+    const avatarOverride = new URLSearchParams(location.search).get('avatar') || '';
+    function setChannelAvatar(url) {
+        const raw = typeof url === 'string' ? url.trim() : '';
+        if (!raw || !/^(\/[a-zA-Z0-9._/-]+|https:\/\/[^\s"'<>]+)$/.test(raw)) return;
+        el('channel-avatar').src = raw;
+        document.querySelectorAll('.channel-avatar-sync').forEach(node => { node.src = raw; });
+    }
+    if (avatarOverride) setChannelAvatar(avatarOverride);
     let chatShown = new URLSearchParams(location.search).get('chat') !== '0';
     if (!chatShown) document.body.classList.add('no-chat');
     el('chat-toggle').setAttribute('aria-pressed', String(chatShown));
@@ -215,6 +223,7 @@
         const name = String(config.channel_name || channel || 'seniordai').toLowerCase();
         document.title = name;
         el('stream-title-display').textContent = name;
+        if (!avatarOverride && (config.avatar_url || config.avatar)) setChannelAvatar(config.avatar_url || config.avatar);
         document.querySelectorAll('.kick-channel-url').forEach(node => { node.textContent = config.kick_url || `kick.com/${channel}`; });
     });
     socket.on('playbackRole', data => {

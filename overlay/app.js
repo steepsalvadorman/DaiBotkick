@@ -296,7 +296,7 @@
         const empty = el('chat-empty');
         if (empty) empty.hidden = true;
         const item = document.createElement('div'); item.className = 'msg';
-        const user = document.createElement('div'); user.className = 'msg-user'; user.textContent = `▶ ${data.user || ''}`;
+        const user = document.createElement('div'); user.className = 'msg-user'; user.textContent = data.user || '';
         const text = document.createElement('div'); text.className = 'msg-text';
         renderChatContent(text, typeof data.content === 'string' ? data.content : '');
         countEmojis(typeof data.content === 'string' ? data.content : '');

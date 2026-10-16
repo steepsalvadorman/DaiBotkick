@@ -1,17 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 68">
   <defs>
     <pattern id="dots" width="8" height="8" patternUnits="userSpaceOnUse">
-      <circle cx="2" cy="2" r="1.6" fill="#06061a"/>
+      <rect width="3" height="3" x="1" y="1" fill="#06061a"/>
     </pattern>
   </defs>
-  <path d="M0 68V10L118 34 176 0 162 40 300 30 216 68Z" fill="#1f22ff" stroke="#06061a" stroke-width="4" stroke-linejoin="round"/>
-  <path d="M0 68V30L92 50 132 24 124 58 196 56 182 68Z" fill="#ffe600" stroke="#06061a" stroke-width="4" stroke-linejoin="round"/>
-  <path d="M0 68V44L64 60 86 46 84 68Z" fill="#ff2bd6" stroke="#06061a" stroke-width="4" stroke-linejoin="round"/>
-  <path d="M0 68V52L40 64 44 68Z" fill="url(#dots)"/>
-  <path d="M8 22L96 40M196 8L170 36M286 34L214 50" fill="none" stroke="#2ff3e0" stroke-width="4" stroke-linecap="round"/>
-  <path d="M232 52L240 38 244 52 258 56 244 60 238 68 236 60 222 56Z" fill="#ffffff" stroke="#06061a" stroke-width="3" stroke-linejoin="round"/>
-  <g fill="#ff2bd6" stroke="#06061a" stroke-width="2">
-    <path d="M276 60L300 50 296 56 272 66Z"/>
-    <path d="M304 60L340 46 336 52 300 66Z"/>
+  <!-- Placa base blindada azul con biseles a 45° -->
+  <path d="M0 68V6L22 6L74 28L142 28L164 6L218 6L252 40L326 40L354 68Z" fill="#1f22ff" stroke="#06061a" stroke-width="4" stroke-linejoin="miter"/>
+  <!-- Placa táctica amarilla superpuesta -->
+  <path d="M0 68V26L58 26L82 50L178 50L196 32L242 32L278 68Z" fill="#ffe600" stroke="#06061a" stroke-width="4" stroke-linejoin="miter"/>
+  <!-- Cuña de impacto magenta -->
+  <path d="M0 68V44L44 44L68 68Z" fill="#ff2bd6" stroke="#06061a" stroke-width="4" stroke-linejoin="miter"/>
+  <!-- Rejilla industrial de puntos cuadrados -->
+  <path d="M4 48H40L58 66H4Z" fill="url(#dots)"/>
+
+  <!-- Arcos eléctricos ramificados abrazando la esquina inferior izquierda -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Sombra/contorno de tinta del arco principal -->
+    <path d="M2 4 L28 14 L18 22 L54 12 L46 26 L92 18 L82 32 L134 22 L156 8 L178 20 L214 10 L236 28 L278 16 L306 34 L348 24" stroke="#06061a" stroke-width="7"/>
+    <!-- Halo turquesa del arco eléctrico -->
+    <path d="M2 4 L28 14 L18 22 L54 12 L46 26 L92 18 L82 32 L134 22 L156 8 L178 20 L214 10 L236 28 L278 16 L306 34 L348 24" stroke="#2ff3e0" stroke-width="4"/>
+    <!-- Núcleo blanco incandescente -->
+    <path d="M2 4 L28 14 L18 22 L54 12 L46 26 L92 18 L82 32 L134 22 L156 8 L178 20 L214 10 L236 28 L278 16 L306 34 L348 24" stroke="#ffffff" stroke-width="1.8"/>
+
+    <!-- Ramificaciones secundarias (filamentos de plasma) -->
+    <path d="M54 12 L72 4 L88 10 M92 18 L112 36 L138 34 M178 20 L194 38 L224 32 M278 16 L294 6 L318 14" stroke="#06061a" stroke-width="5"/>
+    <path d="M54 12 L72 4 L88 10 M178 20 L194 38 L224 32" stroke="#ffe600" stroke-width="2.5"/>
+    <path d="M92 18 L112 36 L138 34 M278 16 L294 6 L318 14" stroke="#ff2bd6" stroke-width="2.5"/>
   </g>
+
+  <!-- Franjas de peligro inclinadas (chevrons) -->
+  <g fill="#ff2bd6" stroke="#06061a" stroke-width="3" stroke-linejoin="miter">
+    <path d="M268 68L286 46H302L284 68Z"/>
+    <path d="M298 68L316 46H332L314 68Z"/>
+  </g>
+  <path d="M328 68L340 54H352L340 68Z" fill="#2ff3e0" stroke="#06061a" stroke-width="3" stroke-linejoin="miter"/>
 </svg>

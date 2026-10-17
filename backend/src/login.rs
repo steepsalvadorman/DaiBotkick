@@ -14,7 +14,7 @@ pub async fn run_and_exit() {
     match run_flow().await {
         Ok(_) => {
             println!();
-            println!("Todo listo. Ya puedes lanzar CuchurruminRix.");
+            println!("Todo listo. Ya puedes lanzar DaiBot.");
             println!();
             println!("Presiona Enter para cerrar...");
             let mut buf = String::new();
@@ -27,7 +27,7 @@ pub async fn run_and_exit() {
 #[allow(dead_code)]
 pub async fn run_first_time() {
     println!("╔══════════════════════════════════════════════╗");
-    println!("║      BIENVENIDO A CUCHURRUMINRIX              ║");
+    println!("║      BIENVENIDO A DAIBOT              ║");
     println!("║  Primera vez detectada — vamos a configurar  ║");
     println!("╚══════════════════════════════════════════════╝");
     println!();
@@ -57,7 +57,7 @@ async fn run_flow() -> Result<(), String> {
 
     if client_id.is_empty() || client_secret.is_empty() {
         return Err("Faltan KICK_CLIENT_ID o KICK_CLIENT_SECRET.\n\
-             Contacta al soporte de CuchurruminRix."
+             Contacta al soporte de DaiBot."
             .to_string());
     }
 
@@ -85,7 +85,7 @@ async fn run_flow() -> Result<(), String> {
              Acepta los permisos y vuelve aquí cuando termines.\n\n\
              Si el navegador NO se abre, copia esta dirección:\n\n{auth_url}"
         ),
-        "CuchurruminRix — Conectar con Kick",
+        "DaiBot — Conectar con Kick",
         0x40, // MB_ICONINFORMATION
     );
 
@@ -131,7 +131,7 @@ async fn fetch_and_save_channel_name(http: &reqwest::Client, token: &str) {
             input_dialog(
                 "No se pudo detectar tu nombre de canal en Kick.\n\
                  Escribe tu nombre de usuario (ejemplo: seniordai):",
-                "CuchurruminRix — Configuración",
+                "DaiBot — Configuración",
             )
             .unwrap_or_default()
         }
@@ -276,7 +276,7 @@ async fn wait_callback(expected_state: &str) -> Result<String, String> {
 
     let listener = TcpListener::bind("127.0.0.1:3001").await.map_err(|_| {
         "El puerto 3001 está ocupado por otro programa.\n\
-         Cierra cualquier otra instancia de CuchurruminRix e inténtalo de nuevo."
+         Cierra cualquier otra instancia de DaiBot e inténtalo de nuevo."
             .to_string()
     })?;
 
@@ -317,7 +317,7 @@ async fn wait_callback(expected_state: &str) -> Result<String, String> {
             html_reply(&mut socket,
                 "<h2 style='color:#ff4444'>Enlace caducado</h2>\
                  <p>Este enlace de inicio de sesi&oacute;n ya no es v&aacute;lido.</p>\
-                 <p>Cierra esta pesta&ntilde;a y vuelve a abrir CuchurruminRix para intentarlo de nuevo.</p>",
+                 <p>Cierra esta pesta&ntilde;a y vuelve a abrir DaiBot para intentarlo de nuevo.</p>",
             ).await;
             continue;
         }

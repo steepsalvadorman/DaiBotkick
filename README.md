@@ -1,8 +1,8 @@
-# CuchurruminRix para Kick
+# DaiBot para Kick
 
 Bot para varios canales de Kick, con comandos de chat, cola de YouTube/video, TTS, sorteos y overlay para OBS.
 
-La mascota original es **CuchurruminRix**, un ninja veloz electrónico y programador con identidad gamer. Su imagen compartida en `overlay/cuchurruminrix.svg` se usa en la conexión del canal, el bingo, los comandos, los iconos de la aplicación y el logo de la barra superior del overlay. Este logo local no depende de la URL de una foto de perfil externa.
+La mascota original es **DaiBot**, un ninja veloz electrónico y programador con identidad gamer. Su imagen compartida en `overlay/daibot.svg` se usa en la conexión del canal, el bingo, los comandos, los iconos de la aplicación y el logo de la barra superior del overlay. Este logo local no depende de la URL de una foto de perfil externa.
 
 ## Funcionamiento
 
@@ -42,7 +42,7 @@ Para obtener la mejor calidad en OBS, configura el **ancho y alto de la fuente d
 
 El overlay principal usa un diseño original de «golpe de viñeta»: azul eléctrico, amarillo, magenta y turquesa planos (sin degradados), bordes de tinta completos, sombras desplazadas y movimiento con curvas cúbicas personalizadas. Combina Bangers en la marca, títulos, alertas y rótulos con Manrope en mensajes, controles y datos; esta combinación es una excepción solicitada a la regla de una sola tipografía de la skill. Ambas fuentes se cargan de Google Fonts con `display=swap` y alternativas locales. El chat se muestra como bocadillos de cómic de hasta dos líneas con etiqueta de nombre; el bingo usa la última bola sobre un estallido y casillas de alto contraste. El centro del lienzo 1920×1080 permanece transparente para el juego, sin marco de cámara. La topbar queda a 16 px del borde superior y muestra el nombre del canal. El panel `music` entra desde la derecha cuando el reproductor autorizado tiene contenido visible y se oculta al vaciar la cola, ocultarlo o desconectarse.
 
-Las esquinas inferiores llevan una tira de fragmentos y arcos eléctricos original de `overlay/kinetic-burst.svg`, limitada a los últimos 68 px del lienzo para dejar libre el chat. El avatar del canal (`overlay/cuchurruminrix.svg` por defecto, o cualquier avatar configurado mediante `?avatar=...` o `avatar_url`) se muestra con mejoras brutalistas (placa blindada, borde de tinta y doble sombra sólida) tanto en la barra superior como en el cabezal del chat y las alertas. Este arte es decorativo y no intercepta clics.
+Las esquinas inferiores llevan una tira de fragmentos y arcos eléctricos original de `overlay/kinetic-burst.svg`, limitada a los últimos 68 px del lienzo para dejar libre el chat. El avatar del canal (`overlay/daibot.svg` por defecto, o cualquier avatar configurado mediante `?avatar=...` o `avatar_url`) se muestra con mejoras brutalistas (placa blindada, borde de tinta y doble sombra sólida) tanto en la barra superior como en el cabezal del chat y las alertas. Este arte es decorativo y no intercepta clics.
 
 El chat usa viñetas oscuras con acentos alternados, las alertas un panel de impacto y el bingo una bola amarilla con ráfagas radiales y las 75 casillas. Al ganar, el cartón verificado sustituye el tablero y el historial para no tapar el chat. Las animaciones y transiciones se desactivan con movimiento reducido; en ese modo se muestra solo el primer consejo, sin superponer los consejos rotativos.
 

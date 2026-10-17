@@ -34,7 +34,7 @@
         const image = node('img');
         image.alt = '';
         image.referrerPolicy = 'no-referrer';
-        image.src = '/cuchurruminrix.svg';
+        image.src = '/daibot.svg';
         if (typeof url === 'string' && url) {
             if (/^https:\/\/(?:[a-z0-9-]+\.)*(?:steamstatic\.com|steamcommunity\.com|akamaihd\.net)\/[^\s"'<>]*$/i.test(url)) image.src = url;
             else message('status', 'Steam devolvió una URL de avatar no permitida. Se muestra la mascota local.', true);

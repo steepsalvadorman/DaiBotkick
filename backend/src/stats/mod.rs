@@ -83,7 +83,7 @@ async fn legacy_followers(global: &AppState, slug: &str) -> Option<u64> {
         .get(format!("https://kick.com/api/v2/channels/{slug}"))
         .header(
             reqwest::header::USER_AGENT,
-            "Mozilla/5.0 (compatible; CuchurruminRix)",
+            "Mozilla/5.0 (compatible; DaiBot)",
         )
         .header(reqwest::header::ACCEPT, "application/json")
         .timeout(std::time::Duration::from_secs(10))

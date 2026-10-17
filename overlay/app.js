@@ -1,4 +1,4 @@
-/* CuchurruminRix: authenticated OBS player and public chat overlay. */
+/* DaiBot: authenticated OBS player and public chat overlay. */
 (() => {
     'use strict';
     const el = id => document.getElementById(id);

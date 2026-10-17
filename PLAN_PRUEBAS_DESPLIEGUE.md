@@ -1,4 +1,4 @@
-# CuchurruminRix: revisión, pruebas y despliegue
+# DaiBot: revisión, pruebas y despliegue
 
 Revisión del código disponible el 3 de octubre de 2026. El diagnóstico siguiente conserva la situación encontrada antes de los cambios; consulta el estado actualizado aquí y el README para operar la versión nueva.
 
@@ -42,7 +42,7 @@ Los apartados de diagnóstico y verificaciones originales siguientes describen e
 - Cada canal tiene cola de videos, cooldowns, sorteo, tokens, tareas de Kick, estadísticas y TTS.
 - El overlay usado en OBS es `overlay/pixel.html`, con CSS y JavaScript internos. No carga `app.js` ni `style.css`.
 - `overlay/app.js` conserva otra implementación: espera un array en `syncQueue`, mientras el servidor envía `{items: [...]}`. `index.html` redirige a `pixel.html` y pierde el query `?ch=`.
-- `sio.js` es el cliente Socket.IO distribuido. `comandos.html` y `comandos.png` son material auxiliar; el Dockerfile solo copia `overlay/`, por lo que esos archivos no se publican.
+- `sio.js` es el cliente Socket.IO distribuido. `comandos.html` se copia en la imagen como `overlay/comandos.html`.
 - `config.rs` y el login local conservan lógica del modo anterior. El servidor actual registra canales mediante OAuth y PostgreSQL; los tokens de `.env` del login local no registran un canal en esa base.
 - Se revisaron los módulos del backend, migración, overlay, Dockerfile, Blueprint, plantilla de variables y README. No se ha verificado una sesión real de Kick ni OBS.
 

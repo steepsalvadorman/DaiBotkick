@@ -243,12 +243,12 @@ test('chat continues receiving messages after its welcome placeholder is removed
 test('top area is a single desktop bar without stream status cards', () => {
     const html = fs.readFileSync(__dirname + '/../overlay/pixel.html', 'utf8');
     assert.match(html, /<header id="hud" class="system-topbar"/);
-    assert.match(html, /id="channel-avatar"\s+src="\/cuchurruminrix\.svg"\s+alt="CuchurruminRix, ninja veloz electrónico y programador"/);
+    assert.match(html, /id="channel-avatar"\s+src="\/daibot\.svg"\s+alt="DaiBot, ninja veloz electrónico y programador"/);
     assert.doesNotMatch(html, /files\.kick\.com\/images\/user\/19296849\/profile_image/);
     assert.doesNotMatch(html, /id="desktop-widget"|id="desktop-dock"|id="weather-description"|id="weather-temperature"/);
     assert.doesNotMatch(html, /api\.open-meteo|geolocation/);
     assert.doesNotMatch(html, /class="stat-chip"|class="live-badge/);
-    assert.doesNotMatch(html, /AERO<span>OS|ESCRITORIO|CUCHURRUMINRIX|Aero Music/);
+    assert.doesNotMatch(html, /AERO<span>OS|ESCRITORIO|DAIBOT|Aero Music/);
     assert.match(html, /id="stream-title-display"[^>]*>seniordai</);
     assert.match(html, /id="music-anchor"/);
 });
@@ -261,10 +261,10 @@ test('original kinetic artwork stays decorative and the game canvas stays transp
     assert.match(css, /html, body \{[^}]*background: transparent;/);
     assert.match(css, /url\('\/kinetic-burst\.svg'\)/);
     assert.ok(fs.existsSync(__dirname + '/../overlay/kinetic-burst.svg'));
-    const hand = fs.readFileSync(__dirname + '/../overlay/cuchurruminrix.svg', 'utf8');
+    const hand = fs.readFileSync(__dirname + '/../overlay/daibot.svg', 'utf8');
     assert.doesNotMatch(hand, /<image|href=|<script|on\w+=/);
-    assert.match(html, /class="heading-sticker channel-avatar-sync" src="\/cuchurruminrix\.svg" alt="" aria-hidden="true"/);
-    assert.match(html, /class="alert-art channel-avatar-sync" src="\/cuchurruminrix\.svg" alt="" aria-hidden="true"/);
+    assert.match(html, /class="heading-sticker channel-avatar-sync" src="\/daibot\.svg" alt="" aria-hidden="true"/);
+    assert.match(html, /class="alert-art channel-avatar-sync" src="\/daibot\.svg" alt="" aria-hidden="true"/);
     assert.match(css, /\.heading-sticker \{[^}]*pointer-events: none;/);
 });
 test('visual system pairs comic headings with readable body type and preserves scale and motion', () => {

@@ -158,7 +158,7 @@ async fn main() {
 
     // HTTP client
     let http = reqwest::Client::builder()
-        .user_agent("CuchurruminRix/1.0")
+        .user_agent("DaiBot/1.0")
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .expect("reqwest client");
@@ -239,7 +239,7 @@ async fn main() {
         });
 
     info!(
-        "CuchurruminRix corriendo  → http://localhost:{}",
+        "DaiBot corriendo  → http://localhost:{}",
         state.config.port
     );
     info!(

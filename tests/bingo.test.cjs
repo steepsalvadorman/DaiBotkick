@@ -9,17 +9,17 @@ const state = (changes = {}) => ({ user: '<img src=x>', round: 1, phase: 'runnin
 
 test('bingo page uses the channel mascot and the simple Bingo name', () => {
     const html = fs.readFileSync(__dirname + '/../overlay/bingo.html', 'utf8');
-    const mascot = fs.readFileSync(__dirname + '/../overlay/cuchurruminrix.svg', 'utf8');
-    assert.match(html, /<title>Bingo<\/title>/);
+    const mascot = fs.readFileSync(__dirname + '/../overlay/daibot.svg', 'utf8');
+    assert.match(html, /<title>Bingo · DaiBot<\/title>/);
     assert.match(html, /<h1>Bingo<\/h1>/);
     assert.match(html, /id="draw-burst" class="energy-burst" aria-hidden="true"/);
-    assert.match(html, /src="cuchurruminrix\.svg" alt="CuchurruminRix, ninja veloz electrónico y programador, mascota del canal"/);
-    assert.ok(fs.existsSync(__dirname + '/../overlay/cuchurruminrix.svg'));
+    assert.match(html, /src="daibot\.svg" alt="DaiBot, ninja veloz electrónico y programador, mascota del canal"/);
+    assert.ok(fs.existsSync(__dirname + '/../overlay/daibot.svg'));
     assert.match(mascot, /aria-labelledby="crx-title crx-desc"/);
-    assert.match(mascot, /<title id="crx-title">CuchurruminRix, ninja veloz electrónico y programador<\/title>/);
+    assert.match(mascot, /<title id="crx-title">DaiBot, ninja veloz electrónico y programador<\/title>/);
     assert.doesNotMatch(mascot, /gorila|mamut|trompa|colmillo/i);
     const start = fs.readFileSync(__dirname + '/../backend/src/start.html', 'utf8');
-    assert.match(start, /alt="CuchurruminRix, ninja veloz electrónico y programador"/);
+    assert.match(start, /alt="DaiBot, ninja veloz electrónico y programador"/);
     assert.ok(!html.includes('Bingo Aero'));
 });
 

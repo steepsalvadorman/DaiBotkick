@@ -10,6 +10,7 @@ mod db;
 #[cfg(test)]
 mod integration_tests;
 mod kick;
+mod l4d2;
 mod login;
 mod queue;
 mod server;
@@ -205,7 +206,10 @@ async fn main() {
     info!("Overlay: {}", overlay_dir.display());
 
     // Router
+    let steam_routes =
+        l4d2::router(state.clone()).unwrap_or_else(|e| fatal(&format!("Steam/L4D2: {e}")));
     let app = axum::Router::new()
+        .merge(steam_routes)
         .route("/", axum::routing::get(auth::start_oauth))
         .route("/auth/kick", axum::routing::get(auth::redirect_to_kick))
         .route("/auth/callback", axum::routing::get(auth::handle_callback))
@@ -263,6 +267,8 @@ async fn response_headers(
     next: axum::middleware::Next,
 ) -> axum::response::Response {
     let private = request.uri().path().starts_with("/auth")
+        || request.uri().path().starts_with("/api/l4d2/")
+        || request.uri().path() == "/l4d2.html"
         || request.uri().path().starts_with("/api/bingo/")
         || request.uri().path() == "/bingo.html";
     let mut response = next.run(request).await;

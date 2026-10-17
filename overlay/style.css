@@ -215,19 +215,19 @@ button:focus-visible, input:focus-visible {
     color: var(--kick);
     transform: skewX(10deg);
 }
-.desktop-date {
-    flex: 0 0 auto;
+/* Quién pidió el video actual: a la derecha de la placa, solo mientras suena algo. */
+.topbar-requester {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    max-width: 400px;
+    min-width: 0;
     padding: 4px 12px;
     border-radius: 2px;
     background: var(--ink);
-    font-size: 14px;
-    line-height: 20px;
-    font-weight: 700;
-    letter-spacing: 0.6px;
-    color: var(--mist);
-    text-transform: uppercase;
 }
-.desktop-date::first-letter { text-transform: uppercase; }
+.requester-label { flex-shrink: 0; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: var(--mist); }
+#video-requester { min-width: 0; color: var(--kick); font-size: 16px; line-height: 24px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .topbar-spacer { flex: 1; min-width: 0; }
 #emoji-meter {
     display: flex;
@@ -646,6 +646,8 @@ body.no-chat #chat-widget { display: none; }
     border-radius: 2px;
     background: var(--ink);
 }
+/* TikTok es vertical: el área del reproductor pasa a 9:16 centrada. */
+#media-widget[data-source="tiktok"] #video-container { width: 288px; margin: 16px auto; aspect-ratio: 9 / 16; }
 #youtube-player, #direct-video { width: 100%; height: 100%; display: block; }
 #youtube-player iframe { width: 100%; height: 100%; border: 0; }
 #direct-video { display: none; object-fit: contain; }
@@ -678,23 +680,10 @@ body.no-chat #chat-widget { display: none; }
 #video-title.scrolling { text-overflow: clip; }
 .title-inner { display: inline-block; }
 .title-inner.marquee { animation: title-marquee 24s var(--swing) infinite alternate; }
-.media-meta {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    margin-top: 8px;
-    padding: 8px 12px;
-    border: 0;
-    border-radius: 2px;
-    background: var(--surface-raised);
-}
-.requester-box { display: flex; flex-direction: row; align-items: baseline; gap: 8px; min-width: 0; }
-.requester-label { flex-shrink: 0; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: var(--mist); }
-#video-requester { color: var(--kick); font-size: 16px; line-height: 24px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #queue-indicator {
     display: none;
     flex-shrink: 0;
+    margin-top: 8px;
     padding: 4px 8px;
     border: 3px solid var(--ink);
     border-radius: 2px;

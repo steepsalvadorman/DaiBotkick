@@ -58,7 +58,7 @@ La fuente autorizada también puede reiniciar la canción actual, pausar/reanuda
 
 | Comando | Función |
 |---|---|
-| `!play URL` / `!play nombre y artista` | Agregar un video o buscar una canción en YouTube; 30 s por usuario |
+| `!play URL` / `!play nombre y artista` | Agregar un video de YouTube o TikTok, o buscar una canción en YouTube; 30 s por usuario |
 | `!cola` | Ver próximos videos; 30 s global |
 | `!quitarme` | Quitar tu primer video |
 | `!misongs` | Ver tus videos; 15 s por usuario |
@@ -109,6 +109,8 @@ Fish Audio utiliza `s2.1-pro-free` con `latency: "low"` para priorizar una menor
 Requisitos: Rust 1.88.0, PostgreSQL, `edge-tts==7.3.1` y `yt-dlp==2026.8.19` en el PATH. Node 22 o posterior se usa para las pruebas del overlay.
 
 `!play cervecita flor pileña` busca los primeros cinco resultados de YouTube mediante `yt-dlp`, sin clave API ni descargar audio. Selecciona el primero en el orden de relevancia de YouTube que tenga duración conocida y no sea un directo o estreno pendiente. La reproducción sigue usando el reproductor de YouTube y la cola habitual. No garantiza versiones exactas ni disponibilidad para incrustar: añade el artista o usa el enlace exacto. Hay dos búsquedas simultáneas como máximo y timeout de 25 s; los errores y bloqueos de YouTube se avisan en chat.
+
+`!play https://www.tiktok.com/@usuario/video/7440114099565972791` agrega un video de TikTok. También acepta enlaces cortos (`vm.tiktok.com`, `vt.tiktok.com`, `tiktok.com/t/...`): el backend sigue sus redirecciones, solo dentro de dominios de TikTok, hasta obtener el ID. El título se pide al oEmbed público de TikTok; si no responde, aparece como «Video de TikTok». El overlay lo reproduce con el [reproductor embebido oficial](https://developers.tiktok.com/doc/embed-player) en formato vertical 9:16 y avanza la cola cuando termina. Reiniciar, pausar y saltar funcionan igual que con YouTube. Ese reproductor no permite ajustar el volumen: el control de volumen solo lo silencia cuando está en 0 %. Las publicaciones de fotos no se admiten.
 
 En Windows puedes usar el ejecutable oficial `yt-dlp.exe`; se detecta también en `%LOCALAPPDATA%\DaiBot\tools\yt-dlp.exe`. Configura `YT_DLP_PATH` con su ruta absoluta para otra ubicación si no está en el PATH. En servidores con Python se puede instalar `yt-dlp==2026.8.19` en el entorno del backend. La imagen de despliegue ya incluye esa dependencia.
 

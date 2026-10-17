@@ -24,7 +24,10 @@
                 <span class="brand-live" aria-hidden="true">En vivo</span>
             </span>
         </div>
-        <span id="desktop-date" class="desktop-date">Cargando fecha…</span>
+        <div id="topbar-requester" class="topbar-requester" hidden>
+            <span class="requester-label">Pedido por</span>
+            <span id="video-requester">---</span>
+        </div>
         <div class="topbar-clock">
             <time id="desktop-clock" class="desktop-clock">00:00</time>
         </div>
@@ -94,13 +97,7 @@
         <div class="media-info">
             <div class="media-label"><span class="equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i></span> Ahora suena</div>
             <div id="video-title">---</div>
-            <div class="media-meta">
-                <div class="requester-box">
-                    <span class="requester-label">Pedido por</span>
-                    <span id="video-requester">---</span>
-                </div>
-                <span id="queue-indicator"></span>
-            </div>
+            <span id="queue-indicator"></span>
         </div>
     </section>
 

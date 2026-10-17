@@ -48,7 +48,7 @@ pub fn setup(io: &socketioxide::SocketIo, global: Arc<AppState>) {
             }
             let active = *ch.player.lock().await == Some(socket_id.clone());
             socket.emit("playbackRole", serde_json::json!({"active":active})).ok();
-            socket.emit("config", serde_json::json!({"channel_name":slug,"kick_url":format!("kick.com/{slug}")})).ok();
+            socket.emit("config", ch.overlay_config().await).ok();
             socket.emit("toggleVideo", serde_json::json!({"showVideo":ch.show_video.load(Ordering::Relaxed)})).ok();
             let q = ch.video_queue.read().await;
             socket.emit("syncQueue", serde_json::json!({"items":q.items,"version":q.version})).ok();

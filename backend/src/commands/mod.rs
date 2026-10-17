@@ -7,6 +7,7 @@ use crate::{
 use std::sync::Arc;
 use tracing::warn;
 mod search;
+mod tiktok;
 
 pub async fn handle(
     username: &str,
@@ -506,11 +507,8 @@ pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global:
     if ch.cancel.is_cancelled() {
         return;
     }
-    if !url.contains("://")
-        && !url.starts_with("www.")
-        && !url.starts_with("youtube.com")
-        && !url.starts_with("youtu.be")
-    {
+    let url = with_scheme(url);
+    if !url.contains("://") {
         let found = tokio::select! {
             _ = ch.cancel.cancelled() => return,
             result = search::youtube(url.trim(), global) => result,
@@ -525,6 +523,7 @@ pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global:
                     VideoItem {
                         id: uuid::Uuid::new_v4().to_string(),
                         video_id: Some(id),
+                        tiktok_id: None,
                         url: None,
                         title,
                         user: username,
@@ -551,6 +550,36 @@ pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global:
         return;
     }
 
+    if tiktok::is_link(&url) {
+        let resolved = tokio::select! {
+            _ = ch.cancel.cancelled() => return,
+            result = tiktok::resolve(&url) => result,
+        };
+        match resolved {
+            Ok((tiktok_id, title)) => {
+                let msg = format!("▶ @{username} agregó «{}» a la cola", trunc(&title, 60));
+                if enqueue(
+                    VideoItem {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        video_id: None,
+                        tiktok_id: Some(tiktok_id),
+                        url: None,
+                        title,
+                        user: username,
+                    },
+                    ch,
+                    global,
+                )
+                .await
+                {
+                    sender::send(&msg, ch, global).await;
+                }
+            }
+            Err(message) => sender::send(&format!("@{username} {message}"), ch, global).await,
+        }
+        return;
+    }
+
     if is_direct_video(&url) {
         let title = url
             .split('/')
@@ -563,6 +592,7 @@ pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global:
             VideoItem {
                 id: uuid::Uuid::new_v4().to_string(),
                 video_id: None,
+                tiktok_id: None,
                 url: Some(url),
                 title,
                 user: username,
@@ -592,6 +622,7 @@ pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global:
                     VideoItem {
                         id: uuid::Uuid::new_v4().to_string(),
                         video_id: Some(vid),
+                        tiktok_id: None,
                         url: None,
                         title,
                         user: username,
@@ -619,6 +650,7 @@ pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global:
             VideoItem {
                 id: uuid::Uuid::new_v4().to_string(),
                 video_id: Some(vid),
+                tiktok_id: None,
                 url: None,
                 title,
                 user: username,
@@ -680,6 +712,24 @@ where
 async fn visibility(ch: &Arc<ChannelState>, global: &Arc<AppState>, visible: bool) {
     if let Err(e) = crate::server::set_visibility(ch, global, visible).await {
         tracing::error!("[Visibility][{}] {e}", ch.slug);
+    }
+}
+
+/// Acepta enlaces pegados sin esquema (www.youtube.com/..., vm.tiktok.com/...).
+fn with_scheme(url: String) -> String {
+    const HOSTS: [&str; 7] = [
+        "www.",
+        "youtube.com",
+        "youtu.be",
+        "m.youtube.com",
+        "tiktok.com",
+        "vm.tiktok.com",
+        "vt.tiktok.com",
+    ];
+    if !url.contains("://") && !url.contains(' ') && HOSTS.iter().any(|h| url.starts_with(h)) {
+        format!("https://{url}")
+    } else {
+        url
     }
 }
 
@@ -841,6 +891,25 @@ mod tests {
         assert!(yt_id("https://evil.example/?v=dQw4w9WgXcQ").is_none());
         assert!(yt_id("https://youtube.com.evil.example/watch?v=dQw4w9WgXcQ").is_none());
         assert!(yt_id("https://youtu.be/short").is_none());
+    }
+    #[test]
+    fn pasted_links_without_scheme_become_https() {
+        assert_eq!(
+            with_scheme("vm.tiktok.com/ZMhvqjqjq/".into()),
+            "https://vm.tiktok.com/ZMhvqjqjq/"
+        );
+        assert_eq!(
+            with_scheme("www.youtube.com/watch?v=dQw4w9WgXcQ".into()),
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        );
+        assert_eq!(
+            with_scheme("cervecita flor pileña".into()),
+            "cervecita flor pileña"
+        );
+        assert_eq!(
+            with_scheme("tiktok.com es genial".into()),
+            "tiktok.com es genial"
+        );
     }
     #[test]
     fn direct_media_requires_public_https() {

@@ -11,7 +11,49 @@ pub fn start_channel(io: socketioxide::SocketIo, ch: Arc<ChannelState>, global: 
         }
     });
 }
+/// Pide a Kick el nombre original del streamer (con mayúsculas y `_`) una sola vez.
+async fn display_name(global: &AppState, ch: &ChannelState, io: &socketioxide::SocketIo) {
+    if !ch.display_name.read().await.is_empty() {
+        return;
+    }
+    let token = ch.access_token.read().await.clone();
+    let Ok(response) = global
+        .http
+        .get(format!("{}/users", global.kick_endpoints.api))
+        .bearer_auth(token)
+        .send()
+        .await
+    else {
+        return;
+    };
+    if !response.status().is_success() {
+        tracing::warn!(
+            "[Stats][{}] Nombre de canal: HTTP {}",
+            ch.slug,
+            response.status()
+        );
+        return;
+    }
+    let Ok(data) = response.json::<serde_json::Value>().await else {
+        return;
+    };
+    let Some(name) = data["data"]
+        .as_array()
+        .and_then(|users| users.first())
+        .and_then(|user| user["name"].as_str())
+        .map(str::trim)
+        .filter(|name| crate::state::display_name_matches(name, &ch.slug))
+    else {
+        return;
+    };
+    *ch.display_name.write().await = name.to_owned();
+    io.to(ch.slug.clone())
+        .emit("config", ch.overlay_config().await)
+        .ok();
+}
+
 async fn fetch(global: &AppState, ch: &ChannelState, io: &socketioxide::SocketIo) {
+    display_name(global, ch, io).await;
     let token = ch.access_token.read().await.clone();
     let Ok(response) = global
         .http

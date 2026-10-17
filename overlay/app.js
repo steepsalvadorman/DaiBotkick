@@ -23,9 +23,6 @@
         el('desktop-clock').textContent = new Intl.DateTimeFormat('es', {
             hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
         }).format(now);
-        el('desktop-date').textContent = new Intl.DateTimeFormat('es', {
-            weekday: 'long', day: 'numeric', month: 'long',
-        }).format(now);
     }
     updateClock();
     setInterval(updateClock, 1000);
@@ -44,7 +41,10 @@
     if (!channel) { notify('Falta el canal. Copia la URL que aparece al conectar con Kick.'); return; }
     const socket = io({ query: { ch: channel }, auth: { token }, reconnectionDelayMax: 10000 });
     let active = false, queue = [], version = 0, playingId = null, pending = false, visible = true;
-    let player = null, retry, generation = 0, apiPromise;
+    let player = null, tiktok = null, retry, generation = 0, apiPromise;
+    const tiktokOrigin = 'https://www.tiktok.com';
+    // El reproductor embebido de TikTok solo admite play, pause, seekTo, mute y unMute.
+    const tiktokSend = (type, value) => tiktok?.contentWindow?.postMessage({ type, value, 'x-tiktok-player': true }, tiktokOrigin);
     let musicShown = true, musicVolume = 25;
     let mediaReady = false, paused = false, actuallyPlaying = false;
     const media = el('media-widget'), youtube = el('youtube-player'), direct = el('direct-video');
@@ -65,6 +65,7 @@
         paused = false;
         updateTransport();
         if (queue[0]?.videoId) player.playVideo();
+        else if (queue[0]?.tiktokId) tiktokSend('play');
         else {
             const run = generation;
             try { await direct.play(); }
@@ -79,12 +80,16 @@
         if (el('music-pause').disabled) return;
         if (paused) { resumeMedia(); return; }
         paused = true; actuallyPlaying = false;
-        if (queue[0]?.videoId) player.pauseVideo(); else direct.pause();
+        if (queue[0]?.videoId) player.pauseVideo();
+        else if (queue[0]?.tiktokId) tiktokSend('pause');
+        else direct.pause();
         updateTransport();
     });
     el('music-restart').addEventListener('click', () => {
         if (el('music-restart').disabled) return;
-        if (queue[0]?.videoId) player.seekTo(0, true); else direct.currentTime = 0;
+        if (queue[0]?.videoId) player.seekTo(0, true);
+        else if (queue[0]?.tiktokId) tiktokSend('seekTo', 0);
+        else direct.currentTime = 0;
     });
     el('music-next').addEventListener('click', () => {
         if (!el('music-next').disabled) finish(playingId);
@@ -127,6 +132,7 @@
         el('volume-value').textContent = `${value}%`;
         direct.volume = value / 100;
         player?.setVolume(value);
+        tiktokSend(value === 0 ? 'mute' : 'unMute');
     });
     function renderQueue() {
         const list = el('queue-list');
@@ -153,6 +159,7 @@
         generation++; clearTimeout(retry);
         direct.onended = direct.onerror = null; direct.pause(); direct.removeAttribute('src'); direct.load();
         if (player) { player.destroy(); player = null; }
+        tiktok = null; media.removeAttribute('data-source');
         youtube.replaceChildren(); playingId = null; pending = false;
         updateTransport();
     }
@@ -161,6 +168,7 @@
         media.setAttribute('data-shown', String(shown));
         media.setAttribute('aria-hidden', String(!shown));
         el('music-anchor').setAttribute('data-playing', String(shown));
+        el('topbar-requester').hidden = !(active && queue.length && playingId === queue[0].id);
         el('queue-indicator').style.display = queue.length > 1 ? 'inline-block' : 'none';
         el('queue-indicator').textContent = `+${Math.max(0, queue.length - 1)} en cola`;
         updateTransport();
@@ -177,6 +185,27 @@
         }).catch(error => { apiPromise = null; throw error; });
         return apiPromise;
     }
+    addEventListener('message', event => {
+        if (event.origin !== tiktokOrigin || !tiktok || event.source !== tiktok.contentWindow) return;
+        let data = event.data;
+        if (typeof data === 'string') { try { data = JSON.parse(data); } catch { return; } }
+        if (!data || typeof data.type !== 'string') return;
+        const id = playingId;
+        if (data.type === 'onPlayerReady') {
+            mediaReady = true; updateTransport();
+            if (musicVolume === 0) tiktokSend('mute');
+            if (!paused) tiktokSend('play');
+        } else if (data.type === 'onStateChange') {
+            actuallyPlaying = data.value === 1;
+            if (actuallyPlaying) { paused = false; notify(''); }
+            if (data.value === 2) paused = true;
+            updateTransport();
+            if (data.value === 0) finish(id);
+        } else if (data.type === 'onPlayerError') {
+            if (data.value?.errorCode === 3002) notify('Audio bloqueado. Interactúa con la fuente de OBS.');
+            else finish(id);
+        }
+    });
     function finish(id) {
         if (!active || pending || playingId !== id || queue[0]?.id !== id || !socket.connected) return;
         pending = true; updateTransport(); socket.emit('advanceQueue', { id, version });
@@ -189,7 +218,21 @@
         title.textContent = `${item.title || 'Sin título'}   ◆   ${item.title || 'Sin título'}   ◆`;
         el('video-title').replaceChildren(title); el('video-title').classList.add('scrolling');
         el('video-requester').textContent = item.user || 'Anónimo'; display();
-        if (item.videoId) {
+        media.setAttribute('data-source', item.tiktokId ? 'tiktok' : item.videoId ? 'youtube' : 'direct');
+        if (item.tiktokId && /^\d{15,25}$/.test(item.tiktokId)) {
+            direct.style.display = 'none'; youtube.style.display = 'block';
+            const params = new URLSearchParams({
+                autoplay: '1', controls: '0', progress_bar: '0', play_button: '0', volume_control: '0',
+                fullscreen_button: '0', timestamp: '0', loop: '0', music_info: '1', description: '0',
+                rel: '0', native_context_menu: '0', closed_caption: '0',
+            });
+            tiktok = document.createElement('iframe');
+            tiktok.src = `${tiktokOrigin}/player/v1/${item.tiktokId}?${params}`;
+            tiktok.title = item.title || 'Video de TikTok';
+            tiktok.allow = 'autoplay; encrypted-media; fullscreen';
+            tiktok.referrerPolicy = 'strict-origin-when-cross-origin';
+            youtube.append(tiktok);
+        } else if (item.videoId) {
             direct.style.display = 'none'; youtube.style.display = 'block';
             try {
                 await loadAPI(); if (run !== generation || !active) return;
@@ -224,7 +267,8 @@
         } else finish(item.id);
     }
     socket.on('config', config => {
-        const name = String(config.channel_name || channel || 'seniordai').toLowerCase();
+        // Nombre tal cual en Kick: conserva mayúsculas y guiones bajos (Frank_Arr).
+        const name = String(config.channel_name || channel || 'seniordai');
         document.title = name;
         el('stream-title-display').textContent = name;
         if (!avatarOverride && (config.avatar_url || config.avatar)) setChannelAvatar(config.avatar_url || config.avatar);

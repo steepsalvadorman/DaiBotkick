@@ -225,7 +225,9 @@ test('topbar controls toggle local panels, chat and player without changing queu
 test('overlay starts with useful defaults and replaces the welcome when data arrives', () => {
     const app = overlay();
     assert.match(app.get('desktop-clock').textContent, /^\d{2}:\d{2}$/);
-    assert.ok(app.get('desktop-date').textContent.length > 0);
+    const html = fs.readFileSync(__dirname + '/../overlay/pixel.html', 'utf8');
+    assert.match(html, /id="topbar-requester" class="topbar-requester" hidden>/);
+    assert.doesNotMatch(html, /desktop-date/);
 
     app.handlers.chatMessage({ user: 'viewer', content: '¡Hola!' });
     assert.equal(app.get('chat-empty').hidden, true);
@@ -316,14 +318,18 @@ test('winner presentation replaces the drawn board to leave the chat unobstructe
 test('music unfolds only for the active visible queue and retracts on hide or disconnect', () => {
     const app = overlay();
     app.handlers.config({ channel_name: 'SeniorDai' });
-    assert.equal(app.get('stream-title-display').textContent, 'seniordai');
-    assert.equal(app.context.document.title, 'seniordai');
+    assert.equal(app.get('stream-title-display').textContent, 'SeniorDai');
+    assert.equal(app.context.document.title, 'SeniorDai');
+    app.handlers.config({ channel_name: 'Frank_Arr', kick_url: 'kick.com/frank-arr' });
+    assert.equal(app.get('stream-title-display').textContent, 'Frank_Arr');
     app.handlers.playbackRole({ active: true });
     assert.equal(app.get('media-widget').getAttribute('data-shown'), 'false');
     app.handlers.syncQueue({ items: [item('one')], version: 1 });
     assert.equal(app.get('media-widget').getAttribute('data-shown'), 'true');
     assert.equal(app.get('media-widget').getAttribute('aria-hidden'), 'false');
     assert.equal(app.get('music-anchor').getAttribute('data-playing'), 'true');
+    assert.equal(app.get('topbar-requester').hidden, false);
+    assert.equal(app.get('video-requester').textContent, 'viewer');
     app.handlers.toggleVideo({ showVideo: false });
     assert.equal(app.get('media-widget').getAttribute('data-shown'), 'false');
     app.handlers.toggleVideo({ showVideo: true });
@@ -331,6 +337,7 @@ test('music unfolds only for the active visible queue and retracts on hide or di
     app.handlers.disconnect('transport close');
     assert.equal(app.get('media-widget').getAttribute('data-shown'), 'false');
     assert.equal(app.get('music-anchor').getAttribute('data-playing'), 'false');
+    assert.equal(app.get('topbar-requester').hidden, true);
 });
 test('bingo renders drawn numbers, preserves local visibility and verifies winner presentation safely', () => {
     const app = overlay();
@@ -410,7 +417,46 @@ test('TTS audio is sequential and cleared on disconnect', () => {
     assert.equal(app.audios.length, 2);
     app.handlers.disconnect('transport close'); assert.equal(app.audios[1].paused, true);
 });
-test('YouTube ended/error events advance once with no custom postMessage handler', async () => {
+test('TikTok plays in the official embed, obeys transport and advances once when it ends', async () => {
+    const app = overlay(); app.handlers.playbackRole({ active: true });
+    app.handlers.syncQueue({ items: [{ ...item('tt', null), tiktokId: '7440114099565972791' }], version: 1 });
+    await new Promise(resolve => setImmediate(resolve));
+    const frame = app.get('youtube-player').children[0];
+    assert.match(frame.src, /^https:\/\/www\.tiktok\.com\/player\/v1\/7440114099565972791\?autoplay=1&controls=0/);
+    assert.equal(app.get('media-widget').getAttribute('data-source'), 'tiktok');
+    const sent = [];
+    frame.contentWindow = { postMessage: (message, origin) => sent.push([message.type, message.value, origin, message['x-tiktok-player']]) };
+    const receive = (data, origin = 'https://www.tiktok.com', source = frame.contentWindow) => app.windowListeners.message({ origin, source, data });
+    receive({ type: 'onStateChange', value: 0 }, 'https://evil.example');
+    receive({ type: 'onStateChange', value: 0 }, 'https://www.tiktok.com', {});
+    assert.equal(app.emitted.length, 0);
+    receive({ type: 'onPlayerReady' });
+    assert.deepEqual(sent.at(-1), ['play', undefined, 'https://www.tiktok.com', true]);
+    receive(JSON.stringify({ type: 'onStateChange', value: 1 }));
+    assert.equal(app.get('music-transport').getAttribute('data-state'), 'playing');
+    app.get('music-pause').listeners.click();
+    assert.equal(sent.at(-1)[0], 'pause');
+    app.get('music-restart').listeners.click();
+    assert.deepEqual(sent.at(-1).slice(0, 2), ['seekTo', 0]);
+    app.get('music-volume').listeners.input({ target: { value: '0' } });
+    assert.equal(sent.at(-1)[0], 'mute');
+    receive({ type: 'onStateChange', value: 0 }); receive({ type: 'onPlayerError', value: { errorCode: 3001 } });
+    assert.equal(JSON.stringify(app.emitted), JSON.stringify([['advanceQueue', { id: 'tt', version: 1 }]]));
+});
+test('TikTok autoplay blocking keeps the head and invalid IDs never build an embed', async () => {
+    const app = overlay(); app.handlers.playbackRole({ active: true });
+    app.handlers.syncQueue({ items: [{ ...item('tt', null), tiktokId: '7440114099565972791' }], version: 1 });
+    await new Promise(resolve => setImmediate(resolve));
+    const frame = app.get('youtube-player').children[0]; frame.contentWindow = { postMessage() {} };
+    app.windowListeners.message({ origin: 'https://www.tiktok.com', source: frame.contentWindow, data: { type: 'onPlayerError', value: { errorCode: 3002 } } });
+    assert.equal(app.emitted.length, 0);
+    const other = overlay(); other.handlers.playbackRole({ active: true });
+    other.handlers.syncQueue({ items: [{ ...item('bad', null), tiktokId: '../../evil' }], version: 1 });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(other.get('youtube-player').children.length, 0);
+    assert.equal(JSON.stringify(other.emitted), JSON.stringify([['advanceQueue', { id: 'bad', version: 1 }]]));
+});
+test('YouTube ended/error events advance once', async () => {
     const app = overlay(); app.handlers.playbackRole({ active: true });
     app.handlers.syncQueue({ items: [{ ...item('youtube'), videoId: 'dQw4w9WgXcQ', url: undefined }], version: 1 });
     await new Promise(resolve => setImmediate(resolve));

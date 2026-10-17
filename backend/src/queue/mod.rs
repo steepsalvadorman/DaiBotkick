@@ -6,6 +6,8 @@ pub struct VideoItem {
     pub id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub video_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tiktok_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
     pub title: String,
@@ -123,6 +125,7 @@ mod tests {
         VideoItem {
             id: uuid::Uuid::new_v4().to_string(),
             video_id: None,
+            tiktok_id: None,
             url: Some("https://youtu.be/dQw4w9WgXcQ".into()),
             title: title.into(),
             user: user.into(),

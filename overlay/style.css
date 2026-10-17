@@ -86,7 +86,7 @@ button:focus-visible, input:focus-visible {
 .kinetic-corner-left { left: 0; }
 .kinetic-corner-right { right: 0; transform: scaleX(-1); animation-name: corner-in-mirror; }
 
-/* Barra superior: chasis blindado brutalista con placa amarilla en ángulo y controles tácticos. */
+/* Barra superior: chasis blindado brutalista con placa verde en ángulo y controles tácticos. */
 #hud.system-topbar {
     position: absolute;
     top: 16px;
@@ -195,22 +195,19 @@ button:focus-visible, input:focus-visible {
     transform: rotate(45deg);
     animation: live-pulse 1600ms var(--mass) infinite;
 }
-.topbar-divider {
-    width: 8px;
-    height: 42px;
-    border: 2px solid var(--ink);
-    border-radius: 0;
-    background: var(--kick-deep);
-    transform: skewX(-22deg);
-}
+/* Reloj colgando bajo la placa del avatar, fuera del flujo de la barra. */
 .topbar-clock {
-    flex-direction: column;
-    align-items: flex-start;
+    position: absolute;
+    top: calc(100% + 12px);
+    left: 8px;
+    align-items: baseline;
+    gap: 8px;
     padding: 4px 12px;
-    border: 0;
+    border: 4px solid var(--ink);
     border-radius: 2px;
     background: var(--ink);
-    transform: skewX(-4deg);
+    box-shadow: 6px 6px 0 var(--kick-deep);
+    transform: rotate(-2deg);
 }
 .desktop-clock {
     font-size: 24px;
@@ -712,6 +709,7 @@ body.no-chat #chat-widget { display: none; }
 
 /* Bingo: bola sobre ráfaga táctica, tablero de 75 con celdas angulares de alto contraste. */
 #bingo-widget {
+    top: 160px;
     left: var(--safe);
     width: 440px;
     z-index: 40;

@@ -233,7 +233,7 @@
     });
     socket.on('playbackRole', data => {
         active = Boolean(data.active);
-        if (!active) { stop(); stopSpeech(); notify(token ? 'Otro overlay controla la reproducción.' : 'Vista pública. Usa la URL privada de OBS para reproducir.'); }
+        if (!active) { stop(); stopSpeech(); notify(token ? '' : 'Vista pública. Usa la URL privada de OBS para reproducir.'); }
         else { notify(''); playHead(); } display();
     });
     socket.on('syncQueue', data => {

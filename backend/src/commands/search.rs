@@ -53,7 +53,7 @@ pub async fn youtube(query: &str, app: &Arc<AppState>) -> Result<(String, String
     let data: serde_json::Value = serde_json::from_slice(&output.stdout)
         .map_err(|_| "La búsqueda devolvió datos inválidos.")?;
     choose(&data).ok_or(
-        "No encontré una canción de hasta 10 minutos. Prueba con el nombre y artista o un enlace.",
+        "No encontré una canción reproducible. Prueba con el nombre y artista o un enlace.",
     )
 }
 
@@ -68,7 +68,7 @@ fn choose(data: &serde_json::Value) -> Option<(String, String)> {
             return None;
         }
         let duration = entry["duration"].as_f64()?;
-        if !(1.0..=600.0).contains(&duration)
+        if duration < 1.0
             || entry["live_status"] == "is_live"
             || entry["live_status"] == "is_upcoming"
             || entry["is_live"] == true
@@ -100,10 +100,10 @@ mod tests {
         println!("Selected: {title} ({id})");
     }
     #[test]
-    fn selects_first_relevant_short_video_not_live_long_or_invalid_results() {
+    fn selects_first_relevant_video_of_any_length_not_live_or_invalid() {
         let data = serde_json::json!({"entries":[
             {"id":"bad", "duration":100, "title":"Bad"},
-            {"id":"aaaaaaaaaaa", "duration":601, "title":"Mix"},
+            {"id":"aaaaaaaaaaa", "duration":0, "title":"Empty"},
             {"id":"bbbbbbbbbbb", "duration":100, "title":"Live", "is_live":true},
             {"id":"ccccccccccc", "duration":100, "title":"Upcoming", "live_status":"is_upcoming"},
             {"id":"ddddddddddd", "title":"Unknown duration"},
@@ -114,6 +114,8 @@ mod tests {
             choose(&data),
             Some(("eeeeeeeeeee".into(), "Cervecita - Flor Pileña".into()))
         );
+        let long = serde_json::json!({"entries":[{"id":"ggggggggggg", "duration":5400, "title":"Mix de 90 minutos"}]});
+        assert_eq!(choose(&long), Some(("ggggggggggg".into(), "Mix de 90 minutos".into())));
         assert!(choose(&serde_json::json!({"entries":[]})).is_none());
         assert!(choose(&serde_json::json!({})).is_none());
     }

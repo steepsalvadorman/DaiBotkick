@@ -44,7 +44,7 @@
     if (!channel) { notify('Falta el canal. Copia la URL que aparece al conectar con Kick.'); return; }
     const socket = io({ query: { ch: channel }, auth: { token }, reconnectionDelayMax: 10000 });
     let active = false, queue = [], version = 0, playingId = null, pending = false, visible = true;
-    let player = null, timer, retry, generation = 0, apiPromise;
+    let player = null, retry, generation = 0, apiPromise;
     let musicShown = true, musicVolume = 25;
     let mediaReady = false, paused = false, actuallyPlaying = false;
     const media = el('media-widget'), youtube = el('youtube-player'), direct = el('direct-video');
@@ -150,7 +150,7 @@
     renderQueue();
     function stop() {
         mediaReady = false; paused = false; actuallyPlaying = false;
-        generation++; clearTimeout(timer); clearTimeout(retry);
+        generation++; clearTimeout(retry);
         direct.onended = direct.onerror = null; direct.pause(); direct.removeAttribute('src'); direct.load();
         if (player) { player.destroy(); player = null; }
         youtube.replaceChildren(); playingId = null; pending = false;
@@ -189,7 +189,6 @@
         title.textContent = `${item.title || 'Sin título'}   ◆   ${item.title || 'Sin título'}   ◆`;
         el('video-title').replaceChildren(title); el('video-title').classList.add('scrolling');
         el('video-requester').textContent = item.user || 'Anónimo'; display();
-        timer = setTimeout(() => finish(item.id), 600000);
         if (item.videoId) {
             direct.style.display = 'none'; youtube.style.display = 'block';
             try {

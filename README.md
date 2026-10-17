@@ -32,7 +32,7 @@ Conserva esa URL en OBS. El token autoriza solo reproducción, no comandos de pa
 
 La URL sin token muestra chat y estadísticas, pero no reproduce audio/video ni puede avanzar la cola. Los canales registrados antes de esta actualización deben volver a conectarse por OAuth para obtener su URL privada. `index.html` conserva canal y token al redirigir.
 
-Si el navegador bloquea autoplay, interactúa con la fuente de OBS. La pantalla muestra el estado de conexión y errores de reproducción. Un video tiene un límite de reproducción de diez minutos.
+Si el navegador bloquea autoplay, interactúa con la fuente de OBS. La pantalla muestra el estado de conexión y errores de reproducción. Los videos se reproducen completos, sin límite de duración.
 
 ### Nitidez y resolución del overlay
 
@@ -52,7 +52,7 @@ El contador de emojis muestra el total y los tres más usados en una ventana mó
 
 Para usar el mouse, haz clic derecho en la fuente de navegador de OBS y selecciona **Interactuar**. Los botones de la topbar permiten mostrar/ocultar el reproductor sin parar el audio, alternar el chat (también con `?chat=0`), consultar la cola y ajustar el volumen de música (no el TTS). Escape cierra los menús. Estas preferencias son locales a esa fuente y se restablecen al recargar; no otorgan permisos de panel. La imagen compuesta de OBS no es una ventana interactiva encima del juego: los clics del juego no llegan al overlay.
 
-La fuente autorizada también puede reiniciar la canción actual, pausar/reanudar y pasar a la siguiente mediante el avance validado por ID y versión. El vinilo y las barras de la topbar se animan durante la reproducción (son decorativos, no un analizador de audio). Reiniciar conserva la pausa; el límite de diez minutos por video sigue contando durante las pausas. Una vista pública no puede usar estos controles.
+La fuente autorizada también puede reiniciar la canción actual, pausar/reanudar y pasar a la siguiente mediante el avance validado por ID y versión. El vinilo y las barras de la topbar se animan durante la reproducción (son decorativos, no un analizador de audio). Reiniciar conserva la pausa. Una vista pública no puede usar estos controles.
 
 ## Comandos
 
@@ -106,9 +106,9 @@ Fish Audio utiliza `s2.1-pro-free` con `latency: "low"` para priorizar una menor
 
 ## Desarrollo local
 
-Requisitos: Rust 1.88.0, PostgreSQL, `edge-tts==7.2.8` y `yt-dlp==2026.8.19` en el PATH. Node 22 o posterior se usa para las pruebas del overlay.
+Requisitos: Rust 1.88.0, PostgreSQL, `edge-tts==7.3.1` y `yt-dlp==2026.8.19` en el PATH. Node 22 o posterior se usa para las pruebas del overlay.
 
-`!play cervecita flor pileña` busca los primeros cinco resultados de YouTube mediante `yt-dlp`, sin clave API ni descargar audio. Selecciona el primero en el orden de relevancia de YouTube que tenga duración conocida de hasta diez minutos y no sea un directo o estreno pendiente. La reproducción sigue usando el reproductor de YouTube y la cola habitual. No garantiza versiones exactas ni disponibilidad para incrustar: añade el artista o usa el enlace exacto. Hay dos búsquedas simultáneas como máximo y timeout de 25 s; los errores y bloqueos de YouTube se avisan en chat.
+`!play cervecita flor pileña` busca los primeros cinco resultados de YouTube mediante `yt-dlp`, sin clave API ni descargar audio. Selecciona el primero en el orden de relevancia de YouTube que tenga duración conocida y no sea un directo o estreno pendiente. La reproducción sigue usando el reproductor de YouTube y la cola habitual. No garantiza versiones exactas ni disponibilidad para incrustar: añade el artista o usa el enlace exacto. Hay dos búsquedas simultáneas como máximo y timeout de 25 s; los errores y bloqueos de YouTube se avisan en chat.
 
 En Windows puedes usar el ejecutable oficial `yt-dlp.exe`; se detecta también en `%LOCALAPPDATA%\DaiBot\tools\yt-dlp.exe`. Configura `YT_DLP_PATH` con su ruta absoluta para otra ubicación si no está en el PATH. En servidores con Python se puede instalar `yt-dlp==2026.8.19` en el entorno del backend. La imagen de despliegue ya incluye esa dependencia.
 

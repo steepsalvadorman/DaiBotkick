@@ -715,8 +715,12 @@ async fn visibility(ch: &Arc<ChannelState>, global: &Arc<AppState>, visible: boo
     }
 }
 
-/// Acepta enlaces pegados sin esquema (www.youtube.com/..., vm.tiktok.com/...).
+/// Acepta enlaces pegados sin esquema (www.youtube.com/..., vm.tiktok.com/...) y el ID
+/// numérico de un video de TikTok solo: el chat de Kick rechaza mensajes con muchos símbolos.
 fn with_scheme(url: String) -> String {
+    if (15..=25).contains(&url.len()) && url.bytes().all(|b| b.is_ascii_digit()) {
+        return format!("https://www.tiktok.com/video/{url}");
+    }
     const HOSTS: [&str; 7] = [
         "www.",
         "youtube.com",
@@ -902,6 +906,11 @@ mod tests {
             with_scheme("www.youtube.com/watch?v=dQw4w9WgXcQ".into()),
             "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
         );
+        assert_eq!(
+            with_scheme("7671109760938265874".into()),
+            "https://www.tiktok.com/video/7671109760938265874"
+        );
+        assert_eq!(with_scheme("1999".into()), "1999");
         assert_eq!(
             with_scheme("cervecita flor pileña".into()),
             "cervecita flor pileña"

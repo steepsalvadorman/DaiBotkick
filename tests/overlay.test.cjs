@@ -29,14 +29,14 @@ function overlay(hash = '#token=private', search = '?ch=alpha', options = {}) {
     const context = {
         document: { body: new Element(), head: new Element(), getElementById: id => id === 'chat-empty' && get(id).removed ? null : get(id), createElement: () => new Element(), createTextNode: text => ({ textContent: text }), querySelectorAll: () => [] },
         location: { hash, search, origin: 'https://bot.example' },
-        innerWidth: options.width ?? 1920, innerHeight: options.height ?? 1080, URLSearchParams, Date, Promise, Intl,
+        localStorage: options.storage, innerWidth: options.width ?? 1920, innerHeight: options.height ?? 1080, URLSearchParams, Date, Promise, Intl,
         CSS: { supports: (property, value) => property === 'zoom' && value === '1' && options.nativeScale !== false },
         io: options => { context.options = options; return socket; }, addEventListener(name, callback) { windowListeners[name] = callback; },
         setTimeout(fn) { timers.set(++timerId, fn); return timerId; }, clearTimeout(id) { timers.delete(id); }, setInterval(fn, delay) { (context.intervals ||= []).push({ fn, delay }); intervalCallback = fn; },
         Audio: class extends Element { constructor(src) { super(); this.src = src; audios.push(this); } },
         YT: { PlayerState: { PLAYING: 1, PAUSED: 2, ENDED: 0 }, Player: class {
             constructor(target, options) { this.options = options; players.push(this); }
-            destroy() { this.destroyed = true; } playVideo() { this.paused = false; } pauseVideo() { this.paused = true; } seekTo(time) { this.time = time; } setVolume() {}
+            destroy() { this.destroyed = true; } getCurrentTime() { return this.now ?? 0; } playVideo() { this.paused = false; } pauseVideo() { this.paused = true; } seekTo(time) { this.time = time; } setVolume() {}
         } },
     };
     context.window = context;
@@ -455,6 +455,50 @@ test('TikTok autoplay blocking keeps the head and invalid IDs never build an emb
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(other.get('youtube-player').children.length, 0);
     assert.equal(JSON.stringify(other.emitted), JSON.stringify([['advanceQueue', { id: 'bad', version: 1 }]]));
+});
+test('a reloaded OBS source resumes the same queue head where it stopped and forgets it when it ends', async () => {
+    const data = new Map();
+    const storage = { getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value), removeItem: key => data.delete(key) };
+    const tick = app => app.context.intervals.find(i => i.delay === 2000).fn();
+    const queueOf = extra => ({ items: [{ ...item('head', null), ...extra }, item('next')], version: 1 });
+    const start = async extra => {
+        const app = overlay('#token=private', '?ch=alpha', { storage });
+        app.handlers.playbackRole({ active: true }); app.handlers.syncQueue(queueOf(extra));
+        await new Promise(resolve => setImmediate(resolve));
+        return app;
+    };
+
+    let app = await start({ videoId: 'dQw4w9WgXcQ' });
+    app.players[0].options.events.onReady({ target: app.players[0] });
+    app.players[0].now = 95.5; tick(app);
+    assert.equal(data.get('daibot:resume:alpha'), JSON.stringify({ id: 'head', time: 95.5 }));
+    app = await start({ videoId: 'dQw4w9WgXcQ' });
+    app.players[0].options.events.onReady({ target: app.players[0] });
+    assert.equal(app.players[0].time, 93.5);
+    app.players[0].options.events.onStateChange({ data: 0 });
+    assert.equal(data.has('daibot:resume:alpha'), false);
+
+    app = await start({ tiktokId: '7440114099565972791' });
+    let frame = app.get('youtube-player').children[0]; const sent = [];
+    frame.contentWindow = { postMessage: message => sent.push([message.type, message.value]) };
+    const receive = (target, value) => target.windowListeners.message({ origin: 'https://www.tiktok.com', source: frame.contentWindow, data: value });
+    receive(app, { type: 'onPlayerReady' }); receive(app, { type: 'onCurrentTime', value: { currentTime: 40, duration: 60 } });
+    app.windowListeners.pagehide();
+    app = await start({ tiktokId: '7440114099565972791' });
+    frame = app.get('youtube-player').children[0];
+    frame.contentWindow = { postMessage: message => sent.push([message.type, message.value]) };
+    receive(app, { type: 'onPlayerReady' });
+    assert.deepEqual(sent.slice(-2).map(([type, value]) => `${type}:${value}`), ['seekTo:38', 'play:undefined']);
+
+    data.set('daibot:resume:alpha', JSON.stringify({ id: 'head', time: 12 }));
+    app = await start({ url: 'https://cdn.example/video.mp4' });
+    app.get('direct-video').onloadedmetadata();
+    assert.equal(app.get('direct-video').currentTime, 10);
+
+    data.set('daibot:resume:alpha', JSON.stringify({ id: 'old', time: 300 }));
+    app = await start({ url: 'https://cdn.example/video.mp4' });
+    assert.equal(app.get('direct-video').onloadedmetadata, undefined);
+    assert.equal(data.has('daibot:resume:alpha'), false);
 });
 test('YouTube ended/error events advance once', async () => {
     const app = overlay(); app.handlers.playbackRole({ active: true });

@@ -47,6 +47,29 @@
     const tiktokSend = (type, value) => tiktok?.contentWindow?.postMessage({ type, value, 'x-tiktok-player': true }, tiktokOrigin);
     let musicShown = true, musicVolume = 25;
     let mediaReady = false, paused = false, actuallyPlaying = false;
+    // Posición del video actual, para retomarlo si OBS recarga la fuente.
+    const resumeKey = `daibot:resume:${channel}`;
+    let tiktokTime = 0, resumeAt = 0;
+    function readResume() {
+        try { return JSON.parse(localStorage.getItem(resumeKey) || 'null'); } catch { return null; }
+    }
+    function currentTime() {
+        if (!mediaReady || !queue[0] || playingId !== queue[0].id) return 0;
+        if (queue[0].videoId) return Number(player?.getCurrentTime?.()) || 0;
+        if (queue[0].tiktokId) return tiktokTime;
+        return Number(direct.currentTime) || 0;
+    }
+    function saveResume() {
+        const time = currentTime();
+        if (!active || !playingId || time < 1) return;
+        try { localStorage.setItem(resumeKey, JSON.stringify({ id: playingId, time })); } catch {}
+    }
+    function clearResume(id) {
+        if (readResume()?.id !== id) return;
+        try { localStorage.removeItem(resumeKey); } catch {}
+    }
+    setInterval(saveResume, 2000);
+    addEventListener('pagehide', saveResume);
     const media = el('media-widget'), youtube = el('youtube-player'), direct = el('direct-video');
     function updateTransport() {
         const usable = Boolean(active && queue.length && playingId === queue[0].id && mediaReady);
@@ -194,7 +217,10 @@
         if (data.type === 'onPlayerReady') {
             mediaReady = true; updateTransport();
             if (musicVolume === 0) tiktokSend('mute');
+            if (resumeAt) { tiktokSend('seekTo', resumeAt); resumeAt = 0; }
             if (!paused) tiktokSend('play');
+        } else if (data.type === 'onCurrentTime') {
+            tiktokTime = Number(data.value?.currentTime) || 0;
         } else if (data.type === 'onStateChange') {
             actuallyPlaying = data.value === 1;
             if (actuallyPlaying) { paused = false; notify(''); }
@@ -207,6 +233,7 @@
         }
     });
     function finish(id) {
+        clearResume(id);
         if (!active || pending || playingId !== id || queue[0]?.id !== id || !socket.connected) return;
         pending = true; updateTransport(); socket.emit('advanceQueue', { id, version });
         retry = setTimeout(() => { pending = false; finish(id); }, 5000);
@@ -214,6 +241,9 @@
     async function playHead() {
         if (!active || !queue.length || playingId === queue[0].id) return;
         stop(); const item = queue[0]; playingId = item.id; const run = generation;
+        const saved = readResume(); tiktokTime = 0;
+        resumeAt = saved?.id === item.id && saved.time > 3 ? Math.max(0, saved.time - 2) : 0;
+        if (saved && saved.id !== item.id) clearResume(saved.id);
         const title = document.createElement('div'); title.className = 'title-inner marquee';
         title.textContent = `${item.title || 'Sin título'}   ◆   ${item.title || 'Sin título'}   ◆`;
         el('video-title').replaceChildren(title); el('video-title').classList.add('scrolling');
@@ -241,7 +271,7 @@
                     width: '100%', height: '100%', videoId: item.videoId,
                     playerVars: { autoplay: 1, playsinline: 1, controls: 0, rel: 0, origin: location.origin },
                     events: {
-                        onReady: event => { if (run === generation) { mediaReady = true; updateTransport(); event.target.setVolume(musicVolume); event.target.playVideo(); } },
+                        onReady: event => { if (run === generation) { mediaReady = true; updateTransport(); event.target.setVolume(musicVolume); if (resumeAt) { event.target.seekTo(resumeAt, true); resumeAt = 0; } event.target.playVideo(); } },
                         onStateChange: event => {
                             if (run !== generation) return;
                             actuallyPlaying = event.data === YT.PlayerState.PLAYING;
@@ -257,6 +287,7 @@
             } catch (error) { if (run === generation) { notify(error.message); finish(item.id); } }
         } else if (item.url) {
             youtube.style.display = 'none'; direct.style.display = 'block'; direct.src = item.url; direct.volume = musicVolume / 100;
+            if (resumeAt) { const at = resumeAt; resumeAt = 0; direct.onloadedmetadata = () => { direct.onloadedmetadata = null; direct.currentTime = at; }; }
             mediaReady = true; updateTransport();
             direct.onended = direct.onerror = () => finish(item.id);
             try { await direct.play(); } catch (error) {

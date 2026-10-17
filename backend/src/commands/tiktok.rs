@@ -46,6 +46,17 @@ pub fn id(value: &str) -> Option<String> {
     valid_id(&candidate).then_some(candidate)
 }
 
+/// Los directos (`/@usuario/live`) no tienen ID de video y el reproductor no los admite.
+pub fn is_live(value: &str) -> bool {
+    url::Url::parse(value)
+        .ok()
+        .and_then(|url| {
+            url.path_segments()
+                .map(|mut segments| segments.any(|segment| segment == "live"))
+        })
+        .unwrap_or(false)
+}
+
 fn valid_id(value: &str) -> bool {
     (15..=25).contains(&value.len()) && value.bytes().all(|b| b.is_ascii_digit())
 }
@@ -53,6 +64,9 @@ fn valid_id(value: &str) -> bool {
 /// Resuelve enlaces cortos (vm.tiktok.com, vt.tiktok.com, tiktok.com/t/...) siguiendo
 /// redirecciones solo dentro de dominios de TikTok, y obtiene el título por oEmbed.
 pub async fn resolve(value: &str) -> Result<(String, String), &'static str> {
+    if is_live(value) {
+        return Err("los directos de TikTok no se pueden reproducir en el overlay. Usa el enlace de un video (tiktok.com/@usuario/video/...).");
+    }
     let client = reqwest::Client::builder()
         .user_agent(BROWSER_UA)
         .timeout(Duration::from_secs(15))
@@ -143,6 +157,17 @@ mod tests {
         assert!(id("https://www.tiktok.com/@a/video/123").is_none());
         assert!(id("https://www.tiktok.com/@a/video/74401140995659727x1").is_none());
         assert!(id("https://vm.tiktok.com/ZMhvqjqjq/").is_none());
+    }
+
+    #[test]
+    fn live_links_are_rejected_before_any_request() {
+        let live = "https://www.tiktok.com/@francovidalatev/live?_r=1&enter_from_merge=pc_share";
+        assert!(is_link(live));
+        assert!(is_live(live));
+        assert!(id(live).is_none());
+        assert!(!is_live(
+            "https://www.tiktok.com/@seniordai/video/7440114099565972791"
+        ));
     }
 
     #[test]

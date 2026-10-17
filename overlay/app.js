@@ -29,11 +29,16 @@
     }
     updateClock();
     setInterval(updateClock, 1000);
+    const nativeScale = window.CSS?.supports('zoom', '1') === true;
     function fit() {
+        if (innerWidth <= 0 || innerHeight <= 0) return;
         const scale = Math.min(innerWidth / 1920, innerHeight / 1080);
-        document.body.style.transform = `scale(${scale})`;
-        document.body.style.marginLeft = `${Math.max(0, (innerWidth - 1920 * scale) / 2)}px`;
-        document.body.style.marginTop = `${Math.max(0, (innerHeight - 1080 * scale) / 2)}px`;
+        // Zoom rasterizes text, SVGs and embedded players at the output size.
+        document.body.style.zoom = nativeScale ? String(scale) : '1';
+        document.body.style.transform = nativeScale ? 'none' : `scale(${scale})`;
+        const marginScale = nativeScale ? scale : 1;
+        document.body.style.marginLeft = `${Math.max(0, (innerWidth - 1920 * scale) / 2) / marginScale}px`;
+        document.body.style.marginTop = `${Math.max(0, (innerHeight - 1080 * scale) / 2) / marginScale}px`;
     }
     fit(); addEventListener('resize', fit);
     if (!channel) { notify('Falta el canal. Copia la URL que aparece al conectar con Kick.'); return; }

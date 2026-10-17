@@ -22,15 +22,16 @@ function overlay(hash = '#token=private', search = '?ch=alpha', options = {}) {
     }
     const elements = new Map();
     const get = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
-    const handlers = {}, emitted = [], audios = [], players = [], calls = [];
+    const handlers = {}, emitted = [], audios = [], players = [], calls = [], windowListeners = {};
     let timerId = 0, intervalCallback;
     const timers = new Map();
     const socket = { connected: true, on(name, callback) { handlers[name] = callback; }, emit(...args) { emitted.push(args); }, disconnect() { calls.push('disconnect'); }, connect() { calls.push('connect'); } };
     const context = {
         document: { body: new Element(), head: new Element(), getElementById: id => id === 'chat-empty' && get(id).removed ? null : get(id), createElement: () => new Element(), createTextNode: text => ({ textContent: text }), querySelectorAll: () => [] },
         location: { hash, search, origin: 'https://bot.example' },
-        innerWidth: 1920, innerHeight: 1080, URLSearchParams, Date, Promise, Intl,
-        io: options => { context.options = options; return socket; }, addEventListener() {},
+        innerWidth: options.width ?? 1920, innerHeight: options.height ?? 1080, URLSearchParams, Date, Promise, Intl,
+        CSS: { supports: (property, value) => property === 'zoom' && value === '1' && options.nativeScale !== false },
+        io: options => { context.options = options; return socket; }, addEventListener(name, callback) { windowListeners[name] = callback; },
         setTimeout(fn) { timers.set(++timerId, fn); return timerId; }, clearTimeout(id) { timers.delete(id); }, setInterval(fn, delay) { (context.intervals ||= []).push({ fn, delay }); intervalCallback = fn; },
         Audio: class extends Element { constructor(src) { super(); this.src = src; audios.push(this); } },
         YT: { PlayerState: { PLAYING: 1, PAUSED: 2, ENDED: 0 }, Player: class {
@@ -40,9 +41,57 @@ function overlay(hash = '#token=private', search = '?ch=alpha', options = {}) {
     };
     context.window = context;
     vm.runInNewContext(fs.readFileSync(__dirname + '/../overlay/app.js', 'utf8'), context);
-    return { handlers, emitted, audios, players, get, context, timers, calls, socket, intervalCallback: () => intervalCallback };
+    return { handlers, emitted, audios, players, get, context, timers, calls, socket, windowListeners, intervalCallback: () => intervalCallback };
 }
 const item = (id, url = 'https://cdn.example/video.mp4') => ({ id, title: '<img src=x onerror=alert(1)>', user: 'viewer', url });
+
+test('overlay renders at native output scale and fits every viewport without cropping', () => {
+    const sizes = [[1280, 720], [1920, 1080], [2560, 1440], [3840, 2160], [7680, 4320],
+        [3440, 1440], [1920, 1200], [1024, 768], [390, 844], [844, 390], [1365, 767]];
+    for (const nativeScale of [true, false]) {
+        for (const [width, height] of sizes) {
+            const app = overlay('', '', { width, height, nativeScale });
+            const style = app.context.document.body.style;
+            const scale = Math.min(width / 1920, height / 1080);
+            assert.equal(style.zoom, nativeScale ? String(scale) : '1');
+            assert.equal(style.transform, nativeScale ? 'none' : `scale(${scale})`);
+            const left = parseFloat(style.marginLeft) * (nativeScale ? scale : 1);
+            const top = parseFloat(style.marginTop) * (nativeScale ? scale : 1);
+            assert.ok(Math.abs(left * 2 + 1920 * scale - width) < 0.000001);
+            assert.ok(Math.abs(top * 2 + 1080 * scale - height) < 0.000001);
+            assert.ok(left >= 0 && top >= 0);
+        }
+    }
+});
+test('resizing preserves the composition and ignores temporarily empty viewports', () => {
+    for (const nativeScale of [true, false]) {
+        const app = overlay('', '', { nativeScale });
+        app.context.innerWidth = 3840;
+        app.context.innerHeight = 2160;
+        app.windowListeners.resize();
+        const style = app.context.document.body.style;
+        assert.equal(style.zoom, nativeScale ? '2' : '1');
+        assert.equal(style.transform, nativeScale ? 'none' : 'scale(2)');
+        for (const [width, height] of [[0, 2160], [3840, 0], [0, 0]]) {
+            app.context.innerWidth = width;
+            app.context.innerHeight = height;
+            app.windowListeners.resize();
+            assert.equal(style.zoom, nativeScale ? '2' : '1');
+            assert.equal(style.transform, nativeScale ? 'none' : 'scale(2)');
+        }
+        app.context.innerWidth = 1920;
+        app.context.innerHeight = 1200;
+        app.windowListeners.resize();
+        assert.equal(style.marginTop, '60px');
+        assert.equal(style.marginLeft, '0px');
+    }
+});
+test('mobile viewport uses device pixels without a fixed desktop layout viewport', () => {
+    const html = fs.readFileSync(__dirname + '/../overlay/pixel.html', 'utf8');
+    assert.match(html, /name="viewport" content="width=device-width, initial-scale=1"/);
+    const css = fs.readFileSync(__dirname + '/../overlay/style.css', 'utf8');
+    assert.match(css, /body \{[^}]*position: relative;/);
+});
 
 test('music transport pauses, resumes, restarts and skips direct media safely', async () => {
     const app = overlay();

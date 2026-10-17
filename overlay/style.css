@@ -1,4 +1,4 @@
-/* Lienzo transparente de OBS, escalado a 1920x1080 por app.js.
+/* Lienzo transparente 1920x1080, renderizado al tamaño de salida por app.js.
    Identidad "Chasis Industrial Biselado (Mecha Bay)": brutalismo gamer con cortes y ángulos
    tácticos, tinta negra, azul eléctrico, amarillo volt, magenta y turquesa planos,
    bordes completos de acero/tinta, sombras duras desplazadas y movimiento con masa. */
@@ -30,6 +30,7 @@
 ::selection { background: var(--yellow); color: var(--ink); }
 html, body { overflow: hidden; background: transparent; }
 body {
+    position: relative;
     width: 1920px;
     height: 1080px;
     transform-origin: top left;

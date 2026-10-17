@@ -75,6 +75,10 @@ html.obs { background: transparent; }
 .obs #status { background: var(--ink); margin-top: 0; }
 .obs h2 { font-size: 24px; }
 .obs .notice { font-size: 12px; }
+.obs-profiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-top: 16px; }
+.obs-profiles .identity strong { font-size: 18px; }
+.obs-profiles .identity small { font-size: 14px; }
+.obs-profiles .identity img { width: 56px; height: 56px; }
 @media (max-width: 600px) {
     body { padding: 16px; }
     .page-heading { flex-wrap: wrap; }

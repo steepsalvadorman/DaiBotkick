@@ -30,14 +30,15 @@
     <section id="server-section" aria-labelledby="server-title">
         <div class="section-heading"><h2 id="server-title">Servidor de la partida</h2><span id="freshness">Sin consulta</span></div>
         <p id="server-description">Todavía no hay un servidor configurado.</p>
-        <p class="notice">A2S muestra los nombres que responde el servidor, no verifica cuentas Steam. La puntuación no equivale necesariamente a bajas. Los bots también pueden aparecer.</p>
-        <div class="table-scroll">
+        <p id="a2s-notice" class="notice">A2S muestra los nombres que responde el servidor, no verifica cuentas Steam. La puntuación no equivale necesariamente a bajas. Los bots también pueden aparecer.</p>
+        <div id="players-table" class="table-scroll">
             <table>
                 <caption class="sr-only">Jugadores informados por el servidor y perfiles asociados manualmente</caption>
                 <thead><tr><th scope="col">Jugador en el servidor</th><th scope="col">Puntuación</th><th scope="col">Conexión</th><th scope="col">Perfil Steam · histórico</th></tr></thead>
                 <tbody id="players"><tr><td colspan="4">Esperando la primera consulta A2S.</td></tr></tbody>
             </table>
         </div>
+        <div id="obs-profiles" class="obs-profiles" hidden></div>
     </section>
     <section id="admin-section" class="setup" aria-labelledby="admin-title">
         <h2 id="admin-title">Configuración del streamer</h2>

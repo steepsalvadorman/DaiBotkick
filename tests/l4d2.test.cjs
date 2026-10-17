@@ -133,3 +133,18 @@ test('account removal calls the authenticated endpoint and public view reports m
     assert.ok(view.requests.some(request => request.path.endsWith('/account') && request.options.method === 'DELETE'));
     assert.equal(view.get('remove-account').hidden, true);
 });
+
+test('OBS view without a live server shows channel Steam profiles instead of an empty table', async () => {
+    const data = fixture();
+    data.snapshot = {};
+    const view = await app({ data, search: '?ch=alpha&view=overlay&stat=kills' });
+    assert.equal(view.get('obs-profiles').hidden, false);
+    assert.equal(view.get('players-table').hidden, true);
+    assert.match(view.get('obs-profiles').textContent, /<script>Alice<\/script>/);
+    assert.match(view.get('obs-profiles').textContent, /2 h en L4D2 · 1\/2 logros · kills: 123/);
+    assert.match(view.get('status').textContent, /Sin servidor en vivo/);
+    assert.doesNotMatch(view.get('status').textContent, /más abajo/);
+    data.profiles = [];
+    const empty = await app({ data, search: '?ch=alpha&view=overlay' });
+    assert.match(empty.get('obs-profiles').textContent, /Inicia sesión con Steam/);
+});

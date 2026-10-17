@@ -103,9 +103,34 @@
         selectOptions('player-name', players.filter(p => p.name && players.filter(other => other.name === p.name).length === 1)
             .map(p => [p.name, p.name]));
         selectOptions('steam-profile', data.profiles.map(p => [p.steamid, `${p.profile.name || p.steamid} · ${p.steamid}`]));
+        const steamOnly = obs && !players.length;
+        if (obs) renderObsProfiles(steamOnly);
         if (snapshot.error) message('status', snapshot.error, true);
         else if (stale && snapshot.updated) message('status', 'La consulta del servidor está atrasada. No se garantiza que estos jugadores sigan conectados.', true);
-        else message('status', server ? 'Consulta A2S recibida. Los perfiles Steam se asocian manualmente.' : 'Esperando servidor. El streamer puede configurarlo más abajo.');
+        else if (steamOnly && !server) message('status', 'Sin servidor en vivo: estadísticas históricas de Steam del canal.');
+        else message('status', server ? 'Consulta A2S recibida. Los perfiles Steam se asocian manualmente.'
+            : obs ? 'Esperando servidor.' : 'Esperando servidor. Puedes configurarlo más abajo con tu token de panel.');
+    }
+    // OBS without live players: show the channel's Steam profiles instead of an empty table.
+    function renderObsProfiles(show) {
+        const box = el('obs-profiles');
+        box.hidden = !show;
+        el('players-table').hidden = show;
+        el('a2s-notice').hidden = show;
+        el('server-title').textContent = show ? 'Left 4 Dead 2 · Steam' : 'Servidor de la partida';
+        box.replaceChildren();
+        if (!show) return;
+        if (!data.profiles.length) {
+            box.append(node('p', 'Inicia sesión con Steam en el panel de L4D2 para mostrar tus estadísticas aquí.'));
+            return;
+        }
+        for (const account of data.profiles) {
+            const card = node('div', undefined, 'identity'), copy = node('div');
+            copy.append(node('strong', account.profile.name || account.steamid), node('small', historySummary(account.profile)));
+            if (account.profile.error || account.profile.stats_error) copy.append(node('small', 'Estadísticas no disponibles'));
+            card.append(avatar(account.profile.avatar), copy);
+            box.append(card);
+        }
     }
     function renderProfiles() {
         const profiles = el('profiles');

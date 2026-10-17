@@ -228,6 +228,9 @@ test('overlay starts with useful defaults and replaces the welcome when data arr
     const html = fs.readFileSync(__dirname + '/../overlay/pixel.html', 'utf8');
     assert.match(html, /id="topbar-requester" class="topbar-requester" hidden>/);
     assert.doesNotMatch(html, /desktop-date/);
+    assert.match(html, /id="music-volume" type="range" min="0" max="100" value="100"/);
+    assert.match(html, /id="volume-value" for="music-volume">100%</);
+    assert.match(fs.readFileSync(__dirname + '/../overlay/app.js', 'utf8'), /musicVolume = 100;/);
 
     app.handlers.chatMessage({ user: 'viewer', content: '¡Hola!' });
     assert.equal(app.get('chat-empty').hidden, true);

@@ -45,7 +45,7 @@
     const tiktokOrigin = 'https://www.tiktok.com';
     // El reproductor embebido de TikTok solo admite play, pause, seekTo, mute y unMute.
     const tiktokSend = (type, value) => tiktok?.contentWindow?.postMessage({ type, value, 'x-tiktok-player': true }, tiktokOrigin);
-    let musicShown = true, musicVolume = 25;
+    let musicShown = true, musicVolume = 100;
     let mediaReady = false, paused = false, actuallyPlaying = false;
     // Posición del video actual, para retomarlo si OBS recarga la fuente.
     const resumeKey = `daibot:resume:${channel}`;

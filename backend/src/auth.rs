@@ -225,7 +225,6 @@ pub async fn handle_callback(
     let overlay_url = format!("{base}/pixel.html?ch={slug}#token={playback_token}");
     Html(
         CONNECTED_PAGE
-            .replace("{{panel_token}}", &escape_html(&panel_token))
             .replace("{{overlay_url}}", &overlay_url)
             .replace("{{slug}}", &slug),
     )

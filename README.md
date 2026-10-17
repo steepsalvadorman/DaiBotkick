@@ -54,41 +54,6 @@ Para usar el mouse, haz clic derecho en la fuente de navegador de OBS y seleccio
 
 La fuente autorizada también puede reiniciar la canción actual, pausar/reanudar y pasar a la siguiente mediante el avance validado por ID y versión. El vinilo y las barras de la topbar se animan durante la reproducción (son decorativos, no un analizador de audio). Reiniciar conserva la pausa; el límite de diez minutos por video sigue contando durante las pausas. Una vista pública no puede usar estos controles.
 
-## Steam y Left 4 Dead 2
-
-La integración es opcional y no necesita acceso administrativo al servidor de juego. Combina el inicio de sesión **Steam OpenID**, estadísticas históricas de L4D2 (`appid=550`) y consultas UDP **A2S_INFO/A2S_PLAYER**. No instala plugins ni lee memoria del juego.
-
-### Configuración
-
-1. Obtén una clave personal de [Steam Web API](https://steamcommunity.com/dev/apikey) y configura `STEAM_WEB_API_KEY` como secreto del backend. No necesitas credenciales de publisher ni debes pedir contraseñas Steam.
-2. Configura `BASE_URL` con el origen público HTTPS del bot. Steam regresa a `/auth/steam/callback`; este flujo OpenID no utiliza el OAuth de Kick ni requiere registrar ese callback en Kick.
-3. Añade a `STEAM_A2S_SERVERS` las IP públicas y **puertos de consulta** autorizados, separados por comas: `IP_PUBLICA_REAL:27015,OTRA_IP_PUBLICA_REAL:27016`. Sustituye los marcadores por direcciones reales; no se admiten DNS, comodines, direcciones privadas/reservadas ni más de 16 destinos. IPv6 usa `[IPV6_PUBLICA_REAL]:puerto`. Un destino inválido impide arrancar para no ignorar una configuración errónea.
-4. El despliegue debe permitir tráfico UDP saliente y respuestas desde esos servidores. Un túnel HTTP no transporta A2S: la consulta sale desde la máquina del backend. El puerto de consulta puede diferir del puerto para entrar a jugar. Algunos servidores oficiales o de terceros bloquean A2S_PLAYER, ocultan nombres o no exponen información suficiente.
-5. Reinicia el backend; la migración `003_l4d2.sql` crea las tablas persistentes automáticamente.
-6. Vuelve a abrir la página de canal conectado mediante `/auth/kick` y pulsa **Steam y Left 4 Dead 2**. Ese enlace privado lleva el token de **panel**, que se retira de la barra de direcciones al abrir el panel y no se guarda en almacenamiento del navegador. No lo compartas. El token privado del overlay principal solo autoriza reproducción y no sirve para configurar Steam.
-7. Selecciona el servidor permitido y guarda. Comparte con los jugadores únicamente `/l4d2.html?ch=TU_CANAL`, sin fragmento privado. Cada persona pulsa **Iniciar sesión con Steam** tras leer el aviso de publicación de su perfil.
-8. Cuando lleguen nombres A2S, asócialos manualmente con los perfiles que iniciaron sesión en el canal. Los nombres duplicados no se pueden asociar; las asociaciones se borran al guardar un servidor. El usuario puede retirar su perfil del canal, eliminando también asociaciones y sesiones.
-
-### Fuente OBS
-
-En el panel selecciona, si quieres, una **estadística acumulada destacada** y abre **Vista OBS**. Copia la URL pública resultante a una fuente de navegador independiente y colócala en tu escena. Por ejemplo, `/l4d2.html?ch=TU_CANAL&view=overlay`; la selección añade `&stat=IDENTIFICADOR_STEAM`. No pegues un token de panel en OBS. Esta fuente no modifica el overlay principal ni su audio. Ajusta sus dimensiones al espacio disponible; conserva fondo transparente fuera del panel.
-
-La fuente muestra nombres recibidos del servidor, puntuación A2S, minutos de conexión y, cuando existe una asociación, nombre/avatar Steam, horas acumuladas, logros y el contador histórico seleccionado. El panel web permite consultar todos los contadores publicados (hasta 256 por perfil), conservando los identificadores exactos de Steam para no inventar su significado.
-
-### Límites y privacidad
-
-- **A2S no identifica cuentas Steam:** puede incluir bots, nombres vacíos o suplantados; no descubre por sí mismo en qué servidor estás jugando. Debes actualizar el servidor cuando cambies de partida. El listado corresponde al servidor consultado, no a tu sesión de Steam.
-- Toda asociación nombre ↔ SteamID se etiqueta **manual y no verificada**. No se deduce identidad a partir de nombres coincidentes. Incluso un nombre único puede cambiar de propietario entre consultas.
-- La puntuación A2S **no se interpreta como bajas**. No hay daño a Tanks, rescates u otras métricas en vivo salvo que el servidor las exponga mediante otra integración futura.
-- A2S se consulta en segundo plano cada 30 segundos; las consultas tienen un límite de 6 segundos por servidor. Los ciclos son secuenciales y pueden demorarse según el número de canales y los tiempos de red. Los datos de más de 90 segundos se marcan como antiguos. Un error reemplaza el snapshot por un aviso, sin simular que el servidor está vacío o disponible.
-- Los paquetes A2S fragmentados/comprimidos no se admiten en esta versión y producen un aviso explícito. Se admiten desafíos A2S tanto para INFO como para PLAYER.
-- Steam se refresca en segundo plano para perfiles con más de cinco minutos desde su última consulta, hasta diez por ciclo. Las estadísticas son **históricas**, pueden actualizarse después de terminar una partida y dependen de la privacidad del perfil/detalles del juego. Un dato ausente o privado se muestra como no disponible, nunca como cero.
-- Hasta 32 perfiles por canal. Iniciar sesión publica el perfil en ese canal, pero no prueba que esté jugando. Los usuarios pueden retirarlo; la sesión web dura ocho horas. Cookies HttpOnly/SameSite, verificación OpenID con Steam, estado de un solo uso y controles de origen protegen los cambios.
-- Sin `STEAM_WEB_API_KEY` el resto del bot funciona, pero no permite iniciar sesión con Steam. A2S puede funcionar de forma independiente. Sin servidores permitidos no se envían consultas UDP.
-- Las claves API y tokens de panel no forman parte de las respuestas públicas; configuración, perfiles, sesiones y asociaciones se conservan en PostgreSQL. Mantén una sola réplica como el resto del bot.
-
-Pruebas específicas: `cargo test l4d2`, `node --test tests/l4d2.test.cjs` y, con PostgreSQL de pruebas, `cargo test l4d2 -- --ignored`. La prueba integrada usa Steam simulado por HTTP, verifica inicio de sesión, rechazo de replay, persistencia, asociaciones no verificadas y retirada del perfil. No sustituye la comprobación con tu clave, cuenta Steam y servidor reales.
-
 ## Comandos
 
 | Comando | Función |

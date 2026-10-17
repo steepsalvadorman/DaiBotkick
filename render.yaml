@@ -17,10 +17,6 @@ services:
         sync: false
       - key: BASE_URL
         sync: false
-      - key: STEAM_WEB_API_KEY
-        sync: false
-      - key: STEAM_A2S_SERVERS
-        sync: false
       - key: OVERLAY_DIR
         value: /app/overlay
       - key: TTS_CACHE_DIR

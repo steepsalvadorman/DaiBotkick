@@ -48,7 +48,6 @@
     .primary { background: var(--green); color: var(--green-ink); min-width: 132px; }
     .primary:hover { filter: brightness(1.08); }
     .primary.done { background: #c8ffb0; }
-    .note { margin: 14px 0 0; color: var(--muted); font-size: 14px; }
     .ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
     .ghost:hover { border-color: var(--muted); }
     button:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
@@ -105,16 +104,6 @@
   </section>
 
   <section class="card">
-    <h2>URL de Left 4 Dead 2 para OBS</h2>
-    <p>Panel con los jugadores del servidor y sus estadísticas de Steam. Úsala en una segunda fuente de navegador; es pública y no lleva token.</p>
-    <div class="field">
-      <div id="l4d2-url" class="url"></div>
-      <button id="l4d2-copy" class="primary" type="button">Copiar URL</button>
-    </div>
-    <p class="note">Para elegir servidor, iniciar sesión con Steam o destacar una estadística, abre <b>Steam y Left 4 Dead 2</b> abajo.</p>
-  </section>
-
-  <section class="card">
     <h2>Cómo añadirla en OBS</h2>
     <p>Solo tienes que hacerlo una vez.</p>
     <ol>
@@ -127,7 +116,6 @@
   </section>
 
   <nav class="links">
-    <a href="/l4d2.html?ch={{slug}}#panel={{panel_token}}" target="_blank" rel="noopener noreferrer">Steam y Left 4 Dead 2<small>Servidor, perfiles y fuente OBS</small></a>
     <a href="/comandos.html?ch={{slug}}" target="_blank" rel="noopener">Comandos del chat<small>!play, TTS y más</small></a>
     <a href="https://kick.com/{{slug}}" target="_blank" rel="noopener noreferrer">Tu canal en Kick<small>kick.com/{{slug}}</small></a>
   </nav>
@@ -138,12 +126,10 @@
 <script>
   (function () {
     var url = "{{overlay_url}}";
-    var l4d2Url = location.origin + "/l4d2.html?ch=" + encodeURIComponent("{{slug}}") + "&view=overlay";
     var box = document.getElementById("url");
     var toggle = document.getElementById("toggle");
     var masked = box.textContent;
     var shown = false;
-    document.getElementById("l4d2-url").textContent = l4d2Url;
 
     toggle.addEventListener("click", function () {
       shown = !shown;
@@ -190,7 +176,6 @@
     }
 
     copyButton(document.getElementById("copy"), function () { return url; }, function () { if (!shown) toggle.click(); });
-    copyButton(document.getElementById("l4d2-copy"), function () { return l4d2Url; });
   })();
 </script>
 </body>

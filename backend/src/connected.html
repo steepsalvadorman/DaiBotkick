@@ -48,6 +48,7 @@
     .primary { background: var(--green); color: var(--green-ink); min-width: 132px; }
     .primary:hover { filter: brightness(1.08); }
     .primary.done { background: #c8ffb0; }
+    .note { margin: 14px 0 0; color: var(--muted); font-size: 14px; }
     .ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
     .ghost:hover { border-color: var(--muted); }
     button:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
@@ -104,6 +105,16 @@
   </section>
 
   <section class="card">
+    <h2>URL de Left 4 Dead 2 para OBS</h2>
+    <p>Panel con los jugadores del servidor y sus estadísticas de Steam. Úsala en una segunda fuente de navegador; es pública y no lleva token.</p>
+    <div class="field">
+      <div id="l4d2-url" class="url"></div>
+      <button id="l4d2-copy" class="primary" type="button">Copiar URL</button>
+    </div>
+    <p class="note">Para elegir servidor, iniciar sesión con Steam o destacar una estadística, abre <b>Steam y Left 4 Dead 2</b> abajo.</p>
+  </section>
+
+  <section class="card">
     <h2>Cómo añadirla en OBS</h2>
     <p>Solo tienes que hacerlo una vez.</p>
     <ol>
@@ -127,12 +138,12 @@
 <script>
   (function () {
     var url = "{{overlay_url}}";
+    var l4d2Url = location.origin + "/l4d2.html?ch=" + encodeURIComponent("{{slug}}") + "&view=overlay";
     var box = document.getElementById("url");
-    var copy = document.getElementById("copy");
     var toggle = document.getElementById("toggle");
     var masked = box.textContent;
     var shown = false;
-    var timer;
+    document.getElementById("l4d2-url").textContent = l4d2Url;
 
     toggle.addEventListener("click", function () {
       shown = !shown;
@@ -142,9 +153,9 @@
       toggle.setAttribute("aria-pressed", String(shown));
     });
 
-    function fallbackCopy() {
+    function fallbackCopy(text) {
       var area = document.createElement("textarea");
-      area.value = url;
+      area.value = text;
       area.setAttribute("readonly", "");
       area.style.position = "fixed";
       area.style.opacity = "0";
@@ -156,24 +167,30 @@
       return ok;
     }
 
-    function feedback(ok) {
-      copy.textContent = ok ? "¡Copiada!" : "Cópiala a mano";
-      copy.classList.toggle("done", ok);
-      if (!ok && !shown) toggle.click();
-      clearTimeout(timer);
-      timer = setTimeout(function () {
-        copy.textContent = "Copiar URL";
-        copy.classList.remove("done");
-      }, 2500);
+    function copyButton(button, getText, onFail) {
+      var timer;
+      function feedback(ok) {
+        button.textContent = ok ? "¡Copiada!" : "Cópiala a mano";
+        button.classList.toggle("done", ok);
+        if (!ok && onFail) onFail();
+        clearTimeout(timer);
+        timer = setTimeout(function () {
+          button.textContent = "Copiar URL";
+          button.classList.remove("done");
+        }, 2500);
+      }
+      button.addEventListener("click", function () {
+        var text = getText();
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(text).then(function () { feedback(true); }, function () { feedback(fallbackCopy(text)); });
+        } else {
+          feedback(fallbackCopy(text));
+        }
+      });
     }
 
-    copy.addEventListener("click", function () {
-      if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(url).then(function () { feedback(true); }, function () { feedback(fallbackCopy()); });
-      } else {
-        feedback(fallbackCopy());
-      }
-    });
+    copyButton(document.getElementById("copy"), function () { return url; }, function () { if (!shown) toggle.click(); });
+    copyButton(document.getElementById("l4d2-copy"), function () { return l4d2Url; });
   })();
 </script>
 </body>

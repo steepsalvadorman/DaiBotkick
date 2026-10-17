@@ -195,13 +195,11 @@ button:focus-visible, input:focus-visible {
     transform: rotate(45deg);
     animation: live-pulse 1600ms var(--mass) infinite;
 }
-/* Reloj colgando bajo la placa del avatar, fuera del flujo de la barra. */
+/* Fecha a la derecha de la placa; la hora cuelga bajo el avatar, fuera del flujo de la barra. */
 .topbar-clock {
     position: absolute;
     top: calc(100% + 12px);
     left: 8px;
-    align-items: baseline;
-    gap: 8px;
     padding: 4px 12px;
     border: 4px solid var(--ink);
     border-radius: 2px;
@@ -218,13 +216,16 @@ button:focus-visible, input:focus-visible {
     transform: skewX(10deg);
 }
 .desktop-date {
-    font-size: 12px;
-    line-height: 16px;
+    flex: 0 0 auto;
+    padding: 4px 12px;
+    border-radius: 2px;
+    background: var(--ink);
+    font-size: 14px;
+    line-height: 20px;
     font-weight: 700;
     letter-spacing: 0.6px;
     color: var(--mist);
     text-transform: uppercase;
-    transform: skewX(10deg);
 }
 .desktop-date::first-letter { text-transform: uppercase; }
 .topbar-spacer { flex: 1; min-width: 0; }

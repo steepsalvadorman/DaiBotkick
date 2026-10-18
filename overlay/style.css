@@ -96,6 +96,7 @@ button:focus-visible, input:focus-visible {
     height: 96px;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 12px;
     padding: 8px 16px 8px 12px;
     border: 4px solid var(--ink);
@@ -232,7 +233,7 @@ button:focus-visible, input:focus-visible {
 }
 .requester-label { flex-shrink: 0; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: var(--mist); }
 #video-requester { min-width: 0; color: var(--kick); font-size: 16px; line-height: 24px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.topbar-spacer { flex: 1; min-width: 0; }
+.topbar-spacer { display: none; }
 #emoji-meter {
     display: flex;
     align-items: center;
@@ -894,16 +895,17 @@ body.no-chat #chat-widget { display: none; }
     text-shadow: 4px 4px 0 var(--ink);
 }
 
-/* Consejos rotativos en una tira táctica al centro inferior con ángulo brutalista. */
+/* Consejos rotativos pegados a la derecha, por encima de la esquina. */
 #tips {
     position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 26px;
+    right: 48px;
+    bottom: 84px;
+    width: max-content;
+    max-width: 780px;
     height: 58px;
     z-index: 20;
     display: grid;
-    justify-items: center;
+    justify-items: end;
     pointer-events: none;
 }
 .tip {

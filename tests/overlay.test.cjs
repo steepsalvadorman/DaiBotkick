@@ -27,7 +27,7 @@ function overlay(hash = '#token=private', search = '?ch=alpha', options = {}) {
     const timers = new Map();
     const socket = { connected: true, on(name, callback) { handlers[name] = callback; }, emit(...args) { emitted.push(args); }, disconnect() { calls.push('disconnect'); }, connect() { calls.push('connect'); } };
     const context = {
-        document: { body: new Element(), head: new Element(), getElementById: id => id === 'chat-empty' && get(id).removed ? null : get(id), createElement: () => new Element(), createTextNode: text => ({ textContent: text }), querySelectorAll: () => [] },
+        document: { body: new Element(), head: new Element(), getElementById: id => get(id), createElement: () => new Element(), createTextNode: text => ({ textContent: text }), querySelectorAll: () => [] },
         location: { hash, search, origin: 'https://bot.example' },
         localStorage: options.storage, innerWidth: options.width ?? 1920, innerHeight: options.height ?? 1080, URLSearchParams, Date, Promise, Intl,
         CSS: { supports: (property, value) => property === 'zoom' && value === '1' && options.nativeScale !== false },
@@ -36,7 +36,7 @@ function overlay(hash = '#token=private', search = '?ch=alpha', options = {}) {
         Audio: class extends Element { constructor(src) { super(); this.src = src; audios.push(this); } },
         YT: { PlayerState: { PLAYING: 1, PAUSED: 2, ENDED: 0 }, Player: class {
             constructor(target, options) { this.options = options; players.push(this); }
-            destroy() { this.destroyed = true; } getCurrentTime() { return this.now ?? 0; } playVideo() { this.paused = false; } pauseVideo() { this.paused = true; } seekTo(time) { this.time = time; } setVolume() {}
+            destroy() { this.destroyed = true; } getCurrentTime() { return this.now ?? 0; } playVideo() { this.paused = false; } pauseVideo() { this.paused = true; } seekTo(time) { this.time = time; } setVolume(value) { this.volume = value; }
         } },
     };
     context.window = context;
@@ -113,6 +113,12 @@ test('music transport pauses, resumes, restarts and skips direct media safely', 
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(video.paused, false);
     video.onplaying();
+    video.currentTime = 12;
+    app.get('music-stop').listeners.click();
+    assert.equal(video.paused, true);
+    assert.equal(video.currentTime, 0);
+    assert.equal(app.emitted.length, 0);
+    video.onplaying();
     app.get('music-next').listeners.click();
     app.get('music-next').listeners.click();
     assert.equal(app.emitted.length, 1);
@@ -129,6 +135,7 @@ test('YouTube transport uses player methods and public transport remains disable
     await new Promise(resolve => setImmediate(resolve));
     const player = app.players[0];
     player.options.events.onReady({ target: player });
+    assert.equal(player.volume, 90);
     player.options.events.onStateChange({ data: 1 });
     app.get('music-pause').listeners.click();
     assert.equal(player.paused, true);
@@ -196,11 +203,15 @@ test('emoji meter groups complete Unicode sequences and Kick emotes over a rolli
     } finally { Date.now = original; }
 });
 test('topbar controls toggle local panels, chat and player without changing queue permissions', () => {
-    const app = overlay('#token=private', '?ch=alpha&chat=0');
+    const app = overlay('#token=private', '?ch=alpha');
     assert.equal(app.get('chat-toggle').getAttribute('aria-pressed'), 'false');
+    assert.equal(app.context.document.body.classList.contains('no-chat'), true);
     app.get('chat-toggle').listeners.click();
     assert.equal(app.get('chat-toggle').getAttribute('aria-pressed'), 'true');
     assert.equal(app.context.document.body.classList.contains('no-chat'), false);
+    const shown = overlay('#token=private', '?ch=alpha&chat=1');
+    assert.equal(shown.get('chat-toggle').getAttribute('aria-pressed'), 'true');
+    assert.equal(shown.context.document.body.classList.contains('no-chat'), false);
     app.get('queue-toggle').listeners.click();
     assert.equal(app.get('queue-panel').hidden, false);
     app.get('volume-toggle').listeners.click();
@@ -222,24 +233,22 @@ test('topbar controls toggle local panels, chat and player without changing queu
     assert.equal(app.get('direct-video').volume, 0.6);
     assert.equal(app.emitted.length, 0);
 });
-test('overlay starts with useful defaults and replaces the welcome when data arrives', () => {
+test('overlay starts with useful defaults and an empty chat until messages arrive', () => {
     const app = overlay();
     assert.match(app.get('desktop-clock').textContent, /^\d{2}:\d{2}$/);
     const html = fs.readFileSync(__dirname + '/../overlay/pixel.html', 'utf8');
     assert.match(html, /id="topbar-requester" class="topbar-requester" hidden>/);
-    assert.doesNotMatch(html, /desktop-date/);
-    assert.match(html, /id="music-volume" type="range" min="0" max="100" value="100"/);
-    assert.match(html, /id="volume-value" for="music-volume">100%</);
-    assert.match(fs.readFileSync(__dirname + '/../overlay/app.js', 'utf8'), /musicVolume = 100;/);
+    assert.doesNotMatch(html, /desktop-date|chat-empty|El chat está listo/);
+    assert.match(html, /id="music-volume" type="range" min="0" max="100" value="90"/);
+    assert.match(html, /id="volume-value" for="music-volume">90%</);
+    assert.match(fs.readFileSync(__dirname + '/../overlay/app.js', 'utf8'), /musicVolume = 90;/);
 
     app.handlers.chatMessage({ user: 'viewer', content: '¡Hola!' });
-    assert.equal(app.get('chat-empty').hidden, true);
     assert.equal(app.get('chat-messages').children[0].children[1].textContent, '¡Hola!');
 });
-test('chat continues receiving messages after its welcome placeholder is removed', () => {
+test('chat keeps the latest four messages', () => {
     const app = overlay();
     const body = app.get('chat-messages');
-    body.append(app.get('chat-empty'));
     for (let i = 0; i < 10; i++) app.handlers.chatMessage({ user: `viewer${i}`, content: `Mensaje ${i}` });
     assert.equal(body.children.length, 4);
     assert.equal(body.children[0].children[1].textContent, 'Mensaje 6');
@@ -268,9 +277,8 @@ test('original kinetic artwork stays decorative and the game canvas stays transp
     assert.ok(fs.existsSync(__dirname + '/../overlay/kinetic-burst.svg'));
     const hand = fs.readFileSync(__dirname + '/../overlay/daibot.svg', 'utf8');
     assert.doesNotMatch(hand, /<image|href=|<script|on\w+=/);
-    assert.match(html, /class="heading-sticker channel-avatar-sync" src="\/daibot\.svg" alt="" aria-hidden="true"/);
+    assert.doesNotMatch(html, /widget-heading|heading-sticker|heading-mark|>Chat en vivo</);
     assert.match(html, /class="alert-art channel-avatar-sync" src="\/daibot\.svg" alt="" aria-hidden="true"/);
-    assert.match(css, /\.heading-sticker \{[^}]*pointer-events: none;/);
 });
 test('visual system pairs comic headings with readable body type and preserves scale and motion', () => {
     const html = fs.readFileSync(__dirname + '/../overlay/pixel.html', 'utf8');
@@ -278,7 +286,7 @@ test('visual system pairs comic headings with readable body type and preserves s
     assert.match(html, /family=Manrope:wght@400;500;600;700&display=swap/);
     assert.match(html, /family=Bangers&family=Manrope/);
     assert.match(css, /--display: 'Bangers', 'Impact', 'Haettenschweiler', sans-serif;/);
-    for (const selector of ['#hud .stream-title', '.aero-window-title', '.widget-heading', '.alert-header', '.alert-body', '.tip-label']) {
+    for (const selector of ['#hud .stream-title', '.aero-window-title', '.alert-header', '.alert-body', '.tip-label']) {
         const start = css.indexOf(`${selector} {`);
         assert.notEqual(start, -1);
         assert.match(css.slice(start, css.indexOf('}', start)), /font-family: var\(--display\);/);
@@ -434,6 +442,7 @@ test('TikTok plays in the official embed, obeys transport and advances once when
     receive({ type: 'onStateChange', value: 0 }, 'https://www.tiktok.com', {});
     assert.equal(app.emitted.length, 0);
     receive({ type: 'onPlayerReady' });
+    assert.deepEqual(sent.find(message => message[0] === 'changeVolume')?.slice(0, 2), ['changeVolume', 90]);
     assert.deepEqual(sent.at(-1), ['play', undefined, 'https://www.tiktok.com', true]);
     receive(JSON.stringify({ type: 'onStateChange', value: 1 }));
     assert.equal(app.get('music-transport').getAttribute('data-state'), 'playing');

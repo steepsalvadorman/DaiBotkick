@@ -12,7 +12,7 @@ pub async fn send(text: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
             .http
             .post(format!("{}/chat", global.kick_endpoints.api))
             .bearer_auth(&token)
-            .json(&serde_json::json!({"broadcaster_user_id":id,"content":text,"type":"user"}))
+            .json(&payload(id, text))
             .send()
             .await;
         match response {
@@ -39,6 +39,11 @@ pub async fn send(text: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
 
 const RECENT_LIMIT: usize = 20;
 
+/// Kick muestra estas respuestas con el nombre de la app (DaiBot), no con el del canal.
+fn payload(channel_id: u64, text: &str) -> serde_json::Value {
+    serde_json::json!({"broadcaster_user_id":channel_id,"content":text,"type":"bot"})
+}
+
 /// Guarda el texto para reconocer su eco cuando Kick lo devuelva como mensaje del canal.
 async fn remember(ch: &ChannelState, text: &str) {
     let mut recent = ch.recent_sent.lock().await;
@@ -63,6 +68,14 @@ pub async fn is_own_echo(ch: &ChannelState, content: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn automatic_replies_use_the_bot_identity() {
+        let body = payload(42, "▶ @ana agregó «x» a la cola");
+        assert_eq!(body["type"], "bot");
+        assert_eq!(body["broadcaster_user_id"], 42);
+        assert_eq!(body["content"], "▶ @ana agregó «x» a la cola");
+    }
 
     #[tokio::test]
     async fn own_messages_are_recognized_once_and_others_are_not() {

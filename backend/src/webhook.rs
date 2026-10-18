@@ -214,8 +214,8 @@ async fn process(app: &Arc<AppState>, kind: &str, json: &serde_json::Value) {
                 return;
             };
             let owner = json["sender"]["user_id"].as_u64() == Some(id);
-            // El bot escribe con la cuenta del streamer: su eco no se muestra ni se procesa.
-            if owner && crate::kick::sender::is_own_echo(&ch, content).await {
+            // El bot escribe como DaiBot: su eco no se muestra ni se procesa, venga de la app o del canal.
+            if crate::kick::sender::is_own_echo(&ch, content).await {
                 return;
             }
             // Los comandos (!play, !s…) no se muestran en el chat del overlay.

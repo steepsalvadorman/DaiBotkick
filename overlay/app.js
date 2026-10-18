@@ -11,7 +11,7 @@
         document.querySelectorAll('.channel-avatar-sync').forEach(node => { node.src = raw; });
     }
     if (avatarOverride) setChannelAvatar(avatarOverride);
-    let chatShown = new URLSearchParams(location.search).get('chat') !== '0';
+    let chatShown = new URLSearchParams(location.search).get('chat') === '1';
     if (!chatShown) document.body.classList.add('no-chat');
     el('chat-toggle').setAttribute('aria-pressed', String(chatShown));
     const token = new URLSearchParams(location.hash.slice(1)).get('token') || '';
@@ -43,9 +43,9 @@
     let active = false, queue = [], version = 0, playingId = null, pending = false, visible = true;
     let player = null, tiktok = null, retry, generation = 0, apiPromise;
     const tiktokOrigin = 'https://www.tiktok.com';
-    // El reproductor embebido de TikTok solo admite play, pause, seekTo, mute y unMute.
+    // TikTok admite play, pause, seekTo, mute, unMute y changeVolume (0–100).
     const tiktokSend = (type, value) => tiktok?.contentWindow?.postMessage({ type, value, 'x-tiktok-player': true }, tiktokOrigin);
-    let musicShown = true, musicVolume = 100;
+    let musicShown = true, musicVolume = 90;
     let mediaReady = false, paused = false, actuallyPlaying = false;
     // Posición del video actual, para retomarlo si OBS recarga la fuente.
     const resumeKey = `daibot:resume:${channel}`;
@@ -75,6 +75,7 @@
         const usable = Boolean(active && queue.length && playingId === queue[0].id && mediaReady);
         el('music-restart').disabled = !usable || pending;
         el('music-pause').disabled = !usable || pending;
+        el('music-stop').disabled = !usable || pending;
         el('music-next').disabled = !active || !queue.length || pending;
         const state = usable && actuallyPlaying && !paused ? 'playing' : usable ? 'paused' : 'idle';
         el('music-transport').setAttribute('data-state', state);
@@ -113,6 +114,14 @@
         if (queue[0]?.videoId) player.seekTo(0, true);
         else if (queue[0]?.tiktokId) tiktokSend('seekTo', 0);
         else direct.currentTime = 0;
+    });
+    el('music-stop').addEventListener('click', () => {
+        if (el('music-stop').disabled) return;
+        paused = true; actuallyPlaying = false;
+        if (queue[0]?.videoId) { player.pauseVideo(); player.seekTo(0, true); }
+        else if (queue[0]?.tiktokId) { tiktokSend('pause'); tiktokSend('seekTo', 0); }
+        else { direct.pause(); direct.currentTime = 0; }
+        updateTransport();
     });
     el('music-next').addEventListener('click', () => {
         if (!el('music-next').disabled) finish(playingId);
@@ -154,9 +163,14 @@
         musicVolume = value;
         el('volume-value').textContent = `${value}%`;
         direct.volume = value / 100;
-        player?.setVolume(value);
-        tiktokSend(value === 0 ? 'mute' : 'unMute');
+        applyEmbedVolume();
     });
+    function applyEmbedVolume() {
+        player?.setVolume(musicVolume);
+        if (!tiktok) return;
+        if (musicVolume === 0) tiktokSend('mute');
+        else { tiktokSend('unMute'); tiktokSend('changeVolume', musicVolume); }
+    }
     function renderQueue() {
         const list = el('queue-list');
         list.replaceChildren();
@@ -216,14 +230,14 @@
         const id = playingId;
         if (data.type === 'onPlayerReady') {
             mediaReady = true; updateTransport();
-            if (musicVolume === 0) tiktokSend('mute');
+            applyEmbedVolume();
             if (resumeAt) { tiktokSend('seekTo', resumeAt); resumeAt = 0; }
             if (!paused) tiktokSend('play');
         } else if (data.type === 'onCurrentTime') {
             tiktokTime = Number(data.value?.currentTime) || 0;
         } else if (data.type === 'onStateChange') {
             actuallyPlaying = data.value === 1;
-            if (actuallyPlaying) { paused = false; notify(''); }
+            if (actuallyPlaying) { paused = false; notify(''); applyEmbedVolume(); }
             if (data.value === 2) paused = true;
             updateTransport();
             if (data.value === 0) finish(id);
@@ -271,11 +285,11 @@
                     width: '100%', height: '100%', videoId: item.videoId,
                     playerVars: { autoplay: 1, playsinline: 1, controls: 0, rel: 0, origin: location.origin },
                     events: {
-                        onReady: event => { if (run === generation) { mediaReady = true; updateTransport(); event.target.setVolume(musicVolume); if (resumeAt) { event.target.seekTo(resumeAt, true); resumeAt = 0; } event.target.playVideo(); } },
+                        onReady: event => { if (run === generation) { mediaReady = true; updateTransport(); applyEmbedVolume(); if (resumeAt) { event.target.seekTo(resumeAt, true); resumeAt = 0; } event.target.playVideo(); } },
                         onStateChange: event => {
                             if (run !== generation) return;
                             actuallyPlaying = event.data === YT.PlayerState.PLAYING;
-                            if (actuallyPlaying) { paused = false; notify(''); }
+                            if (actuallyPlaying) { paused = false; notify(''); applyEmbedVolume(); }
                             if (event.data === YT.PlayerState.PAUSED) paused = true;
                             updateTransport();
                             if (event.data === YT.PlayerState.ENDED) finish(item.id);
@@ -381,8 +395,6 @@
     }
     setInterval(updateEmojiMeter, 5000);
     socket.on('chatMessage', data => {
-        const empty = el('chat-empty');
-        if (empty) empty.hidden = true;
         const item = document.createElement('div'); item.className = 'msg';
         const user = document.createElement('div'); user.className = 'msg-user'; user.textContent = data.user || '';
         const text = document.createElement('div'); text.className = 'msg-text';

@@ -185,6 +185,7 @@ async fn refresh_serializes_rotation_honors_expiry_and_chat_retries_401() {
     assert_eq!(chats[0].0, "Bearer expired");
     assert_eq!(chats[1].0, "Bearer access-3");
     assert_eq!(chats[1].1["content"], "hola á 😀");
+    assert_eq!(chats[1].1["type"], "bot");
     drop(chats);
     ch.cancel.cancel();
     assert!(!kick::refresh_access_token(&ch, &app).await);

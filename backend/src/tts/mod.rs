@@ -67,7 +67,7 @@ pub fn is_valid_voice(voice: &str) -> bool {
 }
 
 pub fn voice_list(fish_audio_enabled: bool) -> String {
-    let mut commands = vec!["!s / !dai / !camila".to_string()];
+    let mut commands = vec!["!s / !camila".to_string()];
     commands.extend(
         edge_tts::VOICES
             .iter()
@@ -195,7 +195,8 @@ mod tests {
         for &(alias, _) in edge_tts::VOICES {
             assert!(without_fish.contains(&format!("!{alias}")));
         }
-        assert!(without_fish.contains("!s / !dai / !camila"));
+        assert!(without_fish.contains("!s / !camila"));
+        assert!(!without_fish.contains("!dai"));
         assert!(!without_fish.contains("!jacinta"));
         assert!(voice_list(true).contains("!jacinta"));
         assert!(without_fish.contains("!s Hola stream"));
@@ -257,7 +258,6 @@ mod tests {
         *channel.channel_id.write().await = None;
         for (command, voice) in [
             ("!s", "camila"),
-            ("!dai", "camila"),
             ("!camila", "camila"),
             ("!dalia", "dalia"),
             ("!jorge", "jorge"),
@@ -273,6 +273,8 @@ mod tests {
             assert_eq!(item.text, "Ana 7 dice: Hola");
             assert_eq!(item.voice, voice);
         }
+        crate::commands::handle("Ana_7", "!dai Hola", true, &channel, &app).await;
+        assert!(receiver.try_recv().is_err());
     }
     #[tokio::test]
     async fn tts_rejects_long_invalid_and_excess_requests() {

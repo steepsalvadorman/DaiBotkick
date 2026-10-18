@@ -383,11 +383,11 @@ pub async fn handle(
         return;
     }
     let cmd_low = cmd_word.to_lowercase();
-    let camila = cmd_low == "!s" || cmd_low == "!dai";
+    let camila = cmd_low == "!s" || cmd_low == "!camila";
     let is_tts = camila || cmd_low.strip_prefix('!').is_some_and(tts::is_valid_voice);
     if is_tts {
         if !is_owner {
-            let ok = { ch.cooldown.lock().await.consume_user(username, "!dai", 15) };
+            let ok = { ch.cooldown.lock().await.consume_user(username, "!camila", 15) };
             if !ok {
                 return;
             }

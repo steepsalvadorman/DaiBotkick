@@ -91,8 +91,9 @@ button:focus-visible, input:focus-visible {
     position: absolute;
     top: 16px;
     left: var(--safe);
-    right: var(--safe);
-    height: 76px;
+    /* Deja libre la columna derecha para el reproductor de YouTube. */
+    right: calc(var(--safe) + 440px);
+    height: 96px;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -215,16 +216,19 @@ button:focus-visible, input:focus-visible {
     color: var(--kick);
     transform: skewX(10deg);
 }
-/* Quién pidió el video actual: a la derecha de la placa, solo mientras suena algo. */
+/* «Pedido por» queda encima de anterior, pausa, stop y siguiente. */
+#music-transport { flex-direction: column; align-items: center; gap: 2px; padding: 2px 6px; }
+.transport-row { display: flex; align-items: center; gap: 4px; }
 .topbar-requester {
     display: flex;
-    align-items: baseline;
-    gap: 8px;
-    max-width: 400px;
-    min-width: 0;
-    padding: 4px 12px;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    max-width: 220px;
+    padding: 0 8px;
     border-radius: 2px;
     background: var(--ink);
+    transform: skewX(6deg);
 }
 .requester-label { flex-shrink: 0; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: var(--mist); }
 #video-requester { min-width: 0; color: var(--kick); font-size: 16px; line-height: 24px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -232,15 +236,15 @@ button:focus-visible, input:focus-visible {
 #emoji-meter {
     display: flex;
     align-items: center;
-    gap: 8px;
-    max-width: 400px;
-    height: 44px;
+    gap: 10px;
+    max-width: 520px;
+    height: 56px;
     padding: 4px 16px;
     border-radius: 2px;
     background: var(--ink);
     transform: skewX(-8deg);
-    font-size: 14px;
-    line-height: 20px;
+    font-size: 16px;
+    line-height: 24px;
     font-weight: 700;
 }
 #emoji-total {
@@ -250,15 +254,18 @@ button:focus-visible, input:focus-visible {
     text-transform: uppercase;
     transform: skewX(14deg);
 }
-#emoji-top { display: flex; gap: 8px; overflow: hidden; font-family: var(--font), var(--emoji); transform: skewX(14deg); }
+#emoji-top { display: flex; align-items: center; gap: 10px; overflow: hidden; font-family: var(--font), var(--emoji); font-size: 30px; line-height: 36px; transform: skewX(14deg); }
 #emoji-top > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     white-space: nowrap;
-    padding: 2px 4px;
+    padding: 2px 6px;
     border-radius: 2px;
     background: var(--surface-raised);
     color: var(--paper);
 }
-#emoji-top .chat-emote { width: 24px; height: 24px; }
+#emoji-top .chat-emote { width: 40px; height: 40px; }
 .aero-control-cluster {
     display: flex;
     align-items: center;
@@ -367,7 +374,7 @@ button:focus-visible, input:focus-visible {
 .topbar-panel {
     position: absolute;
     top: 108px;
-    right: 160px;
+    right: calc(var(--safe) + 440px);
     width: 380px;
     max-height: 420px;
     overflow: auto;
@@ -438,63 +445,6 @@ button:focus-visible, input:focus-visible {
     z-index: 20;
 }
 body.no-chat #chat-widget { display: none; }
-.widget-heading {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    align-self: flex-start;
-    min-height: 44px;
-    padding: 8px 64px 8px 16px;
-    border: 4px solid var(--ink);
-    border-radius: 2px;
-    background: var(--kick);
-    box-shadow: 6px 6px 0 var(--ink);
-    color: var(--ink);
-    font-family: var(--display);
-    font-size: 20px;
-    line-height: 28px;
-    font-weight: 400;
-    letter-spacing: 1.2px;
-    text-transform: uppercase;
-    transform: skewX(-10deg) rotate(-2deg);
-    transform-origin: left center;
-}
-.widget-heading::before {
-    content: "";
-    position: absolute;
-    left: -12px;
-    top: -12px;
-    width: 68px;
-    height: 54px;
-    background: var(--arc-corner-cyan) center / contain no-repeat;
-    pointer-events: none;
-    animation: volt-arc 360ms var(--swing) infinite alternate;
-}
-.heading-mark {
-    width: 14px;
-    height: 14px;
-    border-radius: 0;
-    background: var(--kick-deep);
-    border: 2px solid var(--ink);
-    transform: rotate(45deg);
-}
-.heading-sticker {
-    position: absolute;
-    right: -12px;
-    bottom: -10px;
-    width: 58px;
-    height: 58px;
-    padding: 2px;
-    object-fit: cover;
-    border: 3px solid var(--ink);
-    border-radius: 4px;
-    background: var(--surface-raised);
-    box-shadow: 4px 4px 0 var(--kick-deep), -3px -3px 0 var(--kick-mint);
-    transform: skewX(10deg) rotate(8deg);
-    pointer-events: none;
-    animation: sticker-bob 2400ms var(--swing) infinite alternate;
-}
 .chat-body {
     display: flex;
     flex-direction: column;
@@ -504,19 +454,20 @@ body.no-chat #chat-widget { display: none; }
     overflow: hidden;
     padding: 16px 12px 8px 16px;
 }
-.chat-empty, .msg {
+.msg {
     position: relative;
     flex-shrink: 0;
-    padding: 8px 16px 12px;
+    padding: 16px 16px 12px;
     border: 4px solid var(--ink);
     border-radius: 2px;
     background: var(--surface);
     color: var(--paper);
     box-shadow: 8px 8px 0 var(--kick);
     transform: skewX(-4deg);
+    animation: msg-slam 700ms var(--mass) both, msg-out 800ms var(--mass) 25s forwards;
 }
-.chat-empty::before, .msg::before,
-.chat-empty::after, .msg::after {
+.msg::before,
+.msg::after {
     content: "";
     position: absolute;
     top: 14px;
@@ -524,13 +475,8 @@ body.no-chat #chat-widget { display: none; }
     height: 22px;
     clip-path: polygon(100% 0, 0 35%, 100% 100%);
 }
-.chat-empty::before, .msg::before { left: -18px; background: var(--ink); }
-.chat-empty::after, .msg::after { left: -12px; top: 18px; width: 12px; height: 14px; background: var(--surface); }
-.chat-empty { padding: 12px 16px; font-size: 18px; line-height: 28px; font-weight: 700; text-wrap: pretty; }
-.msg {
-    padding-top: 16px;
-    animation: msg-slam 700ms var(--mass) both, msg-out 800ms var(--mass) 25s forwards;
-}
+.msg::before { left: -18px; background: var(--ink); }
+.msg::after { left: -12px; top: 18px; width: 12px; height: 14px; background: var(--surface); }
 .msg:nth-child(even) {
     background: var(--kick);
     color: var(--ink);
@@ -621,6 +567,7 @@ body.no-chat #chat-widget { display: none; }
     animation: volt-arc 440ms var(--swing) -180ms infinite alternate;
 }
 #media-widget {
+    top: 16px;
     right: var(--safe);
     width: 408px;
     z-index: 45;
@@ -647,7 +594,7 @@ body.no-chat #chat-widget { display: none; }
     background: var(--ink);
 }
 /* TikTok es vertical: el reproductor pasa a 9:16 y se pega al borde izquierdo, bajo la hora;
-   queda por encima del bingo y del chat mientras suena. */
+   queda por encima del bingo y del chat mientras suena. YouTube permanece arriba a la derecha. */
 #media-widget[data-source="tiktok"] { top: 160px; right: auto; left: var(--safe); width: 320px; }
 #media-widget[data-source="tiktok"] #video-container { width: 288px; margin: 16px auto; aspect-ratio: 9 / 16; }
 #youtube-player, #direct-video { width: 100%; height: 100%; display: block; }
@@ -699,66 +646,85 @@ body.no-chat #chat-widget { display: none; }
     text-transform: uppercase;
 }
 
-/* Bingo: bola sobre ráfaga táctica, tablero de 75 con celdas angulares de alto contraste. */
+/* Bingo: tablero grande al centro del lienzo para que se lea en el stream. */
 #bingo-widget {
-    top: 160px;
-    left: var(--safe);
-    width: 440px;
-    z-index: 40;
-    box-shadow: 10px 10px 0 var(--kick-deep);
+    top: 188px;
+    left: 50%;
+    width: 980px;
+    margin-left: -490px;
+    z-index: 42;
+    box-shadow: 12px 12px 0 var(--kick-deep);
     transform: skewX(-2deg);
     animation: panel-slam 700ms var(--mass) both;
 }
+#bingo-widget .aero-window-title { min-height: 56px; font-size: 30px; line-height: 36px; }
 .bingo-caption {
     margin-left: auto;
-    padding: 2px 8px;
+    padding: 4px 12px;
     border: 2px solid var(--ink);
     border-radius: 2px;
     background: var(--kick);
     color: var(--ink);
     transform: skewX(-12deg);
-    font-size: 12px;
-    line-height: 16px;
+    font-size: 18px;
+    line-height: 24px;
 }
-.bingo-content { padding: 12px 16px 16px; }
-.bingo-draw { display: flex; align-items: center; gap: 16px; }
+.bingo-content { padding: 20px 24px 24px; }
+.bingo-draw { display: flex; align-items: center; gap: 24px; }
 .bingo-drum {
     position: relative;
     display: grid;
     place-items: center;
-    width: 84px;
-    height: 84px;
-    flex: 0 0 84px;
+    width: 148px;
+    height: 148px;
+    flex: 0 0 148px;
     isolation: isolate;
+    transform: skewX(2deg);
 }
 .bingo-drum i {
     position: absolute;
     inset: 0;
-    clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
-    background: var(--ink);
-    animation: burst-turn 6s var(--swing) infinite alternate;
+    border: 6px solid var(--ink);
+    border-radius: 9999px;
+    background: transparent;
 }
-.bingo-drum i:nth-child(2) { inset: 4px; background: var(--kick); }
-.bingo-drum i:nth-child(3) { inset: 14px; background: var(--kick-deep); transform: rotate(22deg); animation-direction: alternate-reverse; }
+.bingo-drum i:nth-child(2) {
+    inset: 10px;
+    border: 3px solid var(--kick);
+    box-shadow:
+        0 -48px 0 -54px var(--paper),
+        42px -24px 0 -56px var(--kick-mint),
+        42px 24px 0 -56px var(--paper),
+        0 48px 0 -54px var(--kick),
+        -42px 24px 0 -56px var(--paper),
+        -42px -24px 0 -56px var(--kick-mint);
+    animation: bingo-cage 900ms var(--swing) infinite alternate;
+}
+.bingo-drum i:nth-child(3) {
+    inset: 22px;
+    border-width: 4px;
+    background: var(--ink-soft);
+}
 #bingo-ball {
     display: grid;
     place-items: center;
     z-index: 1;
-    width: 58px;
-    height: 58px;
+    width: 92px;
+    height: 92px;
     border: 4px solid var(--ink);
-    border-radius: 4px;
+    border-radius: 9999px;
     background: var(--paper);
     color: var(--ink);
-    transform: rotate(-6deg);
-    font-size: 16px;
-    line-height: 24px;
-    font-weight: 700;
-    box-shadow: 4px 4px 0 var(--ink);
+    font-family: var(--display);
+    font-size: 30px;
+    line-height: 32px;
+    font-weight: 400;
+    letter-spacing: 0.5px;
+    box-shadow: inset -10px -12px 0 var(--kick-mint), 5px 5px 0 var(--ink);
 }
-.bingo-ball-arrival { animation: bingo-arrival 900ms var(--mass); }
+.bingo-ball-arrival { animation: bingo-arrival 900ms var(--mass) both; }
 .bingo-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-#bingo-status { font-size: 18px; line-height: 28px; font-weight: 700; text-transform: uppercase; overflow-wrap: anywhere; }
+#bingo-status { font-family: var(--display); font-size: 36px; line-height: 40px; font-weight: 400; letter-spacing: 1px; text-transform: uppercase; overflow-wrap: anywhere; }
 #bingo-participants {
     align-self: flex-start;
     padding: 2px 8px;
@@ -767,43 +733,51 @@ body.no-chat #chat-widget { display: none; }
     background: var(--ink);
     color: var(--kick-mint);
     transform: skewX(-10deg);
-    font-size: 12px;
-    line-height: 16px;
+    font-size: 16px;
+    line-height: 24px;
     font-weight: 700;
     text-transform: uppercase;
 }
-#bingo-help { color: var(--mist); font-size: 12px; line-height: 16px; font-weight: 700; }
+#bingo-help { color: var(--mist); font-size: 16px; line-height: 24px; font-weight: 700; }
 #bingo-history {
-    margin: 12px 0 8px;
-    font-size: 12px;
-    line-height: 16px;
+    margin: 16px 0 12px;
+    font-size: 18px;
+    line-height: 28px;
     font-weight: 700;
     color: var(--kick);
     overflow-wrap: anywhere;
 }
-.bingo-board-row { display: grid; grid-template-columns: 22px repeat(15, minmax(0, 1fr)); gap: 2px; margin: 2px 0; }
-.bingo-board-row b, .bingo-board-row span { display: grid; place-items: center; height: 24px; font-size: 12px; line-height: 16px; }
+.bingo-board-row { display: grid; grid-template-columns: 40px repeat(15, minmax(0, 1fr)); gap: 6px; margin: 6px 0; align-items: center; justify-items: center; }
+.bingo-board-row b, .bingo-board-row span {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 9999px;
+    font-size: 14px;
+    line-height: 16px;
+    transform: skewX(2deg);
+}
 .bingo-board-row b {
     border: 2px solid var(--ink);
-    border-radius: 2px;
     background: var(--kick);
     font-weight: 700;
     color: var(--ink);
 }
 .bingo-board-row span {
-    border-radius: 2px;
-    background: var(--ink);
+    border: 2px solid var(--ink);
+    background: var(--ink-soft);
     color: var(--mist);
     font-weight: 600;
-    transition: background-color 600ms var(--mass), color 600ms var(--mass), transform 600ms var(--spring);
+    transition: background-color 600ms var(--mass), color 600ms var(--mass), transform 600ms var(--spring), box-shadow 600ms var(--mass);
 }
-.bingo-board-row .called { background: var(--kick); color: var(--ink); font-weight: 700; }
+.bingo-board-row .called { background: var(--paper); color: var(--ink); font-weight: 700; box-shadow: inset -4px -5px 0 var(--kick-mint); }
 .bingo-board-row .latest {
-    background: var(--kick-deep);
+    background: var(--kick);
     color: var(--ink);
     font-weight: 700;
-    transform: scale(1.18) rotate(-4deg);
-    box-shadow: 0 0 0 2px var(--ink);
+    transform: skewX(2deg) scale(1.22);
+    box-shadow: inset -4px -5px 0 var(--paper), 0 0 0 2px var(--ink);
 }
 #bingo-widget[data-phase="won"] { box-shadow: 10px 10px 0 var(--kick-mint); }
 #bingo-widget[data-phase="won"] #bingo-status { color: var(--kick-mint); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -819,8 +793,8 @@ body.no-chat #chat-widget { display: none; }
     border-radius: 2px;
     background: var(--ink);
     text-align: center;
-    font-size: 14px;
-    line-height: 20px;
+    font-size: 20px;
+    line-height: 28px;
     font-weight: 700;
 }
 #bingo-winning-card b { color: var(--kick); }
@@ -920,13 +894,21 @@ body.no-chat #chat-widget { display: none; }
     text-shadow: 4px 4px 0 var(--ink);
 }
 
-/* Consejos rotativos en una tira táctica inferior derecha con ángulo brutalista. */
-#tips { position: absolute; right: 56px; bottom: 26px; width: 900px; height: 58px; z-index: 20; }
-.tip {
+/* Consejos rotativos en una tira táctica al centro inferior con ángulo brutalista. */
+#tips {
     position: absolute;
+    left: 0;
     right: 0;
-    bottom: 0;
-    max-width: 100%;
+    bottom: 26px;
+    height: 58px;
+    z-index: 20;
+    display: grid;
+    justify-items: center;
+    pointer-events: none;
+}
+.tip {
+    grid-area: 1 / 1;
+    max-width: 900px;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -1011,10 +993,8 @@ body.no-chat #chat-widget { display: none; }
 }
 @keyframes msg-out { to { opacity: 0; transform: translateX(-24px) skewX(-8deg); } }
 @keyframes live-pulse { 0%, 100% { transform: rotate(45deg) scale(1); } 50% { transform: rotate(45deg) scale(.5); } }
-@keyframes sticker-bob { from { transform: skewX(10deg) rotate(8deg) translateY(0); } to { transform: skewX(10deg) rotate(2deg) translateY(-4px); } }
 @keyframes disc-spin { from { transform: skewX(6deg) rotate(0); } to { transform: skewX(6deg) rotate(180deg); } }
 @keyframes music-bars { to { transform: scaleY(.3); } }
-@keyframes burst-turn { from { transform: rotate(-8deg); } to { transform: rotate(8deg); } }
 @keyframes volt-arc {
     0% { transform: scale(1) translate(0, 0); opacity: 1; }
     50% { transform: scale(1.06, .95) translate(2px, -1px); opacity: .75; }
@@ -1036,9 +1016,11 @@ body.no-chat #chat-widget { display: none; }
     100% { transform: rotate(180deg) scale(.95, 1.05) translate(-1px, -2px); opacity: 1; }
 }
 @keyframes title-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes bingo-cage { from { transform: rotate(-16deg); } to { transform: rotate(16deg); } }
 @keyframes bingo-arrival {
-    0% { opacity: 0; transform: translate(-24px, -32px) scale(.4) rotate(-40deg); }
-    100% { opacity: 1; transform: rotate(-6deg); }
+    0% { opacity: 0; transform: translateY(-56px) scale(.3); }
+    55% { opacity: 1; transform: translateY(8px) scale(1.12); }
+    100% { opacity: 1; transform: none; }
 }
 @keyframes tip-cycle {
     0% { opacity: 0; transform: translate(48px, 0) skewX(-8deg) rotate(2deg); }

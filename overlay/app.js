@@ -201,7 +201,7 @@
         updateTransport();
     }
     function display() {
-        const shown = Boolean(queue.length && visible && active && musicShown);
+        const shown = Boolean(queue.length && visible && active && musicShown && !bingoLive());
         media.setAttribute('data-shown', String(shown));
         media.setAttribute('aria-hidden', String(!shown));
         el('music-anchor').setAttribute('data-playing', String(shown));
@@ -232,7 +232,7 @@
             mediaReady = true; updateTransport();
             applyEmbedVolume();
             if (resumeAt) { tiktokSend('seekTo', resumeAt); resumeAt = 0; }
-            if (!paused) tiktokSend('play');
+            if (!paused && !bingoLive()) tiktokSend('play');
         } else if (data.type === 'onCurrentTime') {
             tiktokTime = Number(data.value?.currentTime) || 0;
         } else if (data.type === 'onStateChange') {
@@ -285,7 +285,7 @@
                     width: '100%', height: '100%', videoId: item.videoId,
                     playerVars: { autoplay: 1, playsinline: 1, controls: 0, rel: 0, origin: location.origin },
                     events: {
-                        onReady: event => { if (run === generation) { mediaReady = true; updateTransport(); applyEmbedVolume(); if (resumeAt) { event.target.seekTo(resumeAt, true); resumeAt = 0; } event.target.playVideo(); } },
+                        onReady: event => { if (run === generation) { mediaReady = true; updateTransport(); applyEmbedVolume(); if (resumeAt) { event.target.seekTo(resumeAt, true); resumeAt = 0; } if (!paused && !bingoLive()) event.target.playVideo(); } },
                         onStateChange: event => {
                             if (run !== generation) return;
                             actuallyPlaying = event.data === YT.PlayerState.PLAYING;
@@ -304,7 +304,8 @@
             if (resumeAt) { const at = resumeAt; resumeAt = 0; direct.onloadedmetadata = () => { direct.onloadedmetadata = null; direct.currentTime = at; }; }
             mediaReady = true; updateTransport();
             direct.onended = direct.onerror = () => finish(item.id);
-            try { await direct.play(); } catch (error) {
+            if (bingoLive()) paused = true;
+            else try { await direct.play(); } catch (error) {
                 if (run !== generation) return;
                 if (error.name === 'NotAllowedError') notify('Audio bloqueado. Interactúa con la fuente de OBS.');
                 else finish(item.id);
@@ -337,7 +338,8 @@
     socket.on('connect_error', () => notify('Sin conexión. Reintentando...'));
     socket.on('connect', () => { version = 0; notify('Conectado. Sincronizando...'); });
     socket.on('disconnect', reason => {
-        bingoState = null; el('bingo-widget').hidden = true;
+        bingoState = null; el('bingo-widget').hidden = true; resumeAfterBingo = false;
+        document.body.classList.remove('bingo-active');
         active = false; stop(); stopSpeech(); queue = []; display(); notify('Sin conexión. Reintentando...');
         renderQueue(); closePanels();
         if (reason === 'io server disconnect') socket.connect();
@@ -410,7 +412,23 @@
         alertTimer = setTimeout(() => el('alert-box').classList.remove('show'), 6000);
     };
     socket.on('kickAlert', showAlert); socket.on('alert', showAlert);
-    let bingoState = null, bingoShown = true;
+    let bingoState = null, bingoShown = true, resumeAfterBingo = false;
+    function bingoLive() { return document.body.classList.contains('bingo-active'); }
+    function syncBingoStage() {
+        const live = Boolean(bingoShown && bingoState && bingoState.phase !== 'idle');
+        document.body.classList.toggle('bingo-active', live);
+        if (!live) {
+            if (resumeAfterBingo && active && queue.length) { resumeAfterBingo = false; resumeMedia(); }
+            return;
+        }
+        if (actuallyPlaying && !paused) resumeAfterBingo = true;
+        if (!active || !queue.length || paused) return;
+        paused = true; actuallyPlaying = false;
+        if (queue[0]?.videoId) player?.pauseVideo();
+        else if (queue[0]?.tiktokId) tiktokSend('pause');
+        else direct.pause();
+        updateTransport();
+    }
     const bingoLabel = number => `${'BINGO'[Math.floor((number - 1) / 15)]}-${number}`;
     const bingoCells = [];
     for (let group = 0; group < 5; group++) {
@@ -426,6 +444,7 @@
         bingoShown = !bingoShown;
         el('bingo-toggle').setAttribute('aria-pressed', String(bingoShown));
         el('bingo-widget').hidden = !bingoShown || !bingoState || bingoState.phase === 'idle';
+        syncBingoStage();
     });
     socket.on('bingoState', data => {
         const number = n => Number.isInteger(n) && n >= 1 && n <= 75;
@@ -444,6 +463,7 @@
         bingoState = data;
         const widget = el('bingo-widget');
         widget.hidden = !bingoShown || data.phase === 'idle';
+        syncBingoStage();
         widget.setAttribute('data-phase', data.phase);
         el('bingo-count').textContent = `${data.drawn.length} / 75`;
         el('bingo-participants').textContent = `${data.participants} cartones`;

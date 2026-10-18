@@ -98,7 +98,7 @@ button:focus-visible, input:focus-visible {
     align-items: center;
     justify-content: center;
     gap: 12px;
-    padding: 8px 16px 8px 12px;
+    padding: 8px 16px 8px 300px;
     border: 4px solid var(--ink);
     border-radius: 4px;
     background: var(--surface-olive);
@@ -137,6 +137,9 @@ button:focus-visible, input:focus-visible {
     flex: 0 0 auto;
 }
 .topbar-start {
+    position: absolute;
+    left: 12px;
+    top: 50%;
     gap: 12px;
     height: 58px;
     padding: 4px 16px 4px 4px;
@@ -144,7 +147,7 @@ button:focus-visible, input:focus-visible {
     border-radius: 2px;
     background: var(--kick);
     color: var(--ink);
-    transform: skewX(-6deg) rotate(-2deg);
+    transform: translateY(-50%) skewX(-6deg) rotate(-2deg);
     box-shadow: 6px 6px 0 var(--kick-deep);
 }
 .channel-avatar {
@@ -647,16 +650,20 @@ body.no-chat #chat-widget { display: none; }
     text-transform: uppercase;
 }
 
-/* Bingo: tablero grande al centro del lienzo para que se lea en el stream. */
+/* Bingo: tablero grande, centrado en ambos ejes. YouTube y TikTok se ocultan mientras está en juego. */
+body.bingo-active #media-widget {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
 #bingo-widget {
-    top: 188px;
+    top: 50%;
     left: 50%;
-    width: 980px;
-    margin-left: -490px;
+    width: 1400px;
     z-index: 42;
     box-shadow: 12px 12px 0 var(--kick-deep);
-    transform: skewX(-2deg);
-    animation: panel-slam 700ms var(--mass) both;
+    transform: translate(-50%, -50%) skewX(-2deg);
+    animation: bingo-center 700ms var(--mass) both;
 }
 #bingo-widget .aero-window-title { min-height: 56px; font-size: 30px; line-height: 36px; }
 .bingo-caption {
@@ -676,9 +683,9 @@ body.no-chat #chat-widget { display: none; }
     position: relative;
     display: grid;
     place-items: center;
-    width: 148px;
-    height: 148px;
-    flex: 0 0 148px;
+    width: 168px;
+    height: 168px;
+    flex: 0 0 168px;
     isolation: isolate;
     transform: skewX(2deg);
 }
@@ -710,8 +717,8 @@ body.no-chat #chat-widget { display: none; }
     display: grid;
     place-items: center;
     z-index: 1;
-    width: 92px;
-    height: 92px;
+    width: 108px;
+    height: 108px;
     border: 4px solid var(--ink);
     border-radius: 9999px;
     background: var(--paper);
@@ -748,12 +755,12 @@ body.no-chat #chat-widget { display: none; }
     color: var(--kick);
     overflow-wrap: anywhere;
 }
-.bingo-board-row { display: grid; grid-template-columns: 40px repeat(15, minmax(0, 1fr)); gap: 6px; margin: 6px 0; align-items: center; justify-items: center; }
+.bingo-board-row { display: grid; grid-template-columns: 52px repeat(15, minmax(0, 1fr)); gap: 8px; margin: 8px 0; align-items: center; justify-items: center; }
 .bingo-board-row b, .bingo-board-row span {
     display: grid;
     place-items: center;
-    width: 36px;
-    height: 36px;
+    width: 52px;
+    height: 52px;
     border-radius: 9999px;
     font-size: 14px;
     line-height: 16px;
@@ -984,6 +991,10 @@ body.no-chat #chat-widget { display: none; }
 }
 @keyframes corner-in { from { transform: translate(-96px, 24px); } to { transform: none; } }
 @keyframes corner-in-mirror { from { transform: scaleX(-1) translate(-96px, 24px); } to { transform: scaleX(-1); } }
+@keyframes bingo-center {
+    0% { opacity: 0; transform: translate(-50%, -46%) skewX(-6deg) scale(.94); }
+    100% { opacity: 1; transform: translate(-50%, -50%) skewX(-2deg); }
+}
 @keyframes panel-slam {
     0% { opacity: 0; transform: translate(-32px, -24px) skewX(-6deg) rotate(-4deg) scale(.9); }
     100% { opacity: 1; transform: skewX(-2deg); }

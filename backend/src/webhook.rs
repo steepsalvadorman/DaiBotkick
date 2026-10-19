@@ -187,6 +187,18 @@ pub async fn worker(app: Arc<AppState>) {
     }
 }
 
+/// Usuario de Kick que puede usar todos los comandos en cualquier canal, sin cooldowns.
+const FULL_ACCESS_USERNAME: &str = "seniordai";
+
+/// El streamer del canal y `seniordai` tienen permisos de owner. El remitente viene de un
+/// webhook con firma verificada, así que el nombre no se puede suplantar.
+fn has_owner_access(sender: &serde_json::Value, broadcaster_id: u64) -> bool {
+    sender["user_id"].as_u64() == Some(broadcaster_id)
+        || sender["username"]
+            .as_str()
+            .is_some_and(|name| name.trim().eq_ignore_ascii_case(FULL_ACCESS_USERNAME))
+}
+
 async fn process(app: &Arc<AppState>, kind: &str, json: &serde_json::Value) {
     let Some(id) = json["broadcaster"]["user_id"]
         .as_u64()
@@ -213,7 +225,7 @@ async fn process(app: &Arc<AppState>, kind: &str, json: &serde_json::Value) {
             else {
                 return;
             };
-            let owner = json["sender"]["user_id"].as_u64() == Some(id);
+            let owner = has_owner_access(&json["sender"], id);
             // El bot escribe como DaiBot: su eco no se muestra ni se procesa, venga de la app o del canal.
             if crate::kick::sender::is_own_echo(&ch, content).await {
                 return;
@@ -322,6 +334,19 @@ mod tests {
         assert!(verify(&key, &headers, body, now - 301).is_err());
         headers.remove("Kick-Event-Signature");
         assert!(verify(&key, &headers, body, now).is_err());
+    }
+
+    #[test]
+    fn broadcaster_and_seniordai_have_owner_access_on_any_channel() {
+        let sender = |name: &str, id: u64| serde_json::json!({"username": name, "user_id": id});
+        assert!(has_owner_access(&sender("Frank_Arr", 7), 7));
+        for name in ["seniordai", "SeniorDai", "SENIORDAI"] {
+            assert!(has_owner_access(&sender(name, 99), 7));
+        }
+        assert!(!has_owner_access(&sender("viewer", 99), 7));
+        assert!(!has_owner_access(&sender("seniordai2", 99), 7));
+        assert!(!has_owner_access(&sender("senior-dai", 99), 7));
+        assert!(!has_owner_access(&serde_json::json!({}), 7));
     }
 
     #[test]

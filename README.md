@@ -78,6 +78,8 @@ La fuente autorizada también puede reiniciar la canción actual, pausar/reanuda
 
 Solo la identidad del broadcaster, verificada por su ID en el webhook firmado, puede usar `!von`, `!voff`, `!vstop`, `!skip` / `!next` y `!sorteo abrir|cerrar|ganador`. El skip modifica la cola en el backend incluso sin overlay conectado.
 
+Excepción: el usuario de Kick `seniordai` tiene los mismos permisos que el broadcaster en **todos** los canales y no está sujeto a cooldowns. Puede usar todos los comandos, incluidos `!set` y el control del bingo. El nombre llega en el webhook firmado de Kick, así que no se puede suplantar.
+
 ### Bingo Aero
 
 El dueño abre con `!bingo abrir` (o `!ruleta`). Los participantes escriben `!carton` antes del inicio: el bot responde con un enlace personal a una página Aero con su cartón 5×5. El chat no abre pestañas automáticamente; cada participante pulsa su enlace. La página permite marcar/desmarcar números, guarda las marcas en ese navegador si el almacenamiento está disponible y señala las bolas sorteadas consultando el servidor cada 3 segundos. `LIBRE` ya cuenta. Repetir `!carton` devuelve el mismo enlace incluso durante la partida.

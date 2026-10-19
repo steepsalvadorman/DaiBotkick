@@ -1,14 +1,20 @@
 pub mod edge_tts;
 pub mod fish_audio;
+use base64::{engine::general_purpose::STANDARD, Engine};
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::{mpsc, Semaphore};
+
+/// Máximo de caracteres de un mensaje de chat en Kick: ningún mensaje de voz puede superarlo.
+pub const KICK_MESSAGE_MAX: usize = 500;
+/// El prefijo «nombre dice: » usa hasta 40 caracteres del nombre y no consume el mensaje.
+const AUTHOR_PREFIX_MAX: usize = 40 + " dice: ".len();
 
 pub struct TtsQueueItem {
     pub text: String,
     pub voice: String,
 }
 pub fn enqueue(ch: &crate::state::ChannelState, text: &str, voice: &str) -> bool {
-    enqueue_with_limit(ch, text, voice, 350)
+    enqueue_with_limit(ch, text, voice, KICK_MESSAGE_MAX)
 }
 
 pub fn enqueue_chat(
@@ -17,7 +23,7 @@ pub fn enqueue_chat(
     text: &str,
     voice: &str,
 ) -> bool {
-    if text.trim().is_empty() || text.chars().count() > 350 {
+    if text.trim().is_empty() || text.chars().count() > KICK_MESSAGE_MAX {
         return false;
     }
     let name: String = username
@@ -31,7 +37,12 @@ pub fn enqueue_chat(
     } else {
         &name
     };
-    enqueue_with_limit(ch, &format!("{name} dice: {}", text.trim()), voice, 397)
+    enqueue_with_limit(
+        ch,
+        &format!("{name} dice: {}", text.trim()),
+        voice,
+        KICK_MESSAGE_MAX + AUTHOR_PREFIX_MAX,
+    )
 }
 
 fn enqueue_with_limit(
@@ -77,7 +88,7 @@ pub fn voice_list(fish_audio_enabled: bool) -> String {
         commands.push(format!("!{}", fish_audio::VOICE_ALIAS));
     }
     format!(
-        "Voces disponibles: {}. Usa el comando seguido de tu mensaje, por ejemplo: !s Hola stream. Máximo 350 caracteres; cooldown compartido de 15 s.",
+        "Voces disponibles: {}. Usa el comando seguido de tu mensaje, por ejemplo: !s Hola stream. Máximo {KICK_MESSAGE_MAX} caracteres; cooldown compartido de 15 s.",
         commands.join(" · ")
     )
 }
@@ -188,11 +199,17 @@ pub async fn spawn_processor(
         let (Some(audio), Some(sid)) = (audio, player_sid(&ch).await) else {
             continue;
         };
-        // MP3 como adjunto binario y solo al reproductor: sin base64 ni difusión a toda la sala.
-        io.to(sid)
-            .bin(vec![audio])
-            .emit("speak", serde_json::json!({}))
-            .ok();
+        // Directo al socket reproductor, sin difundir a toda la sala: socketioxide no une
+        // cada socket a una sala con su propio id. Va en base64 y no como adjunto binario
+        // porque engineioxide 0.14 junta evento y adjunto sin separador en long-polling.
+        if let Some(socket) = io.get_socket(sid) {
+            socket
+                .emit(
+                    "speak",
+                    serde_json::json!({"audioBase64": STANDARD.encode(audio)}),
+                )
+                .ok();
+        }
     }
 }
 
@@ -214,7 +231,7 @@ mod tests {
         assert!(!without_fish.contains("!jacinta"));
         assert!(voice_list(true).contains("!jacinta"));
         assert!(without_fish.contains("!s Hola stream"));
-        assert!(without_fish.contains("350 caracteres"));
+        assert!(without_fish.contains("500 caracteres"));
         assert!(without_fish.contains("15 s"));
     }
 
@@ -240,15 +257,15 @@ mod tests {
             assert_eq!(item.text, "Senior Dai dice: Hola mundo");
             assert_eq!(item.voice, voice);
         }
-        let message = "ñ".repeat(350);
+        let message = "ñ".repeat(KICK_MESSAGE_MAX);
         assert!(enqueue_chat(&channel, &"a".repeat(60), &message, "camila"));
         let item = receiver.recv().await.unwrap();
         assert_eq!(item.text, format!("{} dice: {message}", "a".repeat(40)));
-        assert_eq!(item.text.chars().count(), 397);
+        assert_eq!(item.text.chars().count(), 547);
         assert!(!enqueue_chat(
             &channel,
             "viewer",
-            &"x".repeat(351),
+            &"x".repeat(KICK_MESSAGE_MAX + 1),
             "camila"
         ));
         assert!(!enqueue_chat(&channel, "viewer", " ", "camila"));
@@ -293,7 +310,11 @@ mod tests {
     #[tokio::test]
     async fn tts_rejects_long_invalid_and_excess_requests() {
         let (channel, _receiver) = crate::test_support::channel("alpha", 1);
-        assert!(!enqueue(&channel, &"x".repeat(351), "camila"));
+        assert!(!enqueue(
+            &channel,
+            &"x".repeat(KICK_MESSAGE_MAX + 1),
+            "camila"
+        ));
         assert!(!enqueue(&channel, "hello", "unknown"));
         assert!(!enqueue(&channel, " ", "camila"));
         for _ in 0..32 {

@@ -399,7 +399,7 @@ pub async fn handle(
         };
         if !tts::enqueue_chat(ch, username, text, &voice) {
             sender::send(
-                "No se pudo agregar tu mensaje de voz: usa hasta 350 caracteres y vuelve a intentar si la cola está llena.",
+                &format!("No se pudo agregar tu mensaje de voz: usa hasta {} caracteres y vuelve a intentar si la cola está llena.", tts::KICK_MESSAGE_MAX),
                 ch, global,
             ).await;
         }

@@ -527,6 +527,74 @@ impl SocketClient {
 }
 
 #[tokio::test]
+async fn tts_audio_reaches_the_player_socket_and_skips_public_overlays() {
+    use sha2::Digest;
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .connect_lazy("postgres://unused:unused@127.0.0.1/unused")
+        .unwrap();
+    let (layer, io) = socketioxide::SocketIo::new_layer();
+    let app = test_support::app_with_io(pool, io);
+    let (ch, receiver) = test_support::channel("alpha", 1);
+    app.channels.insert("alpha".into(), ch.clone());
+    server::setup(&app.io, app.clone());
+    let http = test_support::HttpServer::start(axum::Router::new().layer(layer)).await;
+    let mut public = SocketClient::connect(&http.url, "alpha", None).await;
+    let mut player = SocketClient::connect(&http.url, "alpha", Some("play-secret")).await;
+    assert_eq!(public.event("playbackRole").await["active"], false);
+    assert_eq!(player.event("playbackRole").await["active"], true);
+
+    // Audio ya en caché: el procesador lo envía sin sintetizar.
+    let cache = std::env::temp_dir().join(format!(
+        "daibot_tts_test_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&cache).unwrap();
+    for (text, mp3) in [("Hola", "ID3-hola"), ("Adios", "ID3-adios")] {
+        let hash = Sha256::digest(format!("camila:{text}"));
+        std::fs::write(cache.join(format!("{hash:x}.mp3")), mp3).unwrap();
+    }
+    let service = Arc::new(crate::tts::TtsService::new(cache.to_str().unwrap(), ""));
+    tokio::spawn(crate::tts::spawn_processor(
+        service,
+        receiver,
+        app.io.clone(),
+        ch.clone(),
+        app.tts_slots.clone(),
+    ));
+    let decode = |event: Value| {
+        STANDARD
+            .decode(event["audioBase64"].as_str().unwrap())
+            .unwrap()
+    };
+
+    // Audio emitido antes de que el overlay pida datos: queda en el buffer del polling.
+    assert!(crate::tts::enqueue(&ch, "Hola", "camila"));
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    assert_eq!(decode(player.event("speak").await), b"ID3-hola");
+
+    // Audio emitido con una petición de long-polling ya abierta.
+    let late = ch.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        assert!(crate::tts::enqueue(&late, "Adios", "camila"));
+    });
+    assert_eq!(decode(player.event("speak").await), b"ID3-adios");
+
+    let public_body = tokio::time::timeout(std::time::Duration::from_millis(500), async {
+        let body = public.http.get(&public.url).send().await.unwrap();
+        body.text().await.unwrap()
+    })
+    .await
+    .unwrap_or_default();
+    assert!(!public_body.contains("speak"));
+    let _ = std::fs::remove_dir_all(cache);
+}
+
+#[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL"]
 async fn socket_authorization_player_takeover_and_channel_isolation() {
     let database = test_support::TestDatabase::new().await;

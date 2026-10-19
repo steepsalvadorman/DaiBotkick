@@ -500,23 +500,23 @@
     const speeches = []; let speech = null, speechTimer;
     function stopSpeech() {
         clearTimeout(speechTimer);
-        if (speech) { speech.onended = speech.onerror = null; speech.pause(); URL.revokeObjectURL(speech.src); speech.src = ''; }
+        if (speech) { speech.onended = speech.onerror = null; speech.pause(); speech.src = ''; }
         speech = null; speeches.length = 0;
     }
     function playSpeech() {
         if (speech || !active || !speeches.length) return;
-        const audio = new Audio(URL.createObjectURL(new Blob([speeches.shift()], { type: 'audio/mpeg' }))); speech = audio; audio.volume = 1;
+        const audio = new Audio(`data:audio/mp3;base64,${speeches.shift()}`); speech = audio; audio.volume = 1;
         const complete = () => {
             if (speech !== audio) return;
-            clearTimeout(speechTimer); audio.onended = audio.onerror = null; audio.pause(); URL.revokeObjectURL(audio.src); audio.src = '';
+            clearTimeout(speechTimer); audio.onended = audio.onerror = null; audio.pause(); audio.src = '';
             speech = null; playSpeech();
         };
         audio.onended = audio.onerror = complete; speechTimer = setTimeout(complete, 90000);
         audio.play().catch(() => { notify('TTS bloqueado. Interactúa con la fuente de OBS.'); complete(); });
     }
-    socket.on('speak', (_data, mp3) => {
-        if (!active || !(mp3 instanceof ArrayBuffer) || !mp3.byteLength || mp3.byteLength > 4.5 * 1024 * 1024 || speeches.length >= 32) return;
-        speeches.push(mp3); playSpeech();
+    socket.on('speak', data => {
+        if (!active || typeof data?.audioBase64 !== 'string' || !data.audioBase64 || data.audioBase64.length > 6 * 1024 * 1024 || speeches.length >= 32) return;
+        speeches.push(data.audioBase64); playSpeech();
     });
     addEventListener('pointerdown', event => {
         if (event.target?.closest('button, input')) return;

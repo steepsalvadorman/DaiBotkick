@@ -72,16 +72,26 @@ fn enqueue_with_limit(
     true
 }
 
+/// Voces masculinas sin efectos entre las que `!s` elige al azar.
+pub const DEFAULT_CHAT_VOICES: &[&str] = &["jorge", "alex"];
+
+pub fn default_chat_voice() -> &'static str {
+    use rand::seq::SliceRandom;
+    DEFAULT_CHAT_VOICES
+        .choose(&mut rand::thread_rng())
+        .copied()
+        .unwrap_or("jorge")
+}
+
 pub fn is_valid_voice(voice: &str) -> bool {
     edge_tts::is_valid_voice(voice) || voice == fish_audio::VOICE_ALIAS
 }
 
 pub fn voice_list(fish_audio_enabled: bool) -> String {
-    let mut commands = vec!["!s / !camila".to_string()];
+    let mut commands = vec!["!s (Jorge o Alex al azar)".to_string()];
     commands.extend(
         edge_tts::VOICES
             .iter()
-            .filter(|(alias, _)| *alias != "camila")
             .map(|(alias, _)| format!("!{alias}")),
     );
     if fish_audio_enabled {
@@ -226,7 +236,7 @@ mod tests {
         for &(alias, _) in edge_tts::VOICES {
             assert!(without_fish.contains(&format!("!{alias}")));
         }
-        assert!(without_fish.contains("!s / !camila"));
+        assert!(without_fish.contains("!s (Jorge o Alex al azar)"));
         assert!(!without_fish.contains("!dai"));
         assert!(!without_fish.contains("!jacinta"));
         assert!(voice_list(true).contains("!jacinta"));
@@ -288,7 +298,6 @@ mod tests {
         let (channel, mut receiver) = crate::test_support::channel("alpha", 1);
         *channel.channel_id.write().await = None;
         for (command, voice) in [
-            ("!s", "camila"),
             ("!camila", "camila"),
             ("!dalia", "dalia"),
             ("!jorge", "jorge"),
@@ -304,6 +313,19 @@ mod tests {
             assert_eq!(item.text, "Ana 7 dice: Hola");
             assert_eq!(item.voice, voice);
         }
+        let mut used = std::collections::HashSet::new();
+        for _ in 0..64 {
+            crate::commands::handle("Ana_7", "!s Hola", true, &channel, &app).await;
+            let item = receiver.try_recv().unwrap();
+            assert_eq!(item.text, "Ana 7 dice: Hola");
+            assert!(DEFAULT_CHAT_VOICES.contains(&item.voice.as_str()));
+            used.insert(item.voice);
+        }
+        assert_eq!(
+            used.len(),
+            DEFAULT_CHAT_VOICES.len(),
+            "!s debe alternar entre las voces masculinas"
+        );
         crate::commands::handle("Ana_7", "!dai Hola", true, &channel, &app).await;
         assert!(receiver.try_recv().is_err());
     }

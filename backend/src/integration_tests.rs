@@ -1167,7 +1167,7 @@ async fn every_documented_chat_command_responds() {
 
     // Texto a voz
     for (user, msg, voice) in [
-        ("u1", "!s hola", "camila"),
+        ("u1", "!camila hola", "camila"),
         ("u2", "!dalia hola", "dalia"),
         ("u3", "!jorge hola", "jorge"),
         ("u4", "!alex hola", "alex"),
@@ -1185,6 +1185,9 @@ async fn every_documented_chat_command_responds() {
             (voice, format!("{user} dice: hola").as_str())
         );
     }
+    handle("u9", "!s hola", false, &ch, &app).await;
+    let item = tts.try_recv().expect("!s no generó TTS");
+    assert!(crate::tts::DEFAULT_CHAT_VOICES.contains(&item.voice.as_str()));
 
     drop(server);
     database.cleanup().await;

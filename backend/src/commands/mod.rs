@@ -383,8 +383,8 @@ pub async fn handle(
         return;
     }
     let cmd_low = cmd_word.to_lowercase();
-    let camila = cmd_low == "!s" || cmd_low == "!camila";
-    let is_tts = camila || cmd_low.strip_prefix('!').is_some_and(tts::is_valid_voice);
+    let default_voice = cmd_low == "!s";
+    let is_tts = default_voice || cmd_low.strip_prefix('!').is_some_and(tts::is_valid_voice);
     if is_tts {
         if !is_owner {
             let ok = { ch.cooldown.lock().await.consume_user(username, "!camila", 15) };
@@ -392,8 +392,8 @@ pub async fn handle(
                 return;
             }
         }
-        let voice = if camila {
-            "camila".into()
+        let voice = if default_voice {
+            tts::default_chat_voice().into()
         } else {
             cmd_low.trim_start_matches('!').to_string()
         };

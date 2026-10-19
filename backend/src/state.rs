@@ -57,6 +57,8 @@ pub struct ChannelState {
     /// Nombre de usuario tal como lo escribió el streamer en Kick (p. ej. `Frank_Arr`);
     /// vacío hasta consultarlo. El slug (`frank-arr`) solo sirve para URLs.
     pub display_name: RwLock<String>,
+    /// Foto de perfil del streamer en Kick (URL https); vacía hasta consultarla.
+    pub avatar_url: RwLock<String>,
 }
 
 impl ChannelState {
@@ -68,12 +70,27 @@ impl ChannelState {
         } else {
             name
         };
-        serde_json::json!({"channel_name": name, "kick_url": format!("kick.com/{}", self.slug)})
+        let avatar = self.avatar_url.read().await.clone();
+        let mut config = serde_json::json!({"channel_name": name, "kick_url": format!("kick.com/{}", self.slug)});
+        if !avatar.is_empty() {
+            config["avatar_url"] = avatar.into();
+        }
+        config
     }
 }
 
 /// Acepta el nombre de Kick solo si corresponde al slug del canal: Kick genera el slug
 /// en minúsculas y cambiando `_` por `-`, así que el nombre conserva ambos tal cual.
+pub fn avatar_url_valid(url: &str) -> bool {
+    url.len() <= 500
+        && url.strip_prefix("https://").is_some_and(|rest| {
+            !rest.is_empty()
+                && !rest
+                    .chars()
+                    .any(|c| c.is_whitespace() || matches!(c, '"' | '\'' | '<' | '>'))
+        })
+}
+
 pub fn display_name_matches(name: &str, slug: &str) -> bool {
     !name.is_empty()
         && name.len() <= 100
@@ -86,7 +103,19 @@ pub fn display_name_matches(name: &str, slug: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::display_name_matches;
+    use super::{avatar_url_valid, display_name_matches};
+
+    #[test]
+    fn avatar_url_only_accepts_plain_https_urls() {
+        assert!(avatar_url_valid(
+            "https://files.kick.com/images/user/1/profile_image/a.webp"
+        ));
+        assert!(!avatar_url_valid("http://files.kick.com/a.webp"));
+        assert!(!avatar_url_valid("https://"));
+        assert!(!avatar_url_valid("https://x.com/a\" onerror=\"x"));
+        assert!(!avatar_url_valid("javascript:alert(1)"));
+        assert!(!avatar_url_valid(""));
+    }
 
     #[test]
     fn display_name_keeps_underscores_and_case_only_for_the_same_channel() {

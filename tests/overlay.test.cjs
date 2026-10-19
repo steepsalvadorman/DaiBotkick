@@ -34,6 +34,8 @@ function overlay(hash = '#token=private', search = '?ch=alpha', options = {}) {
         io: options => { context.options = options; return socket; }, addEventListener(name, callback) { windowListeners[name] = callback; },
         setTimeout(fn) { timers.set(++timerId, fn); return timerId; }, clearTimeout(id) { timers.delete(id); }, setInterval(fn, delay) { (context.intervals ||= []).push({ fn, delay }); intervalCallback = fn; },
         Audio: class extends Element { constructor(src) { super(); this.src = src; audios.push(this); } },
+        ArrayBuffer, Blob: class { constructor(parts, options) { this.parts = parts; this.type = options?.type; } },
+        URL: { createObjectURL: blob => { (context.blobs ||= []).push(blob); return `blob:${context.blobs.length}`; }, revokeObjectURL: url => (context.revoked ||= []).push(url) },
         YT: { PlayerState: { PLAYING: 1, PAUSED: 2, ENDED: 0 }, Player: class {
             constructor(target, options) { this.options = options; players.push(this); }
             destroy() { this.destroyed = true; } getCurrentTime() { return this.now ?? 0; } playVideo() { this.paused = false; } pauseVideo() { this.paused = true; } seekTo(time) { this.time = time; } setVolume(value) { this.volume = value; }
@@ -333,6 +335,12 @@ test('music unfolds only for the active visible queue and retracts on hide or di
     assert.equal(app.context.document.title, 'SeniorDai');
     app.handlers.config({ channel_name: 'Frank_Arr', kick_url: 'kick.com/frank-arr' });
     assert.equal(app.get('stream-title-display').textContent, 'Frank_Arr');
+    assert.equal(app.get('channel-avatar').src, undefined);
+    app.handlers.config({ channel_name: 'Frank_Arr', avatar_url: 'https://files.kick.com/images/user/1/profile_image/frank.webp' });
+    assert.equal(app.get('channel-avatar').src, 'https://files.kick.com/images/user/1/profile_image/frank.webp');
+    assert.equal(app.get('channel-avatar').alt, 'Avatar de Frank_Arr');
+    app.handlers.config({ channel_name: 'Frank_Arr', avatar_url: 'javascript:alert(1)' });
+    assert.equal(app.get('channel-avatar').src, 'https://files.kick.com/images/user/1/profile_image/frank.webp');
     app.handlers.playbackRole({ active: true });
     assert.equal(app.get('media-widget').getAttribute('data-shown'), 'false');
     app.handlers.syncQueue({ items: [item('one')], version: 1 });
@@ -403,7 +411,7 @@ test('public overlay cannot play media, TTS or emit queue advances', () => {
     const app = overlay('');
     app.handlers.playbackRole({ active: false });
     app.handlers.syncQueue({ items: [item('one')], version: 1 });
-    app.handlers.speak({ audioBase64: 'AAAA' });
+    app.handlers.speak({}, new ArrayBuffer(4));
     assert.ok(!app.get('direct-video').src);
     assert.equal(app.audios.length, 0);
     assert.equal(app.emitted.length, 0);
@@ -423,10 +431,13 @@ test('duplicate videos advance by element ID and version; removing head switches
 });
 test('TTS audio is sequential and cleared on disconnect', () => {
     const app = overlay(); app.handlers.playbackRole({ active: true });
-    app.handlers.speak({ audioBase64: 'AAAA' }); app.handlers.speak({ audioBase64: 'BBBB' });
-    assert.equal(app.audios.length, 1); app.audios[0].onended();
-    assert.equal(app.audios.length, 2);
+    app.handlers.speak({}, new ArrayBuffer(4)); app.handlers.speak({}, new ArrayBuffer(8));
+    app.handlers.speak({ audioBase64: 'AAAA' }); app.handlers.speak({}, new ArrayBuffer(0));
+    assert.equal(app.audios.length, 1); assert.equal(app.context.blobs[0].type, 'audio/mpeg');
+    app.audios[0].onended(); assert.deepEqual(app.context.revoked, ['blob:1']);
+    assert.equal(app.audios.length, 2); assert.equal(app.context.blobs[1].parts[0].byteLength, 8);
     app.handlers.disconnect('transport close'); assert.equal(app.audios[1].paused, true);
+    assert.deepEqual(app.context.revoked, ['blob:1', 'blob:2']);
 });
 test('TikTok plays in the official embed, obeys transport and advances once when it ends', async () => {
     const app = overlay(); app.handlers.playbackRole({ active: true });
@@ -535,7 +546,7 @@ test('index redirects with the full channel query and private token', () => {
 test('losing the playback role cancels media, speech and late completion events', () => {
     const app = overlay(); app.handlers.playbackRole({ active: true });
     app.handlers.syncQueue({ items: [item('one')], version: 1 });
-    app.handlers.speak({ audioBase64: 'AAAA' });
+    app.handlers.speak({}, new ArrayBuffer(4));
     const ended = app.get('direct-video').onended;
     app.handlers.playbackRole({ active: false });
     ended();

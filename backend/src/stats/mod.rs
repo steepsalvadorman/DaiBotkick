@@ -11,7 +11,7 @@ pub fn start_channel(io: socketioxide::SocketIo, ch: Arc<ChannelState>, global: 
         }
     });
 }
-/// Pide a Kick el nombre original del streamer (con mayúsculas y `_`) una sola vez.
+/// Pide a Kick el nombre original del streamer (con mayúsculas y `_`) y su foto de perfil una sola vez.
 async fn display_name(global: &AppState, ch: &ChannelState, io: &socketioxide::SocketIo) {
     if !ch.display_name.read().await.is_empty() {
         return;
@@ -37,15 +37,24 @@ async fn display_name(global: &AppState, ch: &ChannelState, io: &socketioxide::S
     let Ok(data) = response.json::<serde_json::Value>().await else {
         return;
     };
-    let Some(name) = data["data"]
-        .as_array()
-        .and_then(|users| users.first())
-        .and_then(|user| user["name"].as_str())
+    let Some(user) = data["data"].as_array().and_then(|users| users.first()) else {
+        return;
+    };
+    // El nombre debe coincidir con el slug: así el avatar es del streamer del canal y no de otra cuenta.
+    let Some(name) = user["name"]
+        .as_str()
         .map(str::trim)
         .filter(|name| crate::state::display_name_matches(name, &ch.slug))
     else {
         return;
     };
+    if let Some(avatar) = user["profile_picture"]
+        .as_str()
+        .map(str::trim)
+        .filter(|url| crate::state::avatar_url_valid(url))
+    {
+        *ch.avatar_url.write().await = avatar.to_owned();
+    }
     *ch.display_name.write().await = name.to_owned();
     io.to(ch.slug.clone())
         .emit("config", ch.overlay_config().await)

@@ -1,6 +1,5 @@
 pub mod edge_tts;
 pub mod fish_audio;
-use base64::{engine::general_purpose::STANDARD, Engine};
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::{mpsc, Semaphore};
 
@@ -104,15 +103,14 @@ impl TtsService {
             http: reqwest::Client::new(),
         }
     }
-    pub async fn generate(&self, text: &str, voice: &str) -> Option<String> {
+    pub async fn generate(&self, text: &str, voice: &str) -> Option<Vec<u8>> {
         use sha2::{Digest, Sha256};
         let hash = Sha256::digest(cache_identity(text, voice));
         let path = self.cache_dir.join(format!("{hash:x}.mp3"));
-        tokio::fs::create_dir_all(&self.cache_dir).await.ok()?;
-        self.prune().await;
         if let Ok(bytes) = tokio::fs::read(&path).await {
-            return Some(STANDARD.encode(bytes));
+            return Some(bytes);
         }
+        tokio::fs::create_dir_all(&self.cache_dir).await.ok()?;
         let result = if voice == fish_audio::VOICE_ALIAS {
             match tokio::time::timeout(
                 std::time::Duration::from_secs(30),
@@ -128,8 +126,10 @@ impl TtsService {
         };
         match result {
             Ok(bytes) => {
+                // Solo se poda al crecer la caché; los aciertos no recorren el directorio.
                 let _ = tokio::fs::write(path, &bytes).await;
-                Some(STANDARD.encode(bytes))
+                self.prune().await;
+                Some(bytes)
             }
             Err(e) => {
                 tracing::warn!("[TTS] {e}");
@@ -171,19 +171,33 @@ pub async fn spawn_processor(
     service: Arc<TtsService>,
     mut rx: mpsc::Receiver<TtsQueueItem>,
     io: socketioxide::SocketIo,
-    slug: String,
+    ch: Arc<crate::state::ChannelState>,
     slots: Arc<Semaphore>,
 ) {
     while let Some(item) = rx.recv().await {
-        let Ok(_permit) = slots.acquire().await else {
-            return;
-        };
-        if let Some(audio) = service.generate(&item.text, &item.voice).await {
-            io.to(slug.clone())
-                .emit("speak", serde_json::json!({"audioBase64":audio}))
-                .ok();
+        // Solo el overlay con rol de reproducción toca el audio: sin él no se sintetiza nada.
+        if player_sid(&ch).await.is_none() {
+            continue;
         }
+        let audio = {
+            let Ok(_permit) = slots.acquire().await else {
+                return;
+            };
+            service.generate(&item.text, &item.voice).await
+        };
+        let (Some(audio), Some(sid)) = (audio, player_sid(&ch).await) else {
+            continue;
+        };
+        // MP3 como adjunto binario y solo al reproductor: sin base64 ni difusión a toda la sala.
+        io.to(sid)
+            .bin(vec![audio])
+            .emit("speak", serde_json::json!({}))
+            .ok();
     }
+}
+
+async fn player_sid(ch: &crate::state::ChannelState) -> Option<socketioxide::socket::Sid> {
+    ch.player.lock().await.as_deref()?.parse().ok()
 }
 
 #[cfg(test)]

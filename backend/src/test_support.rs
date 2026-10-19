@@ -168,6 +168,7 @@ pub fn channel(
             live_since: RwLock::new(None),
             recent_sent: Mutex::new(std::collections::VecDeque::new()),
             display_name: RwLock::new(String::new()),
+            avatar_url: RwLock::new(String::new()),
         }),
         rx,
     )

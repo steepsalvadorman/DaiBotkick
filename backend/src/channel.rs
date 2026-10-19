@@ -55,6 +55,7 @@ pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) -> Result<(),
         live_since: RwLock::new(None),
         recent_sent: Mutex::new(std::collections::VecDeque::new()),
         display_name: RwLock::new(String::new()),
+        avatar_url: RwLock::new(String::new()),
     });
     if let Some(id) = row.broadcaster_user_id {
         global.user_id_to_slug.insert(id as u64, slug.clone());
@@ -71,9 +72,9 @@ pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) -> Result<(),
         ch.cancel.clone(),
         global.tts_slots.clone(),
     );
-    let tts_slug = slug.clone();
+    let tts_channel = ch.clone();
     tokio::spawn(async move {
-        tokio::select! { _ = cancel.cancelled() => {}, _ = tts::spawn_processor(service, tts_rx, io, tts_slug, slots) => {} }
+        tokio::select! { _ = cancel.cancelled() => {}, _ = tts::spawn_processor(service, tts_rx, io, tts_channel, slots) => {} }
     });
     let (worker, app) = (ch.clone(), global.clone());
     tokio::spawn(async move {

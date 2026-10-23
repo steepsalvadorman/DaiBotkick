@@ -79,6 +79,8 @@ La fuente autorizada también puede reiniciar la canción actual, pausar/reanuda
 
 Solo la identidad del broadcaster, verificada por su ID en el webhook firmado, puede usar `!von`, `!voff`, `!vstop`, `!skip` / `!next` y `!sorteo abrir|cerrar|ganador`. El skip modifica la cola en el backend incluso sin overlay conectado.
 
+Los moderadores del canal tienen exactamente los mismos permisos que el broadcaster: todos los comandos (incluidos `!set` y el control del bingo) y sin cooldowns. Se reconocen por la insignia `moderator` que Kick envía con cada mensaje en el webhook firmado, así que no se puede suplantar y quitar el rol de moderador en Kick revoca el acceso desde su siguiente mensaje.
+
 Excepción: el usuario de Kick `seniordai` tiene los mismos permisos que el broadcaster en **todos** los canales y no está sujeto a cooldowns. Puede usar todos los comandos, incluidos `!set` y el control del bingo. El nombre llega en el webhook firmado de Kick, así que no se puede suplantar.
 
 ### Bingo Aero

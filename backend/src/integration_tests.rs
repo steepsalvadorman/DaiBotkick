@@ -684,15 +684,18 @@ async fn socket_authorization_player_takeover_and_channel_isolation() {
     assert_eq!(advanced["version"], 4);
 
     // Signed owner identity governs commands even when a viewer spoofs the username.
+    // Los moderadores del canal, identificados por su insignia firmada, también son owner.
     let worker = tokio::spawn(webhook::worker(app.clone()));
     // Los comandos no se muestran en el chat del overlay; los mensajes normales sí.
-    for (event_id, sender_id, content, expected_len) in [
-        ("spoof", 99, "!skip", 2),
-        ("owner", 1, "!skip", 1),
-        ("chat", 99, "hola chat", 1),
+    for (event_id, sender_id, badge, content, expected_len, raffle_open) in [
+        ("spoof", 99, "", "!skip", 2, false),
+        ("vip", 98, "vip", "!sorteo abrir", 2, false),
+        ("moderator", 97, "moderator", "!sorteo abrir", 2, true),
+        ("owner", 1, "", "!skip", 1, true),
+        ("chat", 99, "", "hola chat", 1, true),
     ] {
         let timestamp = chrono::Utc::now().to_rfc3339();
-        let body = serde_json::to_vec(&json!({"broadcaster":{"user_id":1},"sender":{"user_id":sender_id,"username":"alpha"},"content":content})).unwrap();
+        let body = serde_json::to_vec(&json!({"broadcaster":{"user_id":1},"sender":{"user_id":sender_id,"username":"alpha","identity":{"badges":[{"type":badge}]}},"content":content})).unwrap();
         let mut message = format!("{event_id}.{timestamp}.").into_bytes();
         message.extend_from_slice(&body);
         let signature = SigningKey::<Sha256>::new(private.clone()).sign(&message);
@@ -733,6 +736,7 @@ async fn socket_authorization_player_takeover_and_channel_isolation() {
         .await
         .unwrap();
         assert_eq!(alpha.video_queue.read().await.items.len(), expected_len);
+        assert_eq!(alpha.sorteo.lock().await.open, raffle_open);
     }
     assert!(app
         .channels

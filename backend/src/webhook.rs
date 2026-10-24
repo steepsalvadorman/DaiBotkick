@@ -190,17 +190,23 @@ pub async fn worker(app: Arc<AppState>) {
 /// Usuario de Kick que puede usar todos los comandos en cualquier canal, sin cooldowns.
 const FULL_ACCESS_USERNAME: &str = "seniordai";
 
+/// Moderadores de Kick a los que se les retiran los permisos de owner aunque tengan la insignia.
+const REVOKED_MODERATORS: &[&str] = &["theblastv2"];
+
 /// El streamer del canal, sus moderadores y `seniordai` tienen permisos de owner. El remitente
 /// viene de un webhook con firma verificada, así que ni el nombre ni las insignias se pueden
 /// suplantar. Las insignias llegan con cada mensaje: quitar el rol en Kick revoca el acceso.
 fn has_owner_access(sender: &serde_json::Value, broadcaster_id: u64) -> bool {
+    let name = sender["username"].as_str().map(str::trim);
     sender["user_id"].as_u64() == Some(broadcaster_id)
-        || sender["username"]
-            .as_str()
-            .is_some_and(|name| name.trim().eq_ignore_ascii_case(FULL_ACCESS_USERNAME))
-        || sender["identity"]["badges"]
+        || name.is_some_and(|name| name.eq_ignore_ascii_case(FULL_ACCESS_USERNAME))
+        || (!name.is_some_and(|name| {
+            REVOKED_MODERATORS
+                .iter()
+                .any(|revoked| name.eq_ignore_ascii_case(revoked))
+        }) && sender["identity"]["badges"]
             .as_array()
-            .is_some_and(|badges| badges.iter().any(|b| b["type"] == "moderator"))
+            .is_some_and(|badges| badges.iter().any(|b| b["type"] == "moderator")))
 }
 
 async fn process(app: &Arc<AppState>, kind: &str, json: &serde_json::Value) {
@@ -375,6 +381,23 @@ mod tests {
             &serde_json::json!({"username": "mod", "user_id": 99, "identity": {}}),
             7
         ));
+    }
+
+    #[test]
+    fn revoked_moderators_lose_owner_access() {
+        let moderator = serde_json::json!([{"text": "Moderator", "type": "moderator"}]);
+        for name in ["TheBlastv2", "theblastv2", " THEBLASTV2 "] {
+            assert!(!has_owner_access(
+                &serde_json::json!({"username": name, "user_id": 99, "identity": {"badges": moderator}}),
+                7
+            ));
+        }
+        for name in ["theblastv22", "theblast", "otro_mod"] {
+            assert!(has_owner_access(
+                &serde_json::json!({"username": name, "user_id": 99, "identity": {"badges": moderator}}),
+                7
+            ));
+        }
     }
 
     #[test]

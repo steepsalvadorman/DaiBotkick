@@ -355,6 +355,9 @@ pub async fn handle(
 
     // ── !play ─────────────────────────────────────────────────────────────────
     if let Some(url) = command_args(content, "!play") {
+        if is_play_blocked(username) {
+            return;
+        }
         if url.is_empty() {
             sender::send(
                 "Usa !play seguido de un enlace o del nombre y artista de la canción.",
@@ -404,6 +407,16 @@ pub async fn handle(
             ).await;
         }
     }
+}
+
+/// Usuarios que no pueden pedir canciones con !play; sus peticiones se ignoran en silencio.
+const PLAY_BLOCKED_USERS: &[&str] = &["theblastv2"];
+
+fn is_play_blocked(username: &str) -> bool {
+    let name = username.trim();
+    PLAY_BLOCKED_USERS
+        .iter()
+        .any(|blocked| name.eq_ignore_ascii_case(blocked))
 }
 
 /// Devuelve el texto tras `name` si el mensaje es ese comando (sin distinguir mayúsculas).
@@ -943,6 +956,14 @@ mod tests {
             Some("discord https://d.gg/A")
         );
         assert_eq!(command_args("!p", "!play"), None);
+    }
+    #[test]
+    fn blocked_users_cannot_play() {
+        for name in ["TheBlastv2", "theblastv2", " THEBLASTV2 "] {
+            assert!(is_play_blocked(name));
+        }
+        assert!(!is_play_blocked("viewer"));
+        assert!(!is_play_blocked("theblastv22"));
     }
     #[test]
     fn unicode_truncation_never_splits_code_points() {

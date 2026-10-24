@@ -27,7 +27,7 @@ function overlay(hash = '#token=private', search = '?ch=alpha', options = {}) {
     const timers = new Map();
     const socket = { connected: true, on(name, callback) { handlers[name] = callback; }, emit(...args) { emitted.push(args); }, disconnect() { calls.push('disconnect'); }, connect() { calls.push('connect'); } };
     const context = {
-        document: { body: new Element(), head: new Element(), getElementById: id => get(id), createElement: () => new Element(), createTextNode: text => ({ textContent: text }), querySelectorAll: () => [] },
+        document: { body: new Element(), head: new Element(), getElementById: id => get(id), createElement: () => new Element(), createTextNode: text => ({ textContent: text }), querySelectorAll: selector => selector === '.tip' ? options.tips || [] : [] },
         location: { hash, search, origin: 'https://bot.example' },
         localStorage: options.storage, innerWidth: options.width ?? 1920, innerHeight: options.height ?? 1080, URLSearchParams, Date, Promise, Intl,
         CSS: { supports: (property, value) => property === 'zoom' && value === '1' && options.nativeScale !== false },
@@ -320,6 +320,41 @@ test('reduced motion leaves one readable tip and disables decorative movement', 
     assert.match(reduced, /animation: none !important; transition: none !important;/);
     assert.match(reduced, /\.tip \{ display: none; \}/);
     assert.match(reduced, /\.tip:first-child \{ display: flex; opacity: 1; \}/);
+});
+test('lite mode stops continuous animations and rotates tips without CSS keyframes', () => {
+    const tips = [0, 1, 2].map(() => { const classes = new Set(); return { classes, classList: { toggle(name, force) { if (force) classes.add(name); else classes.delete(name); } } }; });
+    const lite = overlay('#token=private', '?ch=alpha&lite=1', { tips });
+    assert.ok(lite.context.document.body.classList.contains('lite'));
+    assert.deepEqual(tips.map(tip => tip.classes.has('current')), [true, false, false]);
+    const rotate = lite.context.intervals.find(i => i.delay === 9000).fn;
+    rotate(); assert.deepEqual(tips.map(tip => tip.classes.has('current')), [false, true, false]);
+    rotate(); rotate(); assert.deepEqual(tips.map(tip => tip.classes.has('current')), [true, false, false]);
+
+    const normal = overlay('#token=private', '?ch=alpha', { tips });
+    assert.ok(!normal.context.document.body.classList.contains('lite'));
+    assert.ok(!normal.context.intervals.some(i => i.delay === 9000));
+
+    const css = fs.readFileSync(__dirname + '/../overlay/style.css', 'utf8');
+    const block = css.slice(css.indexOf('body.lite .kinetic-corner::before'), css.indexOf('@media (prefers-reduced-motion: reduce)'));
+    for (const selector of ['.kinetic-corner::before', '.topbar-center::after', '#alert-box::before', '.brand-live::before', '.vinyl-record', '.music-bars i', '.title-inner.marquee', '.tip::after']) {
+        assert.ok(block.includes(`body.lite ${selector}`), selector);
+    }
+    assert.match(block, /\{ animation: none !important; \}/);
+    assert.match(block, /body\.lite \.tip\.current \{ display: flex; \}/);
+    assert.match(css, /#alert-box:not\(\.show\)::before[^{]*\{ animation-play-state: paused; \}/);
+});
+test('clock and emoji meter skip DOM writes when nothing changed', () => {
+    const app = overlay();
+    const clock = app.get('desktop-clock');
+    let writes = 0, value = clock.textContent;
+    Object.defineProperty(clock, 'textContent', { get: () => value, set: text => { writes++; value = text; } });
+    app.context.intervals.find(i => i.delay === 1000).fn();
+    assert.equal(writes, 0);
+    const top = app.get('emoji-top');
+    app.handlers.chatMessage({ user: 'a', content: '🔥' });
+    const rendered = top.children[0];
+    app.context.intervals.find(i => i.delay === 5000).fn();
+    assert.equal(top.children[0], rendered);
 });
 test('winner presentation replaces the drawn board to leave the chat unobstructed', () => {
     const css = fs.readFileSync(__dirname + '/../overlay/style.css', 'utf8');

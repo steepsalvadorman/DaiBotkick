@@ -19,11 +19,20 @@
     const status = document.createElement('div');
     status.id = 'connection-status'; status.setAttribute('role', 'status'); document.body.append(status);
     const notify = text => { status.textContent = text; };
+    // Modo ligero (?lite=1): sin animaciones decorativas infinitas para no competir con el juego por la GPU.
+    if (new URLSearchParams(location.search).get('lite') === '1') {
+        document.body.classList.add('lite');
+        const tips = [...document.querySelectorAll('.tip')];
+        let tipIndex = 0;
+        const showTip = () => tips.forEach((tip, index) => tip.classList.toggle('current', index === tipIndex));
+        showTip();
+        if (tips.length > 1) setInterval(() => { tipIndex = (tipIndex + 1) % tips.length; showTip(); }, 9000);
+    }
+    const clockFormat = new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
     function updateClock() {
-        const now = new Date();
-        el('desktop-clock').textContent = new Intl.DateTimeFormat('es', {
-            hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-        }).format(now);
+        const text = clockFormat.format(new Date());
+        // Reescribir el mismo texto cada segundo obliga a repintar sin necesidad.
+        if (el('desktop-clock').textContent !== text) el('desktop-clock').textContent = text;
     }
     updateClock();
     setInterval(updateClock, 1000);
@@ -367,6 +376,7 @@
     }
     const emojiSegments = new Intl.Segmenter('es', { granularity: 'grapheme' });
     const emojiEvents = [];
+    let emojiSummary = '';
     function updateEmojiMeter() {
         const cutoff = Date.now() - 300000;
         while (emojiEvents.length && emojiEvents[0].time <= cutoff) emojiEvents.shift();
@@ -375,9 +385,14 @@
             for (const [key, value] of event.counts) counts.set(key, (counts.get(key) || 0) + value);
         }
         const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
+        const ranking = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 3);
+        // Sin cambios no se reconstruyen los emotes: evita recargar imágenes y repintar cada 5 s.
+        const summary = JSON.stringify([total, ranking]);
+        if (summary === emojiSummary) return;
+        emojiSummary = summary;
         el('emoji-total').textContent = `${total} emojis · 5 min`;
         const top = el('emoji-top'); top.replaceChildren();
-        for (const [key, count] of [...counts].sort((a, b) => b[1] - a[1]).slice(0, 3)) {
+        for (const [key, count] of ranking) {
             const entry = document.createElement('span');
             renderChatContent(entry, key);
             entry.append(document.createTextNode(` ×${count}`));

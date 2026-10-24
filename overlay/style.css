@@ -868,6 +868,9 @@ body.bingo-active #media-widget {
     transform: rotate(180deg);
     animation: volt-arc-br 380ms var(--swing) -170ms infinite alternate;
 }
+/* Los arcos de paneles invisibles no necesitan seguir generando fotogramas. */
+#alert-box:not(.show)::before, #alert-box:not(.show)::after,
+#media-widget:not([data-shown="true"])::before, #media-widget:not([data-shown="true"])::after { animation-play-state: paused; }
 #alert-box.show {
     opacity: 1;
     transform: translate(-50%, 0) skewX(-6deg) rotate(-2deg) scale(1);
@@ -1059,6 +1062,20 @@ body.bingo-active #media-widget {
     3%, 31% { opacity: 1; transform: skewX(-8deg); }
     33%, 100% { opacity: 0; transform: translate(-24px, 0) skewX(-8deg); }
 }
+/* Modo ligero (?lite=1): conserva entradas y alertas, pero elimina todo movimiento continuo
+   para que la página quede quieta entre eventos. app.js rota los consejos cada 9 s. */
+body.lite .kinetic-corner::before, body.lite .kinetic-corner::after,
+body.lite .topbar-center::before, body.lite .topbar-center::after,
+body.lite #media-widget::before, body.lite #media-widget::after,
+body.lite #bingo-widget::before, body.lite #bingo-widget::after,
+body.lite #alert-box::before, body.lite #alert-box::after,
+body.lite .brand-live::before, body.lite .vinyl-record,
+body.lite .music-bars i, body.lite .equalizer i,
+body.lite .bingo-drum i, body.lite .title-inner.marquee,
+body.lite .tip, body.lite .tip::after { animation: none !important; }
+body.lite .tip { display: none; opacity: 1; }
+body.lite .tip.current { display: flex; }
+body.lite #video-title.scrolling { text-overflow: ellipsis; }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
     .tip { display: none; }

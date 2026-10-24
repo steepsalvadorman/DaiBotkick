@@ -46,6 +46,8 @@ Las esquinas inferiores llevan una tira de fragmentos y arcos eléctricos origin
 
 El chat usa viñetas oscuras con acentos alternados, las alertas un panel de impacto y el bingo una bola amarilla con ráfagas radiales y las 75 casillas. Al ganar, el cartón verificado sustituye el tablero y el historial para no tapar el chat. Las animaciones y transiciones se desactivan con movimiento reducido; en ese modo se muestra solo el primer consejo, sin superponer los consejos rotativos.
 
+Para streams con juegos exigentes, añade `&lite=1` a la URL de OBS. El modo ligero quita todo el movimiento continuo: arcos eléctricos, pulso de «En vivo», vinilo, barras, tambor del bingo y desplazamiento del título. Conserva las entradas de chat, alertas y paneles. Los consejos siguen rotando cada 9 s, pero sin animación, así que la página queda quieta entre eventos y no compite con el juego por la GPU. Para reducir aún más el consumo, en la fuente de navegador activa **Usar velocidad de fotogramas personalizada** a 30 fps y **Apagar la fuente cuando no sea visible**.
+
 El chat conserva emojis Unicode y convierte los emotes de Kick (`[emote:ID:NOMBRE]`) en imágenes del CDN oficial, incluidos emotes animados. Si una imagen falla, muestra su nombre y un aviso. El resto del mensaje se renderiza como texto, nunca como HTML.
 
 El contador de emojis muestra el total y los tres más usados en una ventana móvil de cinco minutos (se actualiza cada cinco segundos). Cuenta emotes de Kick y emojis Unicode completos, sin separar familias, banderas o tonos de piel. Es local a la fuente: recargar reinicia el contador y no recupera mensajes perdidos durante desconexiones.

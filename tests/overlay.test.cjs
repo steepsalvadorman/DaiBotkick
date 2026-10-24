@@ -643,3 +643,22 @@ test('stale media callbacks cannot advance a new head and pending ACKs retry saf
     assert.equal(app.get('direct-video').src, '');
     assert.equal(app.get('media-widget').getAttribute('data-shown'), 'false');
 });
+
+test('every overlay theme page provides the elements app.js drives', () => {
+    const app = fs.readFileSync(__dirname + '/../overlay/app.js', 'utf8');
+    const ids = new Set([...app.matchAll(/el\('([\w-]+)'\)/g)].map(match => match[1]));
+    for (const name of ['queue', 'volume']) { ids.add(`${name}-panel`); ids.add(`${name}-toggle`); }
+    for (const page of ['pixel.html', 'vsaturn.html']) {
+        const html = fs.readFileSync(__dirname + '/../overlay/' + page, 'utf8');
+        for (const id of ids) assert.match(html, new RegExp(`id="${id}"`), `${page} no tiene #${id}`);
+        assert.match(html, /name="viewport" content="width=device-width, initial-scale=1"/);
+        assert.match(html, /class="[^"]*\bkick-channel-url\b/);
+        assert.match(html, /class="[^"]*\bchannel-avatar-sync\b/);
+        assert.equal(html.match(/class="tip"/g)?.length, 3);
+        assert.match(html, /<script src="\/app\.js"><\/script>/);
+    }
+    const css = fs.readFileSync(__dirname + '/../overlay/vsaturn.css', 'utf8');
+    assert.match(css, /body \{[^}]*position: relative;/);
+    assert.match(css, /body\.lite \.tip\.current \{ display: flex; \}/);
+    assert.doesNotMatch(css, /^\s*backdrop-filter\s*:/m);
+});

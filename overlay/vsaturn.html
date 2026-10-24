@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>seniordai</title>
+    <link rel="icon" href="/daibot.svg" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@500;600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="/sio.js"></script>
+    <link rel="stylesheet" href="/vsaturn.css">
+</head>
+<body>
+
+    <main aria-label="Overlay del stream">
+    <!-- Barra superior: placa de consola (avatar en la tapa del lector) y mando con seis botones. -->
+    <header id="hud" class="system-topbar" aria-label="Barra de controles del stream">
+        <div class="topbar-start">
+            <span class="disc-lid">
+                <img class="brand-mark channel-avatar" id="channel-avatar"
+                     src="/daibot.svg"
+                     alt="DaiBot, ninja veloz electrónico y programador">
+            </span>
+            <span class="brand-copy">
+                <span id="stream-title-display" class="stream-title">seniordai</span>
+                <span class="brand-meta">
+                    <span class="brand-live" aria-hidden="true">En vivo</span>
+                    <span class="brand-jp" lang="ja" aria-hidden="true">配信中</span>
+                </span>
+            </span>
+            <div class="topbar-clock">
+                <time id="desktop-clock" class="desktop-clock">00:00</time>
+            </div>
+        </div>
+        <div class="topbar-center">
+        <div id="emoji-meter" aria-label="Emojis de los últimos cinco minutos"><span id="emoji-total">0 emojis · 5 min</span><span id="emoji-top"></span></div>
+        <button id="bingo-toggle" class="music-anchor" type="button" aria-pressed="true" aria-controls="bingo-widget" title="Mostrar u ocultar el bingo"><span class="aero-app-orb" aria-hidden="true"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M216,56v60a4,4,0,0,1-4,4H136V44a4,4,0,0,1,4-4h60A16,16,0,0,1,216,56ZM116,40H56A16,16,0,0,0,40,56v60a4,4,0,0,0,4,4h76V44A4,4,0,0,0,116,40Zm96,96H136v76a4,4,0,0,0,4,4h60a16,16,0,0,0,16-16V140A4,4,0,0,0,212,136ZM40,140v60a16,16,0,0,0,16,16h60a4,4,0,0,0,4-4V136H44A4,4,0,0,0,40,140Z"/></svg></span> bingo</button>
+        <div id="music-transport" class="aero-control-cluster music-transport" role="group" aria-label="Reproducción musical" data-state="idle">
+            <div id="topbar-requester" class="topbar-requester" hidden>
+                <span class="requester-label">Pedido por</span>
+                <span id="video-requester">---</span>
+            </div>
+            <div class="transport-row">
+            <span class="vinyl-record" aria-hidden="true"></span>
+            <span class="music-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+            <button id="music-restart" class="topbar-button face-button face-slate" type="button" disabled aria-label="Reiniciar canción" title="Reiniciar canción"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h2v14H5Zm14 0v14L8 12Z"/></svg></button>
+            <button id="music-pause" class="topbar-button face-button face-power" type="button" disabled aria-label="Pausar" title="Pausar"><svg viewBox="0 0 24 24" aria-hidden="true"><path id="music-pause-icon" d="M6 5h4v14H6Zm8 0h4v14h-4Z"/></svg></button>
+            <button id="music-stop" class="topbar-button face-button face-violet" type="button" disabled aria-label="Detener" title="Detener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6Z"/></svg></button>
+            <button id="music-next" class="topbar-button face-button face-ink" type="button" disabled aria-label="Siguiente canción" title="Siguiente canción"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 5h2v14h-2ZM5 5l11 7-11 7Z"/></svg></button>
+            </div>
+        </div>
+        <div class="aero-control-cluster toggle-cluster" role="group" aria-label="Controles del overlay">
+            <button id="chat-toggle" class="topbar-button aero-icon-button" type="button" aria-label="Mostrar u ocultar el chat" aria-pressed="false" title="Mostrar u ocultar el chat">
+                <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M128,24A104,104,0,0,0,36.18,176.88L24.83,210.93a16,16,0,0,0,20.24,20.24l34.05-11.35A104,104,0,1,0,128,24ZM84,140a12,12,0,1,1,12-12A12,12,0,0,1,84,140Zm44,0a12,12,0,1,1,12-12A12,12,0,0,1,128,140Zm44,0a12,12,0,1,1,12-12A12,12,0,0,1,172,140Z"/></svg>
+            </button>
+            <button id="queue-toggle" class="topbar-button aero-icon-button" type="button" aria-label="Ver cola de música" title="Ver cola de música" aria-expanded="false" aria-controls="queue-panel">
+                <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32ZM64,72H192a8,8,0,0,1,0,16H64a8,8,0,0,1,0-16Zm0,48h72a8,8,0,0,1,0,16H64a8,8,0,0,1,0-16Zm40,64H64a8,8,0,0,1,0-16h40a8,8,0,0,1,0,16Zm103.59-53.47a8,8,0,0,1-10.12,5.06L184,131.1V176a24,24,0,1,1-16-22.62V120a8,8,0,0,1,10.53-7.59l24,8A8,8,0,0,1,207.59,130.53Z"/></svg>
+            </button>
+            <button id="volume-toggle" class="topbar-button aero-icon-button" type="button" aria-label="Ajustar volumen de música" title="Ajustar volumen de música" aria-expanded="false" aria-controls="volume-panel">
+                <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M160,32.25V223.69a8.29,8.29,0,0,1-3.91,7.18,8,8,0,0,1-9-.56l-65.57-51A4,4,0,0,1,80,176.16V79.84a4,4,0,0,1,1.55-3.15l65.57-51a8,8,0,0,1,10,.16A8.27,8.27,0,0,1,160,32.25ZM60,80H32A16,16,0,0,0,16,96v64a16,16,0,0,0,16,16H60a4,4,0,0,0,4-4V84A4,4,0,0,0,60,80Zm126.77,20.84a8,8,0,0,0-.72,11.3,24,24,0,0,1,0,31.72,8,8,0,1,0,12,10.58,40,40,0,0,0,0-52.88A8,8,0,0,0,186.74,100.84Zm40.89-26.17a8,8,0,1,0-11.92,10.66,64,64,0,0,1,0,85.34,8,8,0,1,0,11.92,10.66,80,80,0,0,0,0-106.66Z"/></svg>
+            </button>
+        </div>
+        <button id="music-anchor" class="music-anchor" type="button" aria-pressed="true" title="Mostrar u ocultar el reproductor; el audio continúa"><span class="aero-app-orb" aria-hidden="true"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M212.92,17.71a7.89,7.89,0,0,0-6.86-1.46l-128,32A8,8,0,0,0,72,56V166.1A36,36,0,1,0,88,196V102.25l112-28V134.1A36,36,0,1,0,216,164V24A8,8,0,0,0,212.92,17.71Z"/></svg></span> music</button>
+        </div>
+    </header>
+
+    <section id="volume-panel" class="topbar-panel" hidden aria-label="Volumen de música">
+        <div class="aero-window-title">Volumen de música <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>
+        <div class="topbar-panel-body">
+            <label for="music-volume">Nivel <output id="volume-value" for="music-volume">90%</output></label>
+            <input id="music-volume" type="range" min="0" max="100" value="90">
+            <small>No modifica el volumen de TTS.</small>
+        </div>
+    </section>
+    <section id="queue-panel" class="topbar-panel" hidden aria-label="Cola de música">
+        <div class="aero-window-title">Cola de música <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>
+        <ol id="queue-list" class="topbar-panel-body"><li>La cola está vacía.</li></ol>
+    </section>
+
+    <!-- Mensajes del chat -->
+    <section id="chat-widget" aria-label="Chat en vivo">
+        <div class="chat-body" id="chat-messages"></div>
+    </section>
+
+    <!-- Alertas de la comunidad -->
+    <section id="alert-box" aria-label="Alerta del stream" aria-live="polite">
+        <span class="alert-disc" aria-hidden="true"><img class="alert-art channel-avatar-sync" src="/daibot.svg" alt=""></span>
+        <div class="alert-header"><span class="alert-spark" aria-hidden="true"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M208,144a15.78,15.78,0,0,1-10.42,14.94L146,178l-19,51.62a15.92,15.92,0,0,1-29.88,0L78,178l-51.62-19a15.92,15.92,0,0,1,0-29.88L78,110l19-51.62a15.92,15.92,0,0,1,29.88,0L146,110l51.62,19A15.78,15.78,0,0,1,208,144ZM152,48h16V64a8,8,0,0,0,16,0V48h16a8,8,0,0,0,0-16H184V16a8,8,0,0,0-16,0V32H152a8,8,0,0,0,0,16Zm88,32h-8V72a8,8,0,0,0-16,0v8h-8a8,8,0,0,0,0,16h8v8a8,8,0,0,0,16,0V96h8a8,8,0,0,0,0-16Z"/></svg></span> Nueva alerta</div>
+        <span class="alert-jp" lang="ja" aria-hidden="true">＼ ディスクが、遊びになる。 ／</span>
+        <div class="alert-body" id="alert-text"></div>
+    </section>
+
+    <!-- Música y solicitudes; no se muestra ninguna videocámara -->
+    <section id="media-widget" aria-label="Música y solicitudes" data-shown="false" aria-hidden="true">
+        <div class="aero-window-title"><span class="aero-app-orb" aria-hidden="true"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M188.3,43.31a8,8,0,0,0-.65-.5c-.23-.16-.47-.31-.71-.45a103.85,103.85,0,1,0,1.36,1ZM128,152a24,24,0,1,1,24-24A24,24,0,0,1,128,152Zm88-24c0,2.47-.11,4.92-.31,7.34L168,126.92a39.83,39.83,0,0,0-11-26.41l27.78-39.67A87.8,87.8,0,0,1,216,128Z"/></svg></span> Música <span class="window-jp" lang="ja" aria-hidden="true">再生中</span> <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>
+        <div id="video-container">
+            <div id="youtube-player"></div>
+            <video id="direct-video" autoplay></video>
+        </div>
+        <div class="media-info">
+            <div class="media-label"><span class="equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i></span> Ahora suena</div>
+            <div id="video-title">---</div>
+            <span id="queue-indicator"></span>
+        </div>
+    </section>
+
+    <section id="bingo-widget" hidden aria-label="Bingo en vivo">
+        <div class="aero-window-title"><span class="aero-app-orb" aria-hidden="true"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M216,56v60a4,4,0,0,1-4,4H136V44a4,4,0,0,1,4-4h60A16,16,0,0,1,216,56ZM116,40H56A16,16,0,0,0,40,56v60a4,4,0,0,0,4,4h76V44A4,4,0,0,0,116,40Zm96,96H136v76a4,4,0,0,0,4,4h60a16,16,0,0,0,16-16V140A4,4,0,0,0,212,136ZM40,140v60a16,16,0,0,0,16,16h60a4,4,0,0,0,4-4V136H44A4,4,0,0,0,40,140Z"/></svg></span> Bingo <span id="bingo-count" class="bingo-caption">0 / 75</span></div>
+        <div class="bingo-content">
+            <div class="bingo-draw">
+                <div class="bingo-drum" aria-hidden="true"><i></i><i></i><i></i><span id="bingo-ball">—</span></div>
+                <div class="bingo-info" role="status">
+                    <strong id="bingo-status">Esperando partida</strong>
+                    <span id="bingo-participants">0 cartones</span>
+                    <small id="bingo-help">Tu cartón: !carton · Reclamar: !bingo</small>
+                </div>
+            </div>
+            <div id="bingo-history" aria-label="Últimas bolas"></div>
+            <div id="bingo-board" aria-label="Tablero de bolas sorteadas"></div>
+            <div id="bingo-winning-card" hidden aria-label="Cartón ganador verificado"></div>
+        </div>
+    </section>
+
+    <!-- Consejos rotativos con comandos útiles -->
+    <div id="tips" aria-label="Comandos y redes">
+        <div class="tip"><span class="tip-label">Pide música</span><b>!play</b> + nombre y artista o enlace de YouTube</div>
+        <div class="tip"><span class="tip-label">Envía un saludo</span><b>!s</b> / <b>!dalia</b> / <b>!jorge</b> / <b>!alex</b> + texto</div>
+        <div class="tip"><span class="tip-label">Síguenos</span><b class="kick-channel-url">kick.com/seniordai</b></div>
+    </div>
+
+    <!-- Esquinas: los seis botones del mando y el eslogan, limitados a la franja inferior. -->
+    <div class="pad-corner pad-corner-left" aria-hidden="true">
+        <span class="pad-buttons"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+        <span class="pad-tagline">seis botones. un directo.</span>
+    </div>
+    <div class="pad-corner pad-corner-right" aria-hidden="true">
+        <span class="pad-tagline" lang="ja">ディスクが、遊びになる。</span>
+    </div>
+    </main>
+
+    <script src="/app.js"></script>
+</body>
+</html>

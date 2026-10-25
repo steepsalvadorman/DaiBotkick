@@ -62,6 +62,10 @@
     .theme small { color: var(--muted); font-size: 13px; }
     .swatch { flex: none; display: flex; width: 44px; height: 28px; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); }
     .swatch i { flex: 1; }
+    .option { display: flex; gap: 10px; align-items: flex-start; margin: 12px 0 0; cursor: pointer; }
+    .option input { margin-top: 3px; accent-color: var(--green); }
+    .option b { display: block; font-size: 14px; }
+    .option small { color: var(--muted); font-size: 13px; }
     .ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
     .ghost:hover { border-color: var(--muted); }
     button:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
@@ -119,6 +123,10 @@
         <span><b>V-Saturn Aero</b><small>Consola retro y cristal de los 2000</small></span>
       </label>
     </fieldset>
+    <label class="option">
+      <input type="checkbox" id="lite" checked>
+      <span><b>Modo ligero</b><small>Sin animaciones continuas, ideal para juegos exigentes. Desmárcalo para ver el overlay completo.</small></span>
+    </label>
     <div class="field">
       <div id="url" class="url masked" aria-live="polite">••••••••••••••••••••••••••••••••••••••••</div>
       <button id="copy" class="primary" type="button">Copiar URL</button>
@@ -160,13 +168,17 @@
     var shown = false;
 
     // El servidor genera la URL con pixel.html; el tema elegido solo cambia la página, no el token.
+    // El modo ligero es el predeterminado del overlay; desmarcarlo añade lite=0 (antes del #token).
     var themes = document.querySelectorAll('input[name="theme"]');
+    var lite = document.getElementById("lite");
     function applyTheme() {
       var page = document.querySelector('input[name="theme"]:checked').value;
       url = baseUrl.replace("/pixel.html?", "/" + page + "?");
+      if (!lite.checked) url = url.replace("#", "&lite=0#");
       if (shown) box.textContent = url;
     }
     for (var i = 0; i < themes.length; i++) themes[i].addEventListener("change", applyTheme);
+    lite.addEventListener("change", applyTheme);
     applyTheme();
 
     toggle.addEventListener("click", function () {

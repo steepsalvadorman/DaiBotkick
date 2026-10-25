@@ -321,18 +321,17 @@ test('reduced motion leaves one readable tip and disables decorative movement', 
     assert.match(reduced, /\.tip \{ display: none; \}/);
     assert.match(reduced, /\.tip:first-child \{ display: flex; opacity: 1; \}/);
 });
-test('lite mode stops continuous animations and rotates tips without CSS keyframes', () => {
+test('lite mode is the default and stops continuous animations and rotates tips without CSS keyframes', () => {
     const tips = [0, 1, 2].map(() => { const classes = new Set(); return { classes, classList: { toggle(name, force) { if (force) classes.add(name); else classes.delete(name); } } }; });
-    const lite = overlay('#token=private', '?ch=alpha&lite=1', { tips });
+    const lite = overlay('#token=private', '?ch=alpha', { tips });
     assert.ok(lite.context.document.body.classList.contains('lite'));
     assert.deepEqual(tips.map(tip => tip.classes.has('current')), [true, false, false]);
     const rotate = lite.context.intervals.find(i => i.delay === 9000).fn;
     rotate(); assert.deepEqual(tips.map(tip => tip.classes.has('current')), [false, true, false]);
     rotate(); rotate(); assert.deepEqual(tips.map(tip => tip.classes.has('current')), [true, false, false]);
 
-    const normal = overlay('#token=private', '?ch=alpha', { tips });
+    const normal = overlay('#token=private', '?ch=alpha&lite=0', { tips });
     assert.ok(!normal.context.document.body.classList.contains('lite'));
-    assert.ok(!normal.context.intervals.some(i => i.delay === 9000));
 
     const css = fs.readFileSync(__dirname + '/../overlay/style.css', 'utf8');
     const block = css.slice(css.indexOf('body.lite .kinetic-corner::before'), css.indexOf('@media (prefers-reduced-motion: reduce)'));

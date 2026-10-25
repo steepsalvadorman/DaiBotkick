@@ -19,8 +19,9 @@
     const status = document.createElement('div');
     status.id = 'connection-status'; status.setAttribute('role', 'status'); document.body.append(status);
     const notify = text => { status.textContent = text; };
-    // Modo ligero (?lite=1): sin animaciones decorativas infinitas para no competir con el juego por la GPU.
-    if (new URLSearchParams(location.search).get('lite') === '1') document.body.classList.add('lite');
+    // Modo ligero por defecto: sin animaciones decorativas infinitas para no competir con el juego por la GPU.
+    // Se desactiva con ?lite=0.
+    if (new URLSearchParams(location.search).get('lite') !== '0') document.body.classList.add('lite');
     // Un solo consejo visible. La animación CSS los dejaba los tres en la misma celda y se pintaban juntos.
     const tips = [...document.querySelectorAll('.tip')];
     let tipIndex = 0;

@@ -9,6 +9,18 @@ use tracing::warn;
 mod search;
 mod tiktok;
 
+/// Datos del mensaje de chat que reciben todos los grupos de comandos.
+#[derive(Clone, Copy)]
+struct Ctx<'a> {
+    username: &'a str,
+    content: &'a str,
+    /// `content` en minúsculas.
+    cmd: &'a str,
+    is_owner: bool,
+    ch: &'a Arc<ChannelState>,
+    global: &'a Arc<AppState>,
+}
+
 pub async fn handle(
     username: &str,
     content: &str,
@@ -23,21 +35,48 @@ pub async fn handle(
     if crate::bingo::handle(username, cmd.trim(), is_owner, ch, global).await {
         return;
     }
+    let ctx = Ctx {
+        username,
+        content,
+        cmd: &cmd,
+        is_owner,
+        ch,
+        global,
+    };
+    let handled = owner_commands(&ctx).await
+        || info_commands(&ctx).await
+        || dynamic_commands(&ctx).await
+        || entertainment_commands(&ctx).await
+        || queue_commands(&ctx).await
+        || play_command(&ctx).await;
+    if !handled {
+        tts_command(&ctx).await;
+    }
+}
 
+async fn owner_commands(c: &Ctx<'_>) -> bool {
+    let Ctx {
+        content,
+        cmd,
+        is_owner,
+        ch,
+        global,
+        ..
+    } = *c;
     // ── Comandos solo del owner ───────────────────────────────────────────────
     if is_owner {
         if let Some(args) = command_args(content, "!set") {
             configure(args, ch, global).await;
-            return;
+            return true;
         }
-        match cmd.as_str() {
+        match cmd {
             "!von" => {
                 visibility(ch, global, true).await;
-                return;
+                return true;
             }
             "!voff" => {
                 visibility(ch, global, false).await;
-                return;
+                return true;
             }
             "!vstop" => {
                 queue_edit(ch, global, |q| {
@@ -45,7 +84,7 @@ pub async fn handle(
                     true
                 })
                 .await;
-                return;
+                return true;
             }
             "!next" | "!skip" => {
                 queue_edit(ch, global, |q| {
@@ -56,25 +95,33 @@ pub async fn handle(
                     true
                 })
                 .await;
-                return;
+                return true;
             }
             _ => {}
         }
     }
+    false
+}
 
+async fn info_commands(c: &Ctx<'_>) -> bool {
+    let Ctx {
+        cmd,
+        is_owner,
+        ch,
+        global,
+        ..
+    } = *c;
     // ── Comandos informativos (cooldown 20s) ──────────────────────────────────
     macro_rules! global_cmd {
         ($key:expr, $body:expr) => {{
-            if !is_owner {
-                let ok = { ch.cooldown.lock().await.consume_global($key, 20) };
-                if !ok { return; }
+            if global_ready(ch, is_owner, $key, INFO_COOLDOWN_SECS).await {
+                $body
             }
-            $body
-            return;
+            return true;
         }};
     }
 
-    match cmd.as_str() {
+    match cmd {
         "!voces" => global_cmd!("!voces", {
             sender::send(
                 &tts::voice_list(!global.config.fish_audio_api_key.trim().is_empty()),
@@ -103,17 +150,24 @@ pub async fn handle(
         }),
         _ => {}
     }
+    false
+}
 
+async fn dynamic_commands(c: &Ctx<'_>) -> bool {
+    let Ctx {
+        cmd,
+        is_owner,
+        ch,
+        global,
+        ..
+    } = *c;
     // ── Comandos dinámicos ────────────────────────────────────────────────────
     use std::sync::atomic::Ordering;
 
-    match cmd.as_str() {
+    match cmd {
         "!uptime" => {
-            if !is_owner {
-                let ok = { ch.cooldown.lock().await.consume_global("!uptime", 30) };
-                if !ok {
-                    return;
-                }
+            if !global_ready(ch, is_owner, "!uptime", 30).await {
+                return true;
             }
             let since = *ch.live_since.read().await;
             let msg = match since {
@@ -124,14 +178,11 @@ pub async fn handle(
                 None => "El canal esta offline o no hay datos del inicio".to_string(),
             };
             sender::send(&msg, ch, global).await;
-            return;
+            return true;
         }
         "!cola" | "!queue" => {
-            if !is_owner {
-                let ok = { ch.cooldown.lock().await.consume_global("!cola", 30) };
-                if !ok {
-                    return;
-                }
+            if !global_ready(ch, is_owner, "!cola", 30).await {
+                return true;
             }
             let q = ch.video_queue.read().await;
             let msg = if q.items.is_empty() {
@@ -152,14 +203,11 @@ pub async fn handle(
                 format!("🎬 Cola: {}{}", lista.join(" · "), extra)
             };
             sender::send(&msg, ch, global).await;
-            return;
+            return true;
         }
         "!seguidores" | "!followers" => {
-            if !is_owner {
-                let ok = { ch.cooldown.lock().await.consume_global("!seguidores", 60) };
-                if !ok {
-                    return;
-                }
+            if !global_ready(ch, is_owner, "!seguidores", 60).await {
+                return true;
             }
             if !ch.followers_known.load(Ordering::Relaxed) {
                 sender::send(
@@ -168,7 +216,7 @@ pub async fn handle(
                     global,
                 )
                 .await;
-                return;
+                return true;
             }
             let actual = ch.followers.load(Ordering::Relaxed);
             let goal = ch.follow_goal.load(Ordering::Relaxed);
@@ -179,38 +227,38 @@ pub async fn handle(
                 global,
             )
             .await;
-            return;
+            return true;
         }
         _ => {}
     }
+    false
+}
 
+async fn entertainment_commands(c: &Ctx<'_>) -> bool {
+    let Ctx {
+        username,
+        cmd,
+        is_owner,
+        ch,
+        global,
+        ..
+    } = *c;
     // ── Entretenimiento ───────────────────────────────────────────────────────
     use rand::seq::SliceRandom;
     use rand::Rng;
 
     if cmd == "!dado" {
-        if !is_owner {
-            let ok = { ch.cooldown.lock().await.consume_user(username, "!dado", 15) };
-            if !ok {
-                return;
-            }
+        if !user_ready(ch, is_owner, username, "!dado", 15).await {
+            return true;
         }
         let n: u8 = rand::thread_rng().gen_range(1..=100);
         sender::send(&format!("🎲 {username} sacó un {n}!"), ch, global).await;
-        return;
+        return true;
     }
 
     if cmd == "!8ball" || cmd.starts_with("!8ball ") {
-        if !is_owner {
-            let ok = {
-                ch.cooldown
-                    .lock()
-                    .await
-                    .consume_user(username, "!8ball", 10)
-            };
-            if !ok {
-                return;
-            }
+        if !user_ready(ch, is_owner, username, "!8ball", 10).await {
+            return true;
         }
         const RESP: &[&str] = &[
             "Sí, definitivamente 🟢",
@@ -227,7 +275,7 @@ pub async fn handle(
         ];
         let resp = RESP.choose(&mut rand::thread_rng()).unwrap_or(&"Quizás");
         sender::send(&format!("🎱 {resp}"), ch, global).await;
-        return;
+        return true;
     }
 
     // !sorteo
@@ -281,7 +329,7 @@ pub async fn handle(
                         .iter()
                         .any(|p| p.eq_ignore_ascii_case(username))
                 {
-                    return;
+                    return true;
                 }
                 s.participants.push(username.to_string());
                 let count = s.participants.len();
@@ -295,9 +343,20 @@ pub async fn handle(
             }
             _ => {}
         }
-        return;
+        return true;
     }
+    false
+}
 
+async fn queue_commands(c: &Ctx<'_>) -> bool {
+    let Ctx {
+        username,
+        cmd,
+        is_owner,
+        ch,
+        global,
+        ..
+    } = *c;
     // ── Gestión de cola ───────────────────────────────────────────────────────
     if cmd == "!quitarme" || cmd == "!removeme" {
         let changed = queue_edit(ch, global, |q| {
@@ -320,20 +379,12 @@ pub async fn handle(
             )
             .await;
         }
-        return;
+        return true;
     }
 
     if cmd == "!misongs" || cmd == "!miscanciones" {
-        if !is_owner {
-            let ok = {
-                ch.cooldown
-                    .lock()
-                    .await
-                    .consume_user(username, "!misongs", 15)
-            };
-            if !ok {
-                return;
-            }
+        if !user_ready(ch, is_owner, username, "!misongs", 15).await {
+            return true;
         }
         let q = ch.video_queue.read().await;
         let mis: Vec<String> = q
@@ -350,13 +401,24 @@ pub async fn handle(
             format!("🎵 @{username}: {}", mis.join(" · "))
         };
         sender::send(&msg, ch, global).await;
-        return;
+        return true;
     }
+    false
+}
 
+async fn play_command(c: &Ctx<'_>) -> bool {
+    let Ctx {
+        username,
+        content,
+        is_owner,
+        ch,
+        global,
+        ..
+    } = *c;
     // ── !play ─────────────────────────────────────────────────────────────────
     if let Some(url) = command_args(content, "!play") {
         if is_play_blocked(username) {
-            return;
+            return true;
         }
         if url.is_empty() {
             sender::send(
@@ -365,18 +427,26 @@ pub async fn handle(
                 global,
             )
             .await;
-            return;
+            return true;
         }
-        if !is_owner {
-            let ok = { ch.cooldown.lock().await.consume_user(username, "!play", 30) };
-            if !ok {
-                return;
-            }
+        if !user_ready(ch, is_owner, username, "!play", 30).await {
+            return true;
         }
         play(url.trim().to_string(), username.to_string(), ch, global).await;
-        return;
+        return true;
     }
+    false
+}
 
+async fn tts_command(c: &Ctx<'_>) {
+    let Ctx {
+        username,
+        content,
+        is_owner,
+        ch,
+        global,
+        ..
+    } = *c;
     // ── TTS ───────────────────────────────────────────────────────────────────
     let Some((cmd_word, rest)) = content.split_once(' ') else {
         return;
@@ -389,11 +459,8 @@ pub async fn handle(
     let default_voice = cmd_low == "!s";
     let is_tts = default_voice || cmd_low.strip_prefix('!').is_some_and(tts::is_valid_voice);
     if is_tts {
-        if !is_owner {
-            let ok = { ch.cooldown.lock().await.consume_user(username, "!camila", 15) };
-            if !ok {
-                return;
-            }
+        if !user_ready(ch, is_owner, username, "!camila", 15).await {
+            return;
         }
         let voice = if default_voice {
             tts::default_chat_voice().into()
@@ -407,6 +474,21 @@ pub async fn handle(
             ).await;
         }
     }
+}
+
+const INFO_COOLDOWN_SECS: u64 = 20;
+const MAX_QUEUE_ITEMS: usize = 100;
+const MAX_URL_LEN: usize = 2048;
+const TITLE_PREVIEW_CHARS: usize = 60;
+
+/// El owner no tiene cooldown; el resto consume el cooldown global del comando.
+async fn global_ready(ch: &ChannelState, is_owner: bool, key: &str, secs: u64) -> bool {
+    is_owner || ch.cooldown.lock().await.consume_global(key, secs)
+}
+
+/// El owner no tiene cooldown; el resto consume el cooldown por usuario del comando.
+async fn user_ready(ch: &ChannelState, is_owner: bool, user: &str, key: &str, secs: u64) -> bool {
+    is_owner || ch.cooldown.lock().await.consume_user(user, key, secs)
 }
 
 /// Usuarios que no pueden pedir canciones con !play; sus peticiones se ignoran en silencio.
@@ -530,30 +612,19 @@ pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global:
             Ok((id, title)) => {
                 let message = format!(
                     "▶ @{username} encontré «{}» y la agregué a la cola.",
-                    trunc(&title, 60)
+                    trunc(&title, TITLE_PREVIEW_CHARS)
                 );
-                if enqueue(
-                    VideoItem {
-                        id: uuid::Uuid::new_v4().to_string(),
-                        video_id: Some(id),
-                        tiktok_id: None,
-                        url: None,
-                        title,
-                        user: username,
-                    },
-                    ch,
-                    global,
-                )
-                .await
-                {
-                    sender::send(&message, ch, global).await;
-                }
+                let item = VideoItem {
+                    video_id: Some(id),
+                    ..new_item(username, title)
+                };
+                enqueue_announced(item, &message, ch, global).await;
             }
             Err(message) => sender::send(message, ch, global).await,
         }
         return;
     }
-    if url.len() > 2048 || !valid_media_url(&url) {
+    if url.len() > MAX_URL_LEN || !valid_media_url(&url) {
         sender::send(
             "Enlace inválido. Usa una URL HTTPS o escribe el nombre y artista de la canción.",
             ch,
@@ -570,23 +641,11 @@ pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global:
         };
         match resolved {
             Ok((tiktok_id, title)) => {
-                let msg = format!("▶ @{username} agregó «{}» a la cola", trunc(&title, 60));
-                if enqueue(
-                    VideoItem {
-                        id: uuid::Uuid::new_v4().to_string(),
-                        video_id: None,
-                        tiktok_id: Some(tiktok_id),
-                        url: None,
-                        title,
-                        user: username,
-                    },
-                    ch,
-                    global,
-                )
-                .await
-                {
-                    sender::send(&msg, ch, global).await;
-                }
+                let item = VideoItem {
+                    tiktok_id: Some(tiktok_id),
+                    ..new_item(username.clone(), title)
+                };
+                add_announced(item, &username, ch, global).await;
             }
             Err(message) => sender::send(&format!("@{username} {message}"), ch, global).await,
         }
@@ -600,23 +659,11 @@ pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global:
             .and_then(|s| s.split('?').next())
             .unwrap_or("Video")
             .to_string();
-        let msg = format!("▶ @{username} agregó «{}» a la cola", trunc(&title, 60));
-        if enqueue(
-            VideoItem {
-                id: uuid::Uuid::new_v4().to_string(),
-                video_id: None,
-                tiktok_id: None,
-                url: Some(url),
-                title,
-                user: username,
-            },
-            ch,
-            global,
-        )
-        .await
-        {
-            sender::send(&msg, ch, global).await;
-        }
+        let item = VideoItem {
+            url: Some(url),
+            ..new_item(username.clone(), title)
+        };
+        add_announced(item, &username, ch, global).await;
         return;
     }
 
@@ -630,23 +677,11 @@ pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global:
             .unwrap_or("");
         if !list_id.starts_with("RD") {
             if let Some((vid, title)) = first_from_playlist(&global.http, &url).await {
-                let msg = format!("▶ @{username} agregó «{}» a la cola", trunc(&title, 60));
-                if enqueue(
-                    VideoItem {
-                        id: uuid::Uuid::new_v4().to_string(),
-                        video_id: Some(vid),
-                        tiktok_id: None,
-                        url: None,
-                        title,
-                        user: username,
-                    },
-                    ch,
-                    global,
-                )
-                .await
-                {
-                    sender::send(&msg, ch, global).await;
-                }
+                let item = VideoItem {
+                    video_id: Some(vid),
+                    ..new_item(username.clone(), title)
+                };
+                add_announced(item, &username, ch, global).await;
                 return;
             }
         }
@@ -658,23 +693,11 @@ pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global:
             &format!("https://www.youtube.com/watch?v={vid}"),
         )
         .await;
-        let msg = format!("▶ @{username} agregó «{}» a la cola", trunc(&title, 60));
-        if enqueue(
-            VideoItem {
-                id: uuid::Uuid::new_v4().to_string(),
-                video_id: Some(vid),
-                tiktok_id: None,
-                url: None,
-                title,
-                user: username,
-            },
-            ch,
-            global,
-        )
-        .await
-        {
-            sender::send(&msg, ch, global).await;
-        }
+        let item = VideoItem {
+            video_id: Some(vid),
+            ..new_item(username.clone(), title)
+        };
+        add_announced(item, &username, ch, global).await;
     } else {
         warn!("[PLAY] URL inválida: {url}");
         sender::send(
@@ -686,13 +709,50 @@ pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global:
     }
 }
 
+/// Item de cola sin fuente; quien lo usa rellena `video_id`, `tiktok_id` o `url`.
+fn new_item(user: String, title: String) -> VideoItem {
+    VideoItem {
+        id: uuid::Uuid::new_v4().to_string(),
+        video_id: None,
+        tiktok_id: None,
+        url: None,
+        title,
+        user,
+    }
+}
+
+/// Encola `item` y, si entró, anuncia en el chat que `username` lo agregó.
+async fn add_announced(
+    item: VideoItem,
+    username: &str,
+    ch: &Arc<ChannelState>,
+    global: &Arc<AppState>,
+) {
+    let message = format!(
+        "▶ @{username} agregó «{}» a la cola",
+        trunc(&item.title, TITLE_PREVIEW_CHARS)
+    );
+    enqueue_announced(item, &message, ch, global).await;
+}
+
+async fn enqueue_announced(
+    item: VideoItem,
+    message: &str,
+    ch: &Arc<ChannelState>,
+    global: &Arc<AppState>,
+) {
+    if enqueue(item, ch, global).await {
+        sender::send(message, ch, global).await;
+    }
+}
+
 async fn enqueue(item: VideoItem, ch: &Arc<ChannelState>, global: &Arc<AppState>) -> bool {
     if ch.cancel.is_cancelled() {
         return false;
     }
-    if ch.video_queue.read().await.items.len() >= 100 {
+    if ch.video_queue.read().await.items.len() >= MAX_QUEUE_ITEMS {
         sender::send(
-            "La cola está llena (100 solicitudes). Espera a que termine una canción.",
+            &format!("La cola está llena ({MAX_QUEUE_ITEMS} solicitudes). Espera a que termine una canción."),
             ch,
             global,
         )
@@ -700,7 +760,7 @@ async fn enqueue(item: VideoItem, ch: &Arc<ChannelState>, global: &Arc<AppState>
         return false;
     }
     queue_edit(ch, global, |q| {
-        if q.items.len() >= 100 {
+        if q.items.len() >= MAX_QUEUE_ITEMS {
             return false;
         }
         q.push(item);

@@ -55,8 +55,7 @@ impl CooldownManager {
         self.global.insert(cmd.to_string(), Instant::now());
     }
 
-    #[allow(dead_code)]
-    pub fn gc(&mut self, max_secs: u64) {
+    fn gc(&mut self, max_secs: u64) {
         let limit = Duration::from_secs(max_secs);
         self.per_user.retain(|_, t| t.elapsed() < limit);
         self.global.retain(|_, t| t.elapsed() < limit);

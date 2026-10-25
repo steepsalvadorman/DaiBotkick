@@ -54,10 +54,33 @@ async fn metrics(State(state): State<Arc<AppState>>) -> String {
         .map(|channel| channel.tts_tx.max_capacity() - channel.tts_tx.capacity())
         .sum();
     let sockets = state.io.sockets().map_or(0, |sockets| sockets.len());
-    format!("daibot_channels {}\ndaibot_sockets {}\ndaibot_tts_pending {}\ndaibot_webhook_rejected_total {}\ndaibot_webhook_received_total {}\ndaibot_webhook_duplicates_total {}\ndaibot_webhook_processed_total {}\n",
-        state.channels.len(), sockets, pending_tts, state.metrics.webhook_rejected.load(Relaxed),
-        state.metrics.webhook_received.load(Relaxed), state.metrics.webhook_duplicates.load(Relaxed), state.metrics.webhook_processed.load(Relaxed))
+    let m = &state.metrics;
+    [
+        ("daibot_channels", state.channels.len() as u64),
+        ("daibot_sockets", sockets as u64),
+        ("daibot_tts_pending", pending_tts as u64),
+        (
+            "daibot_webhook_rejected_total",
+            m.webhook_rejected.load(Relaxed),
+        ),
+        (
+            "daibot_webhook_received_total",
+            m.webhook_received.load(Relaxed),
+        ),
+        (
+            "daibot_webhook_duplicates_total",
+            m.webhook_duplicates.load(Relaxed),
+        ),
+        (
+            "daibot_webhook_processed_total",
+            m.webhook_processed.load(Relaxed),
+        ),
+    ]
+    .iter()
+    .map(|(name, value)| format!("{name} {value}\n"))
+    .collect()
 }
+
 async fn shutdown_signal() {
     #[cfg(unix)]
     {
@@ -87,11 +110,7 @@ async fn main() {
     }
 
     // Cargar .env (solo para desarrollo local)
-    if let Some(path) = find_dotenv_path() {
-        let _ = dotenvy::from_path(&path);
-    } else {
-        let _ = dotenvy::dotenv();
-    }
+    load_dotenv();
 
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -99,57 +118,8 @@ async fn main() {
         )
         .init();
 
-    // Configuración global (solo credenciales de la app, no del canal)
-    let config = GlobalConfig {
-        client_id: std::env::var("KICK_CLIENT_ID").unwrap_or_default(),
-        client_secret: std::env::var("KICK_CLIENT_SECRET").unwrap_or_default(),
-        port: std::env::var("PORT")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(3000),
-        overlay_dir: std::env::var("OVERLAY_DIR").unwrap_or_else(|_| "../overlay".into()),
-        base_url: std::env::var("BASE_URL")
-            .or_else(|_| std::env::var("RENDER_EXTERNAL_URL"))
-            .unwrap_or_else(|_| "http://localhost:3000".into()),
-        tts_cache_dir: std::env::var("TTS_CACHE_DIR").unwrap_or_else(|_| {
-            std::env::temp_dir()
-                .join("daibot_tts")
-                .to_string_lossy()
-                .into_owned()
-        }),
-        fish_audio_api_key: std::env::var("FISH_AUDIO_API_KEY").unwrap_or_default(),
-    };
-
-    if config.client_id.is_empty() || config.client_secret.is_empty() {
-        eprintln!("[FATAL] Faltan KICK_CLIENT_ID o KICK_CLIENT_SECRET.");
-        std::process::exit(1);
-    }
-
-    // Base de datos PostgreSQL
-    let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
-        eprintln!("[FATAL] DATABASE_URL no configurada.");
-        std::process::exit(1);
-    });
-    let connect_opts = db_url
-        .parse::<sqlx::postgres::PgConnectOptions>()
-        .unwrap_or_else(|e| {
-            eprintln!("[FATAL] DATABASE_URL inválida: {e}");
-            std::process::exit(1);
-        })
-        .statement_cache_capacity(0); // requerido para PgBouncer (transaction pooler)
-    let db = sqlx::postgres::PgPoolOptions::new()
-        .max_connections(5)
-        .connect_with(connect_opts)
-        .await
-        .unwrap_or_else(|e| {
-            eprintln!("[FATAL] No se pudo conectar a PostgreSQL: {e}");
-            std::process::exit(1);
-        });
-
-    // Ejecutar migraciones
-    db::run_migrations(&db)
-        .await
-        .unwrap_or_else(|e| fatal(&format!("Migraciones: {e}")));
+    let config = load_config();
+    let db = connect_db().await;
     info!("Base de datos lista");
 
     // Socket.IO
@@ -204,40 +174,15 @@ async fn main() {
     let overlay_dir = resolve_overlay_dir(&state.config.overlay_dir);
     info!("Overlay: {}", overlay_dir.display());
 
-    // Router
-    let app = axum::Router::new()
-        .route("/", axum::routing::get(auth::start_oauth))
-        .route("/auth/kick", axum::routing::get(auth::redirect_to_kick))
-        .route("/auth/callback", axum::routing::get(auth::handle_callback))
-        .route("/auth/bingo", axum::routing::get(bingo_auth::login))
-        .route(
-            "/auth/bingo/callback",
-            axum::routing::get(bingo_auth::callback),
-        )
-        .route("/kick_webhook", axum::routing::post(webhook::receive))
-        .route("/healthz", axum::routing::get(|| async { StatusCode::OK }))
-        .route("/readyz", axum::routing::get(ready))
-        .route("/metrics", axum::routing::get(metrics))
-        .route("/api/bingo/:slug", axum::routing::get(bingo::personal_card))
-        .layer(axum::extract::DefaultBodyLimit::max(256 * 1024))
-        .with_state(state.clone())
-        .fallback_service(ServeDir::new(&overlay_dir))
-        .layer(axum::middleware::from_fn(response_headers))
-        .layer(layer);
+    let app = build_router(state.clone(), layer, &overlay_dir);
 
     let addr = format!("0.0.0.0:{}", state.config.port);
 
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
-        .unwrap_or_else(|e| {
-            eprintln!("[FATAL] Puerto {}: {e}", state.config.port);
-            std::process::exit(1);
-        });
+        .unwrap_or_else(|e| fatal(&format!("Puerto {}: {e}", state.config.port)));
 
-    info!(
-        "DaiBot corriendo  → http://localhost:{}",
-        state.config.port
-    );
+    info!("DaiBot corriendo  → http://localhost:{}", state.config.port);
     info!(
         "Registro          → http://localhost:{}/",
         state.config.port
@@ -252,10 +197,77 @@ async fn main() {
     axum::serve(listener, app)
         .with_graceful_shutdown(async move { shutdown.cancelled().await })
         .await
-        .unwrap_or_else(|e| {
-            eprintln!("[FATAL] Servidor: {e}");
-            std::process::exit(1);
-        });
+        .unwrap_or_else(|e| fatal(&format!("Servidor: {e}")));
+}
+
+/// Configuración global (solo credenciales de la app, no del canal).
+fn load_config() -> GlobalConfig {
+    let config = GlobalConfig {
+        client_id: std::env::var("KICK_CLIENT_ID").unwrap_or_default(),
+        client_secret: std::env::var("KICK_CLIENT_SECRET").unwrap_or_default(),
+        port: std::env::var("PORT")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(3000),
+        overlay_dir: std::env::var("OVERLAY_DIR").unwrap_or_else(|_| "../overlay".into()),
+        base_url: std::env::var("BASE_URL")
+            .or_else(|_| std::env::var("RENDER_EXTERNAL_URL"))
+            .unwrap_or_else(|_| "http://localhost:3000".into()),
+        tts_cache_dir: std::env::var("TTS_CACHE_DIR").unwrap_or_else(|_| {
+            std::env::temp_dir()
+                .join("daibot_tts")
+                .to_string_lossy()
+                .into_owned()
+        }),
+        fish_audio_api_key: std::env::var("FISH_AUDIO_API_KEY").unwrap_or_default(),
+    };
+    if config.client_id.is_empty() || config.client_secret.is_empty() {
+        fatal("Faltan KICK_CLIENT_ID o KICK_CLIENT_SECRET.");
+    }
+    config
+}
+
+/// Conecta a PostgreSQL y ejecuta las migraciones.
+async fn connect_db() -> sqlx::PgPool {
+    let db_url =
+        std::env::var("DATABASE_URL").unwrap_or_else(|_| fatal("DATABASE_URL no configurada."));
+    let connect_opts = db_url
+        .parse::<sqlx::postgres::PgConnectOptions>()
+        .unwrap_or_else(|e| fatal(&format!("DATABASE_URL inválida: {e}")))
+        .statement_cache_capacity(0); // requerido para PgBouncer (transaction pooler)
+    let db = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(5)
+        .connect_with(connect_opts)
+        .await
+        .unwrap_or_else(|e| fatal(&format!("No se pudo conectar a PostgreSQL: {e}")));
+    db::run_migrations(&db)
+        .await
+        .unwrap_or_else(|e| fatal(&format!("Migraciones: {e}")));
+    db
+}
+
+fn build_router(
+    state: Arc<AppState>,
+    socket_layer: socketioxide::layer::SocketIoLayer,
+    overlay_dir: &std::path::Path,
+) -> axum::Router {
+    use axum::routing::{get, post};
+    axum::Router::new()
+        .route("/", get(auth::start_oauth))
+        .route("/auth/kick", get(auth::redirect_to_kick))
+        .route("/auth/callback", get(auth::handle_callback))
+        .route("/auth/bingo", get(bingo_auth::login))
+        .route("/auth/bingo/callback", get(bingo_auth::callback))
+        .route("/kick_webhook", post(webhook::receive))
+        .route("/healthz", get(|| async { StatusCode::OK }))
+        .route("/readyz", get(ready))
+        .route("/metrics", get(metrics))
+        .route("/api/bingo/:slug", get(bingo::personal_card))
+        .layer(axum::extract::DefaultBodyLimit::max(256 * 1024))
+        .with_state(state)
+        .fallback_service(ServeDir::new(overlay_dir))
+        .layer(axum::middleware::from_fn(response_headers))
+        .layer(socket_layer)
 }
 
 async fn response_headers(
@@ -317,11 +329,7 @@ pub(crate) fn find_dotenv_path() -> Option<std::path::PathBuf> {
         }
     }
     let p = std::path::Path::new(".env");
-    if p.exists() {
-        Some(p.to_path_buf())
-    } else {
-        None
-    }
+    p.exists().then(|| p.to_path_buf())
 }
 
 pub(crate) fn load_dotenv() {

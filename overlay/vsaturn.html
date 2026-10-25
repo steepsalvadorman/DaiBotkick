@@ -9,13 +9,13 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@500;600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="/sio.js"></script>
-    <link rel="stylesheet" href="/vsaturn.css">
+    <link rel="stylesheet" href="/vsaturn.css?v=gold">
 </head>
 <body>
 
     <main aria-label="Overlay del stream">
     <!-- Barra superior: placa de consola (avatar en la tapa del lector) y mando con seis botones. -->
-    <header id="hud" class="system-topbar" aria-label="Barra de controles del stream">
+    <header id="hud" class="system-topbar dynamic-island" data-island="idle" aria-label="Barra de controles del stream">
         <div class="topbar-start">
             <span class="disc-lid">
                 <img class="brand-mark channel-avatar" id="channel-avatar"
@@ -34,8 +34,13 @@
             </span>
         </div>
         <div class="topbar-center">
+        <div class="island-slot" data-slot="emoji"><div class="island-clip">
         <div id="emoji-meter" aria-label="Emojis de los últimos cinco minutos"><span id="emoji-total">0 emojis · 5 min</span><span id="emoji-top"></span></div>
+        </div></div>
+        <div class="island-slot" data-slot="bingo"><div class="island-clip">
         <button id="bingo-toggle" class="music-anchor" type="button" aria-pressed="true" aria-controls="bingo-widget" title="Mostrar u ocultar el bingo"><span class="aero-app-orb" aria-hidden="true"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M216,56v60a4,4,0,0,1-4,4H136V44a4,4,0,0,1,4-4h60A16,16,0,0,1,216,56ZM116,40H56A16,16,0,0,0,40,56v60a4,4,0,0,0,4,4h76V44A4,4,0,0,0,116,40Zm96,96H136v76a4,4,0,0,0,4,4h60a16,16,0,0,0,16-16V140A4,4,0,0,0,212,136ZM40,140v60a16,16,0,0,0,16,16h60a4,4,0,0,0,4-4V136H44A4,4,0,0,0,40,140Z"/></svg></span> bingo</button>
+        </div></div>
+        <div class="island-slot" data-slot="music"><div class="island-clip">
         <span class="pad-rule" aria-hidden="true"></span>
         <div id="topbar-requester" class="topbar-requester" hidden>
             <span class="requester-label">Pedido por</span>
@@ -51,6 +56,9 @@
             <button id="music-next" class="topbar-button face-button face-ink" type="button" disabled aria-label="Siguiente canción" title="Siguiente canción"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 5h2v14h-2ZM5 5l11 7-11 7Z"/></svg></button>
             </div>
         </div>
+        <button id="music-anchor" class="music-anchor" type="button" aria-pressed="true" title="Mostrar u ocultar el reproductor; el audio continúa"><span class="aero-app-orb" aria-hidden="true"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M212.92,17.71a7.89,7.89,0,0,0-6.86-1.46l-128,32A8,8,0,0,0,72,56V166.1A36,36,0,1,0,88,196V102.25l112-28V134.1A36,36,0,1,0,216,164V24A8,8,0,0,0,212.92,17.71Z"/></svg></span> music</button>
+        </div></div>
+        <div class="island-slot" data-slot="open"><div class="island-clip">
         <span class="pad-rule" aria-hidden="true"></span>
         <div class="aero-control-cluster toggle-cluster" role="group" aria-label="Controles del overlay">
             <button id="chat-toggle" class="topbar-button aero-icon-button" type="button" aria-label="Mostrar u ocultar el chat" aria-pressed="false" title="Mostrar u ocultar el chat">
@@ -63,7 +71,7 @@
                 <svg viewBox="0 0 256 256" aria-hidden="true"><path d="M160,32.25V223.69a8.29,8.29,0,0,1-3.91,7.18,8,8,0,0,1-9-.56l-65.57-51A4,4,0,0,1,80,176.16V79.84a4,4,0,0,1,1.55-3.15l65.57-51a8,8,0,0,1,10,.16A8.27,8.27,0,0,1,160,32.25ZM60,80H32A16,16,0,0,0,16,96v64a16,16,0,0,0,16,16H60a4,4,0,0,0,4-4V84A4,4,0,0,0,60,80Zm126.77,20.84a8,8,0,0,0-.72,11.3,24,24,0,0,1,0,31.72,8,8,0,1,0,12,10.58,40,40,0,0,0,0-52.88A8,8,0,0,0,186.74,100.84Zm40.89-26.17a8,8,0,1,0-11.92,10.66,64,64,0,0,1,0,85.34,8,8,0,1,0,11.92,10.66,80,80,0,0,0,0-106.66Z"/></svg>
             </button>
         </div>
-        <button id="music-anchor" class="music-anchor" type="button" aria-pressed="true" title="Mostrar u ocultar el reproductor; el audio continúa"><span class="aero-app-orb" aria-hidden="true"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M212.92,17.71a7.89,7.89,0,0,0-6.86-1.46l-128,32A8,8,0,0,0,72,56V166.1A36,36,0,1,0,88,196V102.25l112-28V134.1A36,36,0,1,0,216,164V24A8,8,0,0,0,212.92,17.71Z"/></svg></span> music</button>
+        </div></div>
         </div>
     </header>
 
@@ -139,8 +147,14 @@
     <div class="pad-corner pad-corner-right" aria-hidden="true">
         <span class="pad-tagline" lang="ja">ディスクが、遊びになる。</span>
     </div>
+    <div class="halloween" aria-hidden="true">
+        <img class="halloween-bat halloween-bat-left" src="/halloween-bats.gif?v=clear" alt="">
+        <img class="halloween-bat halloween-bat-right" src="/halloween-bats.gif?v=clear" alt="">
+        <img class="halloween-pumpkin" src="/halloween-pumpkin.gif?v=clear" alt="">
+        <img class="halloween-ghost" src="/halloween-ghost.gif?v=clear" alt="">
+    </div>
     </main>
 
-    <script src="/app.js"></script>
+    <script src="/app.js?v=island2"></script>
 </body>
 </html>

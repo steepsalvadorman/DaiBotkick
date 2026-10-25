@@ -20,11 +20,12 @@
     status.id = 'connection-status'; status.setAttribute('role', 'status'); document.body.append(status);
     const notify = text => { status.textContent = text; };
     // Modo ligero (?lite=1): sin animaciones decorativas infinitas para no competir con el juego por la GPU.
-    if (new URLSearchParams(location.search).get('lite') === '1') {
-        document.body.classList.add('lite');
-        const tips = [...document.querySelectorAll('.tip')];
-        let tipIndex = 0;
-        const showTip = () => tips.forEach((tip, index) => tip.classList.toggle('current', index === tipIndex));
+    if (new URLSearchParams(location.search).get('lite') === '1') document.body.classList.add('lite');
+    // Un solo consejo visible. La animación CSS los dejaba los tres en la misma celda y se pintaban juntos.
+    const tips = [...document.querySelectorAll('.tip')];
+    let tipIndex = 0;
+    const showTip = () => tips.forEach((tip, index) => tip.classList.toggle('current', index === tipIndex));
+    if (tips.length) {
         showTip();
         if (tips.length > 1) setInterval(() => { tipIndex = (tipIndex + 1) % tips.length; showTip(); }, 9000);
     }
@@ -94,6 +95,31 @@
         el('music-pause').setAttribute('aria-label', label);
         el('music-pause').setAttribute('title', label);
         el('music-pause-icon').setAttribute('d', paused ? 'M7 4l14 8-14 8Z' : 'M6 5h4v14H6Zm8 0h4v14h-4Z');
+        syncIsland();
+    }
+    let emojiIslandUntil = 0;
+    let emojiIslandTimer = 0;
+    let islandHover = false;
+    let islandPinned = false;
+    function syncIsland() {
+        const hud = el('hud');
+        if (!hud?.classList.contains('dynamic-island')) return;
+        const panelsOpen = ['queue', 'volume'].some(name => el(`${name}-panel`) && !el(`${name}-panel`).hidden);
+        const musicLive = el('music-transport')?.dataset.state !== 'idle' || queue.length > 0;
+        const bingo = document.body.classList.contains('bingo-active');
+        const emoji = Date.now() < emojiIslandUntil;
+        let mode = 'idle';
+        if (islandHover || islandPinned || panelsOpen) mode = 'open';
+        else if (bingo) mode = 'bingo';
+        else if (emoji) mode = 'emoji';
+        else if (musicLive) mode = 'music';
+        if (hud.dataset.island !== mode) hud.dataset.island = mode;
+    }
+    function pokeEmojiIsland() {
+        emojiIslandUntil = Date.now() + 8000;
+        clearTimeout(emojiIslandTimer);
+        emojiIslandTimer = setTimeout(syncIsland, 8000);
+        syncIsland();
     }
     async function resumeMedia() {
         paused = false;
@@ -154,6 +180,7 @@
             el(`${name}-panel`).hidden = true;
             el(`${name}-toggle`).setAttribute('aria-expanded', 'false');
         }
+        syncIsland();
     }
     for (const name of ['queue', 'volume']) {
         el(`${name}-toggle`).addEventListener('click', () => {
@@ -161,8 +188,16 @@
             closePanels();
             el(`${name}-panel`).hidden = opened;
             el(`${name}-toggle`).setAttribute('aria-expanded', String(!opened));
+            syncIsland();
         });
     }
+    el('hud')?.addEventListener('pointerenter', () => { islandHover = true; syncIsland(); });
+    el('hud')?.addEventListener('pointerleave', () => { islandHover = false; syncIsland(); });
+    el('hud')?.addEventListener('click', event => {
+        if (event.target.closest('.island-slot')) return;
+        islandPinned = !islandPinned;
+        syncIsland();
+    });
     addEventListener('keydown', event => { if (event.key === 'Escape') closePanels(); });
     el('music-volume').addEventListener('input', event => {
         const value = Number(event.target.value);
@@ -199,6 +234,7 @@
             item.textContent = `Y ${queue.length - 20} solicitudes más.`;
             list.append(item);
         }
+        syncIsland();
     }
     renderQueue();
     function stop() {
@@ -408,7 +444,10 @@
         for (const { segment } of emojiSegments.segment(plain)) {
             if (/\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20e3/u.test(segment)) add(segment);
         }
-        if (counts.size) emojiEvents.push({ time: Date.now(), counts });
+        if (counts.size) {
+            emojiEvents.push({ time: Date.now(), counts });
+            pokeEmojiIsland();
+        }
         updateEmojiMeter();
     }
     setInterval(updateEmojiMeter, 5000);
@@ -433,6 +472,7 @@
     function syncBingoStage() {
         const live = Boolean(bingoShown && bingoState && bingoState.phase !== 'idle');
         document.body.classList.toggle('bingo-active', live);
+        syncIsland();
         if (!live) {
             if (resumeAfterBingo && active && queue.length) { resumeAfterBingo = false; resumeMedia(); }
             return;

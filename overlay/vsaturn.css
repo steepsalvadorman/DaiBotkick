@@ -25,8 +25,8 @@
     --safe: 24px;
     /* Zonas del lienzo OBS 1920×1080. El centro del juego queda libre salvo cuando el bingo está activo. */
     --rail-top: 16px;
-    --rail-h: 96px;
-    --avatar: 80px;
+    --rail-h: 128px;
+    --avatar: 88px;
     --yt-w: 384px;
     --yt-slot: 416px;
     --tiktok-w: 300px;
@@ -101,9 +101,9 @@ button:focus-visible, input:focus-visible {
     display: flex;
     align-items: center;
     gap: 16px;
-    padding: 8px 16px 8px 8px;
+    padding: 16px 24px 16px 16px;
     border-radius: 9999px;
-    background: var(--sheen), var(--grain), var(--paper-glass);
+    background: var(--sheen), var(--grain), rgba(236, 241, 248, 0.96);
     box-shadow: var(--glass-edge), var(--lift);
     z-index: 50;
     animation: rise 900ms var(--mass) both;
@@ -146,8 +146,27 @@ button:focus-visible, input:focus-visible {
     height: var(--avatar-size);
     padding: 8px;
     border-radius: 9999px;
-    background: var(--orb-light), conic-gradient(from 210deg, var(--slate-light), var(--paper-hi), var(--lavender), var(--slate-light), var(--paper-hi), var(--slate-light));
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.45), inset 0 -4px 8px rgba(22, 29, 54, 0.25), var(--lift);
+    background:
+        radial-gradient(120% 70% at 50% 0%, rgba(255, 248, 220, 0.95) 0 20%, rgba(255, 248, 220, 0) 46%),
+        conic-gradient(from 210deg, #8a5a12, #ffe7a0, #fff8dc, #e2b340, #a56b14, #fff1c2, #c9922a, #8a5a12);
+    box-shadow:
+        0 0 0 2px #fff4cc,
+        0 0 16px 2px rgba(255, 198, 64, 0.9),
+        0 0 34px 8px rgba(214, 146, 24, 0.55),
+        inset 0 -6px 8px rgba(90, 52, 8, 0.35);
+    animation: gold-place 2200ms var(--swing) infinite;
+}
+/* Brillo que recorre el aro, como el reflejo de un trofeo. */
+.disc-lid::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: conic-gradient(from 0deg, transparent 0 64%, rgba(255, 252, 236, 0.98) 78%, transparent 90%);
+    animation: disc-spin 4200ms linear infinite;
+    -webkit-mask: radial-gradient(circle, transparent 60%, #000 70%);
+    mask: radial-gradient(circle, transparent 60%, #000 70%);
+    pointer-events: none;
 }
 .channel-avatar {
     width: 100%;
@@ -156,6 +175,11 @@ button:focus-visible, input:focus-visible {
     border-radius: 9999px;
     background: var(--ink);
     box-shadow: 0 0 0 2px var(--white), 0 0 0 4px rgba(22, 29, 54, 0.4);
+}
+.disc-lid .channel-avatar {
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 0 0 2px #fff8e4, 0 0 0 4px #d4a017;
 }
 .brand-copy { display: flex; flex-direction: column; gap: 6px; min-width: 0; justify-content: center; }
 .brand-meta { display: flex; align-items: center; gap: 8px; }
@@ -217,13 +241,45 @@ button:focus-visible, input:focus-visible {
     box-shadow: none;
     animation: none;
 }
+/* Dynamic Island: la pastilla solo muestra lo que está pasando. El resto queda plegado. */
+#hud.dynamic-island .topbar-center { gap: 0; }
+#hud.dynamic-island .topbar-start { cursor: pointer; }
+#hud.dynamic-island .island-slot {
+    display: flex;
+    flex-shrink: 0;
+    max-width: 0;
+    margin-left: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+    /* Primero se apagan, quietos. Después se pliega la pastilla. */
+    transition: opacity 140ms var(--mass), max-width 480ms var(--spring) 140ms, margin-left 480ms var(--spring) 140ms;
+}
+#hud.dynamic-island .island-clip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: max-content;
+    padding: 14px 10px;
+}
+#hud.dynamic-island[data-island="emoji"] .island-slot[data-slot="emoji"],
+#hud.dynamic-island[data-island="bingo"] .island-slot[data-slot="bingo"],
+#hud.dynamic-island[data-island="music"] .island-slot[data-slot="music"],
+#hud.dynamic-island[data-island="open"] .island-slot {
+    max-width: 1100px;
+    margin-left: 12px;
+    opacity: 1;
+    pointer-events: auto;
+    /* La pastilla crece vacía y los botones aparecen ya en su sitio, sin deslizarse. */
+    transition: max-width 480ms var(--spring), margin-left 480ms var(--spring), opacity 160ms var(--mass) 420ms;
+}
 .topbar-spacer { display: none; }
 #emoji-meter {
     display: flex;
     align-items: center;
     gap: 12px;
     max-width: 480px;
-    height: 56px;
+    height: 64px;
     padding: 4px 16px;
     border-radius: 9999px;
     background: var(--sheen), var(--lcd);
@@ -264,24 +320,26 @@ button:focus-visible, input:focus-visible {
     transition: transform 500ms var(--mass), box-shadow 500ms var(--mass), filter 500ms var(--mass), opacity 500ms var(--mass);
 }
 .face-button {
-    width: 40px;
-    height: 40px;
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.5), inset 0 -3px 4px rgba(22, 29, 54, 0.35), 0 3px 6px rgba(22, 29, 54, 0.3);
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 2px rgba(22, 29, 54, 0.55), inset 0 2px 0 rgba(255, 255, 255, 0.5), inset 0 -6px 8px rgba(22, 29, 54, 0.38), 0 5px 0 rgba(22, 29, 54, 0.22);
 }
-.face-button svg { width: 16px; height: 16px; fill: currentColor; filter: drop-shadow(0 1px 1px rgba(22, 29, 54, 0.5)); }
+.face-button svg { width: 22px; height: 22px; fill: currentColor; filter: drop-shadow(0 1px 1px rgba(22, 29, 54, 0.5)); }
 .face-slate { background: var(--orb-light), var(--slate); }
 .face-power { background: var(--orb-light), var(--power); }
 .face-violet { background: var(--orb-light), var(--violet); }
 .face-ink { background: var(--orb-light), var(--slate-deep); }
 /* Interruptores del overlay: botones pequeños en gris claro, como Start. */
 .aero-icon-button {
-    width: 40px;
-    height: 40px;
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
     background: var(--orb-light), var(--slate-light);
     color: var(--ink);
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.4), inset 0 -3px 4px rgba(22, 29, 54, 0.2), 0 3px 6px rgba(22, 29, 54, 0.22);
+    box-shadow: 0 0 0 2px rgba(22, 29, 54, 0.45), inset 0 2px 0 rgba(255, 255, 255, 0.65), inset 0 -6px 8px rgba(22, 29, 54, 0.22), 0 5px 0 rgba(22, 29, 54, 0.16);
 }
-.aero-icon-button svg { width: 20px; height: 20px; fill: currentColor; }
+.aero-icon-button svg { width: 26px; height: 26px; fill: currentColor; }
 .topbar-button:hover:not(:disabled) { transform: translateY(-2px) scale(1.06); filter: brightness(1.08); }
 .topbar-button:active:not(:disabled) { transform: translateY(1px) scale(0.98); box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.5), inset 0 3px 6px rgba(22, 29, 54, 0.4); }
 .topbar-button[aria-expanded="true"] { background: var(--orb-light), var(--power); color: var(--white); }
@@ -291,14 +349,15 @@ button:focus-visible, input:focus-visible {
     display: flex;
     align-items: center;
     gap: 8px;
-    height: 40px;
-    padding: 8px 12px;
+    height: 56px;
+    flex-shrink: 0;
+    padding: 8px 18px;
     border: 0;
     border-radius: 9999px;
     background: var(--orb-light), var(--slate-light);
     color: var(--ink);
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.4), inset 0 -3px 4px rgba(22, 29, 54, 0.2), 0 3px 6px rgba(22, 29, 54, 0.22);
-    font-size: 14px;
+    box-shadow: 0 0 0 2px rgba(22, 29, 54, 0.45), inset 0 2px 0 rgba(255, 255, 255, 0.65), inset 0 -6px 8px rgba(22, 29, 54, 0.22), 0 5px 0 rgba(22, 29, 54, 0.16);
+    font-size: 16px;
     line-height: 20px;
     font-weight: 600;
     letter-spacing: 0.12em;
@@ -309,8 +368,8 @@ button:focus-visible, input:focus-visible {
 .music-anchor:active { transform: translateY(1px) scale(0.98); }
 .music-anchor[data-playing="true"] { background: var(--orb-light), var(--violet); color: var(--white); }
 .music-anchor[aria-pressed="false"] { opacity: .55; filter: saturate(.4); }
-.aero-app-orb { display: inline-grid; place-items: center; width: 16px; height: 16px; }
-.aero-app-orb svg { width: 16px; height: 16px; fill: currentColor; }
+.aero-app-orb { display: inline-grid; place-items: center; width: 22px; height: 22px; }
+.aero-app-orb svg { width: 22px; height: 22px; fill: currentColor; }
 
 .pad-rule {
     flex: 0 0 auto;
@@ -337,8 +396,8 @@ button:focus-visible, input:focus-visible {
 /* CD iridiscente: gira a velocidad constante, como un disco real, solo cuando suena música. */
 .vinyl-record {
     position: relative;
-    width: 32px;
-    height: 32px;
+    width: 44px;
+    height: 44px;
     border-radius: 9999px;
     background: conic-gradient(from 0deg, #f3f6fb, #b9e6ff, #e6d8ff, #fff3c9, #c8ffe0, #f3f6fb, #c9d3ff, #f3f6fb);
     box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.45), inset 0 0 0 4px rgba(255, 255, 255, 0.5);
@@ -347,7 +406,7 @@ button:focus-visible, input:focus-visible {
 .vinyl-record::after {
     content: "";
     position: absolute;
-    inset: 12px;
+    inset: 16px;
     border-radius: 9999px;
     background: var(--paper);
     box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.45);
@@ -825,23 +884,25 @@ body.bingo-active #media-widget {
     text-wrap: balance;
 }
 
-/* Consejos rotativos pegados a la derecha, por encima de la esquina. */
+/* Un consejo a la vez, centrado en la franja inferior. Los otros no se pintan. */
 #tips {
     position: absolute;
-    right: var(--safe);
-    bottom: 72px;
+    left: 50%;
+    right: auto;
+    bottom: 16px;
     width: max-content;
-    max-width: 640px;
+    max-width: 720px;
     height: 56px;
     z-index: 20;
     display: grid;
-    justify-items: end;
+    justify-items: center;
+    translate: -50% 0;
     pointer-events: none;
 }
 .tip {
     grid-area: 1 / 1;
     max-width: 900px;
-    display: flex;
+    display: none;
     align-items: center;
     gap: 12px;
     padding: 8px 24px 8px 8px;
@@ -849,11 +910,8 @@ body.bingo-active #media-widget {
     font-size: 18px;
     line-height: 28px;
     font-weight: 600;
-    opacity: 0;
-    animation: tip-cycle 27s var(--mass) infinite both;
 }
-.tip:nth-child(2) { animation-delay: 9s; }
-.tip:nth-child(3) { animation-delay: 18s; }
+.tip.current { display: flex; }
 .tip-label {
     flex: 0 0 auto;
     padding: 4px 12px;
@@ -925,6 +983,15 @@ body.bingo-active #media-widget {
 }
 .pad-corner-right .pad-tagline { font-family: var(--jp); letter-spacing: 0.16em; }
 
+/* Adornos pequeños de Halloween, fuera del centro del juego. */
+.halloween { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.halloween img { position: absolute; display: block; }
+.halloween-bat { width: 88px; height: auto; }
+.halloween-bat-left { top: 8px; left: var(--safe); }
+.halloween-bat-right { top: 8px; right: var(--safe); transform: scaleX(-1); }
+.halloween-pumpkin { width: 56px; height: auto; bottom: 16px; left: calc(50% - 380px); }
+.halloween-ghost { width: 64px; height: auto; bottom: 16px; right: 248px; }
+
 @keyframes rise {
     from { opacity: 0; transform: translateY(16px); filter: blur(8px); }
     to { opacity: 1; transform: none; filter: none; }
@@ -939,6 +1006,22 @@ body.bingo-active #media-widget {
 }
 @keyframes msg-out { to { opacity: 0; transform: translateY(-8px); filter: blur(4px); } }
 @keyframes led-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@keyframes gold-place {
+    0%, 100% {
+        box-shadow:
+            0 0 0 2px #fff4cc,
+            0 0 12px 1px rgba(255, 198, 64, 0.7),
+            0 0 26px 6px rgba(214, 146, 24, 0.38),
+            inset 0 -6px 8px rgba(90, 52, 8, 0.35);
+    }
+    50% {
+        box-shadow:
+            0 0 0 2px #fffdf4,
+            0 0 22px 4px rgba(255, 214, 96, 1),
+            0 0 46px 14px rgba(232, 168, 32, 0.78),
+            inset 0 -6px 8px rgba(90, 52, 8, 0.28);
+    }
+}
 @keyframes disc-spin { to { transform: rotate(360deg); } }
 @keyframes music-bars { to { transform: scaleY(.3); } }
 @keyframes title-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
@@ -948,23 +1031,16 @@ body.bingo-active #media-widget {
     55% { opacity: 1; transform: translateY(8px) scale(1.08); }
     100% { opacity: 1; transform: none; }
 }
-@keyframes tip-cycle {
-    0% { opacity: 0; transform: translateY(16px); filter: blur(8px); }
-    3%, 31% { opacity: 1; transform: none; filter: none; }
-    33%, 100% { opacity: 0; transform: translateY(-8px); filter: blur(4px); }
-}
 /* Modo ligero (?lite=1): conserva entradas y alertas, pero elimina todo movimiento continuo
    para que la página quede quieta entre eventos. app.js rota los consejos cada 9 s. */
-body.lite .brand-live::before, body.lite .vinyl-record,
+body.lite .brand-live::before, body.lite .disc-lid, body.lite .disc-lid::before, body.lite .vinyl-record,
 body.lite .music-bars i, body.lite .equalizer i,
 body.lite .bingo-drum i, body.lite .title-inner.marquee,
-body.lite .tip { animation: none !important; }
-body.lite .tip { display: none; opacity: 1; }
-body.lite .tip.current { display: flex; }
+body.lite .halloween img { animation: none !important; }
 body.lite #video-title.scrolling { text-overflow: ellipsis; }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
     .tip { display: none; }
-    .tip:first-child { display: flex; opacity: 1; }
+    .tip.current { display: flex; opacity: 1; }
     #video-title.scrolling { text-overflow: ellipsis; }
 }

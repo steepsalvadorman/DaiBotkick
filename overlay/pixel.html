@@ -29,7 +29,6 @@
         </div>
         <span class="topbar-spacer"></span>
         <div class="topbar-center">
-        <div id="emoji-meter" aria-label="Emojis de los últimos cinco minutos"><span id="emoji-total">0 emojis · 5 min</span><span id="emoji-top"></span></div>
         <button id="bingo-toggle" class="music-anchor" type="button" aria-pressed="true" aria-controls="bingo-widget" title="Mostrar u ocultar el bingo"><span class="aero-app-orb" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2L22 12L12 22L2 12Z"/><path class="icon-detail" d="M12 8L16 12L12 16L8 12Z"/></svg></span> bingo</button>
         <div id="music-transport" class="aero-control-cluster music-transport" role="group" aria-label="Reproducción musical" data-state="idle">
             <div id="topbar-requester" class="topbar-requester" hidden>
@@ -52,7 +51,7 @@
             <button id="queue-toggle" class="topbar-button aero-icon-button" type="button" aria-label="Ver cola de música" title="Ver cola de música" aria-expanded="false" aria-controls="queue-panel">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h12M4 10h9M4 15h7" class="icon-detail"/><path d="M18 10v9a3 3 0 1 1-2-2.83V9l6-2v4Z"/></svg>
             </button>
-            <button id="volume-toggle" class="topbar-button aero-icon-button" type="button" aria-label="Ajustar volumen de música" title="Ajustar volumen de música" aria-expanded="false" aria-controls="volume-panel">
+            <button id="volume-toggle" class="topbar-button aero-icon-button" type="button" aria-label="Ajustar volumen" title="Ajustar volumen" aria-expanded="false" aria-controls="volume-panel">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h4l6-5v16l-6-5H3Z"/><path class="icon-detail" d="M16 8a6 6 0 0 1 0 8M19 5a10 10 0 0 1 0 14"/></svg>
             </button>
         </div>
@@ -60,12 +59,14 @@
         </div>
     </header>
 
-    <section id="volume-panel" class="topbar-panel" hidden aria-label="Volumen de música">
-        <div class="aero-window-title">Volumen de música</div>
+    <section id="volume-panel" class="topbar-panel" hidden aria-label="Volumen">
+        <div class="aero-window-title">Volumen</div>
         <div class="topbar-panel-body">
-            <label for="music-volume">Nivel <output id="volume-value" for="music-volume">90%</output></label>
-            <input id="music-volume" type="range" min="0" max="100" value="90">
-            <small>No modifica el volumen de TTS.</small>
+            <label for="music-volume">Música <output id="volume-value" for="music-volume">60%</output></label>
+            <input id="music-volume" type="range" min="0" max="100" value="60">
+            <label for="tts-volume">Voces <output id="tts-volume-value" for="tts-volume">100%</output></label>
+            <input id="tts-volume" type="range" min="0" max="100" value="100">
+            <small>Cada control ajusta solo su sonido.</small>
         </div>
     </section>
     <section id="queue-panel" class="topbar-panel" hidden aria-label="Cola de música">

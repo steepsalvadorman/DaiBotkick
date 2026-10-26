@@ -29,8 +29,6 @@
     --avatar: 88px;
     --yt-w: 384px;
     --yt-slot: 416px;
-    --tiktok-w: 300px;
-    --tiktok-top: 168px;
     --chat-w: 440px;
     --chat-bottom: 80px;
     --chat-max: 280px;
@@ -262,7 +260,6 @@ button:focus-visible, input:focus-visible {
     min-width: max-content;
     padding: 14px 10px;
 }
-#hud.dynamic-island[data-island="emoji"] .island-slot[data-slot="emoji"],
 #hud.dynamic-island[data-island="bingo"] .island-slot[data-slot="bingo"],
 #hud.dynamic-island[data-island="music"] .island-slot[data-slot="music"],
 #hud.dynamic-island[data-island="open"] .island-slot {
@@ -274,39 +271,6 @@ button:focus-visible, input:focus-visible {
     transition: max-width 480ms var(--spring), margin-left 480ms var(--spring), opacity 160ms var(--mass) 420ms;
 }
 .topbar-spacer { display: none; }
-#emoji-meter {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    max-width: 480px;
-    height: 64px;
-    padding: 4px 16px;
-    border-radius: 9999px;
-    background: var(--sheen), var(--lcd);
-    box-shadow: inset 0 0 0 1px rgba(22, 29, 54, 0.4), inset 0 2px 6px rgba(22, 29, 54, 0.3);
-    color: var(--lcd-ink);
-}
-#emoji-total {
-    white-space: nowrap;
-    font-size: 14px;
-    line-height: 20px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: lowercase;
-}
-#emoji-top { display: flex; align-items: center; gap: 8px; overflow: hidden; font-family: var(--font), var(--emoji); font-size: 24px; line-height: 32px; font-weight: 700; }
-#emoji-top > span {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    white-space: nowrap;
-    padding: 0 8px;
-    border-radius: 9999px;
-    background: rgba(246, 249, 253, 0.7);
-    font-size: 14px;
-    line-height: 32px;
-}
-#emoji-top .chat-emote { width: 32px; height: 32px; }
 .aero-control-cluster { display: flex; align-items: center; flex: 0 0 auto; gap: 8px; }
 
 /* Botones de cara: orbes brillantes del mando de seis botones. */
@@ -470,7 +434,7 @@ button:focus-visible, input:focus-visible {
 .topbar-panel-body label { display: flex; justify-content: space-between; gap: 12px; font-weight: 700; }
 .topbar-panel-body output { font-family: var(--mono); font-weight: 600; color: var(--power-deep); }
 .topbar-panel-body small { color: var(--ink-muted); font-size: 14px; line-height: 20px; font-weight: 500; }
-#music-volume { width: 100%; margin: 16px 0; accent-color: var(--power); cursor: pointer; }
+#music-volume, #tts-volume { width: 100%; margin: 16px 0; accent-color: var(--power); cursor: pointer; }
 #queue-list { padding-left: 40px; overflow-wrap: anywhere; }
 #queue-list li { padding: 8px 0; font-weight: 600; }
 #queue-list li::marker { font-family: var(--mono); color: var(--violet-deep); font-weight: 600; }
@@ -588,8 +552,6 @@ body.no-chat #chat-widget { display: none; }
 }
 /* TikTok es vertical: el reproductor pasa a 9:16 y se pega al borde izquierdo, bajo la hora;
    queda por encima del bingo y del chat mientras suena. YouTube permanece arriba a la derecha. */
-#media-widget[data-source="tiktok"] { top: var(--tiktok-top); right: auto; left: var(--safe); width: var(--tiktok-w); }
-#media-widget[data-source="tiktok"] #video-container { width: calc(100% - 32px); margin: 12px auto; aspect-ratio: 9 / 16; }
 #youtube-player, #direct-video { width: 100%; height: 100%; display: block; }
 #youtube-player iframe { width: 100%; height: 100%; border: 0; }
 #direct-video { display: none; object-fit: contain; }

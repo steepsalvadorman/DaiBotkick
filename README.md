@@ -54,9 +54,7 @@ El modo ligero está activo por defecto; para ver las animaciones completas aña
 
 El chat conserva emojis Unicode y convierte los emotes de Kick (`[emote:ID:NOMBRE]`) en imágenes del CDN oficial, incluidos emotes animados. Si una imagen falla, muestra su nombre y un aviso. El resto del mensaje se renderiza como texto, nunca como HTML.
 
-El contador de emojis muestra el total y los tres más usados en una ventana móvil de cinco minutos (se actualiza cada cinco segundos). Cuenta emotes de Kick y emojis Unicode completos, sin separar familias, banderas o tonos de piel. Es local a la fuente: recargar reinicia el contador y no recupera mensajes perdidos durante desconexiones.
-
-Para usar el mouse, haz clic derecho en la fuente de navegador de OBS y selecciona **Interactuar**. Los botones de la topbar permiten mostrar/ocultar el reproductor sin parar el audio, mostrar el chat (oculto por defecto; también con `?chat=1`), consultar la cola y ajustar el volumen de música (no el TTS), que empieza al 90 %. Escape cierra los menús. Estas preferencias son locales a esa fuente y se restablecen al recargar; no otorgan permisos de panel. La imagen compuesta de OBS no es una ventana interactiva encima del juego: los clics del juego no llegan al overlay.
+Para usar el mouse, haz clic derecho en la fuente de navegador de OBS y selecciona **Interactuar**. Los botones de la topbar permiten mostrar/ocultar el reproductor sin parar el audio, mostrar el chat (oculto por defecto; también con `?chat=1`), consultar la cola y ajustar por separado el volumen de la música (empieza al 60 %) y el de las voces TTS (empieza al 100 %). Escape cierra los menús. Estas preferencias son locales a esa fuente y se restablecen al recargar; no otorgan permisos de panel. La imagen compuesta de OBS no es una ventana interactiva encima del juego: los clics del juego no llegan al overlay.
 
 La fuente autorizada también puede reiniciar la canción actual, pausar/reanudar y pasar a la siguiente mediante el avance validado por ID y versión. El vinilo y las barras de la topbar se animan durante la reproducción (son decorativos, no un analizador de audio). Reiniciar conserva la pausa. Una vista pública no puede usar estos controles.
 
@@ -64,7 +62,7 @@ La fuente autorizada también puede reiniciar la canción actual, pausar/reanuda
 
 | Comando | Función |
 |---|---|
-| `!play URL` / `!play nombre y artista` | Agregar un video de YouTube o TikTok, o buscar una canción en YouTube; 30 s por usuario |
+| `!play URL` / `!play nombre y artista` | Agregar un video de YouTube o un enlace directo MP4/WebM, o buscar una canción en YouTube; 30 s por usuario |
 | `!cola` | Ver próximos videos; 30 s global |
 | `!quitarme` | Quitar tu primer video |
 | `!misongs` | Ver tus videos; 15 s por usuario |
@@ -120,8 +118,6 @@ Fish Audio utiliza `s2.1-pro-free` con `latency: "low"` para priorizar una menor
 Requisitos: Rust 1.88.0, PostgreSQL, `edge-tts==7.3.1` y `yt-dlp==2026.8.19` en el PATH. Node 22 o posterior se usa para las pruebas del overlay.
 
 `!play cervecita flor pileña` busca los primeros cinco resultados de YouTube mediante `yt-dlp`, sin clave API ni descargar audio. Selecciona el primero en el orden de relevancia de YouTube que tenga duración conocida y no sea un directo o estreno pendiente. La reproducción sigue usando el reproductor de YouTube y la cola habitual. No garantiza versiones exactas ni disponibilidad para incrustar: añade el artista o usa el enlace exacto. Hay dos búsquedas simultáneas como máximo y timeout de 25 s; los errores y bloqueos de YouTube se avisan en chat.
-
-`!play https://www.tiktok.com/@usuario/video/7440114099565972791` agrega un video de TikTok. También acepta enlaces cortos (`vm.tiktok.com`, `vt.tiktok.com`, `tiktok.com/t/...`): el backend sigue sus redirecciones, solo dentro de dominios de TikTok, hasta obtener el ID. Como el chat de Kick rechaza mensajes con muchos símbolos («Your message contains too many special characters»), también basta con el número del video: `!play 7671109760938265874`. El título se pide al oEmbed público de TikTok; si no responde, aparece como «Video de TikTok». El overlay lo reproduce con el [reproductor embebido oficial](https://developers.tiktok.com/doc/embed-player) en formato vertical 9:16 y avanza la cola cuando termina. Reiniciar, pausar y saltar funcionan igual que con YouTube. El control de volumen usa `changeVolume` del reproductor embebido y arranca en 90 %, igual que YouTube; en 0 % lo silencia. Las publicaciones de fotos no se admiten.
 
 En Windows puedes usar el ejecutable oficial `yt-dlp.exe`; se detecta también en `%LOCALAPPDATA%\DaiBot\tools\yt-dlp.exe`. Configura `YT_DLP_PATH` con su ruta absoluta para otra ubicación si no está en el PATH. En servidores con Python se puede instalar `yt-dlp==2026.8.19` en el entorno del backend. La imagen de despliegue ya incluye esa dependencia.
 

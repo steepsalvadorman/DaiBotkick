@@ -53,22 +53,18 @@
     if (!channel) { notify('Falta el canal. Copia la URL que aparece al conectar con Kick.'); return; }
     const socket = io({ query: { ch: channel }, auth: { token }, reconnectionDelayMax: 10000 });
     let active = false, queue = [], version = 0, playingId = null, pending = false, visible = true;
-    let player = null, tiktok = null, retry, generation = 0, apiPromise;
-    const tiktokOrigin = 'https://www.tiktok.com';
-    // TikTok admite play, pause, seekTo, mute, unMute y changeVolume (0–100).
-    const tiktokSend = (type, value) => tiktok?.contentWindow?.postMessage({ type, value, 'x-tiktok-player': true }, tiktokOrigin);
-    let musicShown = true, musicVolume = 90;
+    let player = null, retry, generation = 0, apiPromise;
+    let musicShown = true, musicVolume = 60, ttsVolume = 100;
     let mediaReady = false, paused = false, actuallyPlaying = false;
     // Posición del video actual, para retomarlo si OBS recarga la fuente.
     const resumeKey = `daibot:resume:${channel}`;
-    let tiktokTime = 0, resumeAt = 0;
+    let resumeAt = 0;
     function readResume() {
         try { return JSON.parse(localStorage.getItem(resumeKey) || 'null'); } catch { return null; }
     }
     function currentTime() {
         if (!mediaReady || !queue[0] || playingId !== queue[0].id) return 0;
         if (queue[0].videoId) return Number(player?.getCurrentTime?.()) || 0;
-        if (queue[0].tiktokId) return tiktokTime;
         return Number(direct.currentTime) || 0;
     }
     function saveResume() {
@@ -98,8 +94,6 @@
         el('music-pause-icon').setAttribute('d', paused ? 'M7 4l14 8-14 8Z' : 'M6 5h4v14H6Zm8 0h4v14h-4Z');
         syncIsland();
     }
-    let emojiIslandUntil = 0;
-    let emojiIslandTimer = 0;
     let islandHover = false;
     let islandPinned = false;
     function syncIsland() {
@@ -108,25 +102,16 @@
         const panelsOpen = ['queue', 'volume'].some(name => el(`${name}-panel`) && !el(`${name}-panel`).hidden);
         const musicLive = el('music-transport')?.dataset.state !== 'idle' || queue.length > 0;
         const bingo = document.body.classList.contains('bingo-active');
-        const emoji = Date.now() < emojiIslandUntil;
         let mode = 'idle';
         if (islandHover || islandPinned || panelsOpen) mode = 'open';
         else if (bingo) mode = 'bingo';
-        else if (emoji) mode = 'emoji';
         else if (musicLive) mode = 'music';
         if (hud.dataset.island !== mode) hud.dataset.island = mode;
-    }
-    function pokeEmojiIsland() {
-        emojiIslandUntil = Date.now() + 8000;
-        clearTimeout(emojiIslandTimer);
-        emojiIslandTimer = setTimeout(syncIsland, 8000);
-        syncIsland();
     }
     async function resumeMedia() {
         paused = false;
         updateTransport();
         if (queue[0]?.videoId) player.playVideo();
-        else if (queue[0]?.tiktokId) tiktokSend('play');
         else {
             const run = generation;
             try { await direct.play(); }
@@ -142,21 +127,18 @@
         if (paused) { resumeMedia(); return; }
         paused = true; actuallyPlaying = false;
         if (queue[0]?.videoId) player.pauseVideo();
-        else if (queue[0]?.tiktokId) tiktokSend('pause');
         else direct.pause();
         updateTransport();
     });
     el('music-restart').addEventListener('click', () => {
         if (el('music-restart').disabled) return;
         if (queue[0]?.videoId) player.seekTo(0, true);
-        else if (queue[0]?.tiktokId) tiktokSend('seekTo', 0);
         else direct.currentTime = 0;
     });
     el('music-stop').addEventListener('click', () => {
         if (el('music-stop').disabled) return;
         paused = true; actuallyPlaying = false;
         if (queue[0]?.videoId) { player.pauseVideo(); player.seekTo(0, true); }
-        else if (queue[0]?.tiktokId) { tiktokSend('pause'); tiktokSend('seekTo', 0); }
         else { direct.pause(); direct.currentTime = 0; }
         updateTransport();
     });
@@ -213,10 +195,17 @@
     });
     function applyEmbedVolume() {
         player?.setVolume(musicVolume);
-        if (!tiktok) return;
-        if (musicVolume === 0) tiktokSend('mute');
-        else { tiktokSend('unMute'); tiktokSend('changeVolume', musicVolume); }
     }
+    el('tts-volume').addEventListener('input', event => {
+        const value = Number(event.target.value);
+        if (!Number.isFinite(value) || value < 0 || value > 100) {
+            notify('Volumen inválido: utiliza un valor entre 0 y 100.');
+            return;
+        }
+        ttsVolume = value;
+        el('tts-volume-value').textContent = `${value}%`;
+        if (speech) speech.volume = value / 100;
+    });
     function renderQueue() {
         const list = el('queue-list');
         list.replaceChildren();
@@ -243,7 +232,7 @@
         generation++; clearTimeout(retry);
         direct.onended = direct.onerror = null; direct.pause(); direct.removeAttribute('src'); direct.load();
         if (player) { player.destroy(); player = null; }
-        tiktok = null; media.removeAttribute('data-source');
+        media.removeAttribute('data-source');
         youtube.replaceChildren(); playingId = null; pending = false;
         updateTransport();
     }
@@ -269,30 +258,6 @@
         }).catch(error => { apiPromise = null; throw error; });
         return apiPromise;
     }
-    addEventListener('message', event => {
-        if (event.origin !== tiktokOrigin || !tiktok || event.source !== tiktok.contentWindow) return;
-        let data = event.data;
-        if (typeof data === 'string') { try { data = JSON.parse(data); } catch { return; } }
-        if (!data || typeof data.type !== 'string') return;
-        const id = playingId;
-        if (data.type === 'onPlayerReady') {
-            mediaReady = true; updateTransport();
-            applyEmbedVolume();
-            if (resumeAt) { tiktokSend('seekTo', resumeAt); resumeAt = 0; }
-            if (!paused && !bingoLive()) tiktokSend('play');
-        } else if (data.type === 'onCurrentTime') {
-            tiktokTime = Number(data.value?.currentTime) || 0;
-        } else if (data.type === 'onStateChange') {
-            actuallyPlaying = data.value === 1;
-            if (actuallyPlaying) { paused = false; notify(''); applyEmbedVolume(); }
-            if (data.value === 2) paused = true;
-            updateTransport();
-            if (data.value === 0) finish(id);
-        } else if (data.type === 'onPlayerError') {
-            if (data.value?.errorCode === 3002) notify('Audio bloqueado. Interactúa con la fuente de OBS.');
-            else finish(id);
-        }
-    });
     function finish(id) {
         clearResume(id);
         if (!active || pending || playingId !== id || queue[0]?.id !== id || !socket.connected) return;
@@ -302,28 +267,15 @@
     async function playHead() {
         if (!active || !queue.length || playingId === queue[0].id) return;
         stop(); const item = queue[0]; playingId = item.id; const run = generation;
-        const saved = readResume(); tiktokTime = 0;
+        const saved = readResume();
         resumeAt = saved?.id === item.id && saved.time > 3 ? Math.max(0, saved.time - 2) : 0;
         if (saved && saved.id !== item.id) clearResume(saved.id);
         const title = document.createElement('div'); title.className = 'title-inner marquee';
         title.textContent = `${item.title || 'Sin título'}   ◆   ${item.title || 'Sin título'}   ◆`;
         el('video-title').replaceChildren(title); el('video-title').classList.add('scrolling');
         el('video-requester').textContent = item.user || 'Anónimo'; display();
-        media.setAttribute('data-source', item.tiktokId ? 'tiktok' : item.videoId ? 'youtube' : 'direct');
-        if (item.tiktokId && /^\d{15,25}$/.test(item.tiktokId)) {
-            direct.style.display = 'none'; youtube.style.display = 'block';
-            const params = new URLSearchParams({
-                autoplay: '1', controls: '0', progress_bar: '0', play_button: '0', volume_control: '0',
-                fullscreen_button: '0', timestamp: '0', loop: '0', music_info: '1', description: '0',
-                rel: '0', native_context_menu: '0', closed_caption: '0',
-            });
-            tiktok = document.createElement('iframe');
-            tiktok.src = `${tiktokOrigin}/player/v1/${item.tiktokId}?${params}`;
-            tiktok.title = item.title || 'Video de TikTok';
-            tiktok.allow = 'autoplay; encrypted-media; fullscreen';
-            tiktok.referrerPolicy = 'strict-origin-when-cross-origin';
-            youtube.append(tiktok);
-        } else if (item.videoId) {
+        media.setAttribute('data-source', item.videoId ? 'youtube' : 'direct');
+        if (item.videoId) {
             direct.style.display = 'none'; youtube.style.display = 'block';
             try {
                 await loadAPI(); if (run !== generation || !active) return;
@@ -411,53 +363,11 @@
         if (offset === 0) target.textContent = content;
         else target.append(document.createTextNode(content.slice(offset)));
     }
-    const emojiSegments = new Intl.Segmenter('es', { granularity: 'grapheme' });
-    const emojiEvents = [];
-    let emojiSummary = '';
-    function updateEmojiMeter() {
-        const cutoff = Date.now() - 300000;
-        while (emojiEvents.length && emojiEvents[0].time <= cutoff) emojiEvents.shift();
-        const counts = new Map();
-        for (const event of emojiEvents) {
-            for (const [key, value] of event.counts) counts.set(key, (counts.get(key) || 0) + value);
-        }
-        const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
-        const ranking = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 3);
-        // Sin cambios no se reconstruyen los emotes: evita recargar imágenes y repintar cada 5 s.
-        const summary = JSON.stringify([total, ranking]);
-        if (summary === emojiSummary) return;
-        emojiSummary = summary;
-        el('emoji-total').textContent = `${total} emojis · 5 min`;
-        const top = el('emoji-top'); top.replaceChildren();
-        for (const [key, count] of ranking) {
-            const entry = document.createElement('span');
-            renderChatContent(entry, key);
-            entry.append(document.createTextNode(` ×${count}`));
-            top.append(entry);
-        }
-    }
-    function countEmojis(content) {
-        const counts = new Map();
-        const add = key => counts.set(key, (counts.get(key) || 0) + 1);
-        const plain = content.replace(/\[emote:(\d{1,20}):([^\]\r\n]{1,100})\]/g, (match) => {
-            add(match); return '';
-        });
-        for (const { segment } of emojiSegments.segment(plain)) {
-            if (/\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20e3/u.test(segment)) add(segment);
-        }
-        if (counts.size) {
-            emojiEvents.push({ time: Date.now(), counts });
-            pokeEmojiIsland();
-        }
-        updateEmojiMeter();
-    }
-    setInterval(updateEmojiMeter, 5000);
     socket.on('chatMessage', data => {
         const item = document.createElement('div'); item.className = 'msg';
         const user = document.createElement('div'); user.className = 'msg-user'; user.textContent = data.user || '';
         const text = document.createElement('div'); text.className = 'msg-text';
         renderChatContent(text, typeof data.content === 'string' ? data.content : '');
-        countEmojis(typeof data.content === 'string' ? data.content : '');
         item.append(user, text); const body = el('chat-messages'); body.append(item);
         while (body.children.length > 4) body.firstChild.remove();
     });
@@ -482,7 +392,6 @@
         if (!active || !queue.length || paused) return;
         paused = true; actuallyPlaying = false;
         if (queue[0]?.videoId) player?.pauseVideo();
-        else if (queue[0]?.tiktokId) tiktokSend('pause');
         else direct.pause();
         updateTransport();
     }
@@ -561,7 +470,7 @@
     }
     function playSpeech() {
         if (speech || !active || !speeches.length) return;
-        const audio = new Audio(`data:audio/mp3;base64,${speeches.shift()}`); speech = audio; audio.volume = 1;
+        const audio = new Audio(`data:audio/mp3;base64,${speeches.shift()}`); speech = audio; audio.volume = ttsVolume / 100;
         const complete = () => {
             if (speech !== audio) return;
             clearTimeout(speechTimer); audio.onended = audio.onerror = null; audio.pause(); audio.src = '';

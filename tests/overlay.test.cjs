@@ -135,7 +135,7 @@ test('YouTube transport uses player methods and public transport remains disable
     await new Promise(resolve => setImmediate(resolve));
     const player = app.players[0];
     player.options.events.onReady({ target: player });
-    assert.equal(player.volume, 90);
+    assert.equal(player.volume, 60);
     player.options.events.onStateChange({ data: 1 });
     app.get('music-pause').listeners.click();
     assert.equal(player.paused, true);
@@ -177,31 +177,6 @@ test('chat preserves Unicode emoji and renders Kick emotes safely with explicit 
     app.handlers.chatMessage({ user: 'viewer', content: '[emote:https://evil.example:x] <script>' });
     assert.equal(app.get('chat-messages').children[2].children[1].textContent, '[emote:https://evil.example:x] <script>');
 });
-test('emoji meter groups complete Unicode sequences and Kick emotes over a rolling five minutes', () => {
-    const app = overlay();
-    const original = Date.now;
-    let now = 1000000;
-    Date.now = () => now;
-    try {
-        app.handlers.chatMessage({ user: 'viewer', content: '😀😀 👨‍👩‍👧‍👦 🇵🇪 👍🏽 1️⃣ [emote:37226:KEKW] [emote:37226:KEKW]' });
-        assert.equal(app.get('emoji-total').textContent, '8 emojis · 5 min');
-        assert.equal(app.get('emoji-top').children.length, 3);
-        const top = app.get('emoji-top').children;
-        assert.equal(top[1].textContent, '😀');
-        assert.equal(top[1].children[0].textContent, ' ×2');
-        assert.equal(top[0].children[1].alt, 'KEKW');
-        assert.equal(top[0].children.at(-1).textContent, ' ×2');
-        now += 299999;
-        app.context.intervals.find(i => i.delay === 5000).fn();
-        assert.equal(app.get('emoji-total').textContent, '8 emojis · 5 min');
-        now += 1;
-        app.context.intervals.find(i => i.delay === 5000).fn();
-        assert.equal(app.get('emoji-total').textContent, '0 emojis · 5 min');
-        assert.equal(app.get('emoji-top').children.length, 0);
-        app.handlers.chatMessage({ user: 'viewer', content: 'abc 123 <script>' });
-        assert.equal(app.get('emoji-total').textContent, '0 emojis · 5 min');
-    } finally { Date.now = original; }
-});
 test('topbar controls toggle local panels, chat and player without changing queue permissions', () => {
     const app = overlay('#token=private', '?ch=alpha');
     assert.equal(app.get('chat-toggle').getAttribute('aria-pressed'), 'false');
@@ -233,15 +208,33 @@ test('topbar controls toggle local panels, chat and player without changing queu
     assert.equal(app.get('direct-video').volume, 0.6);
     assert.equal(app.emitted.length, 0);
 });
+test('voice volume is controlled separately from music volume', () => {
+    const app = overlay(); app.handlers.playbackRole({ active: true });
+    app.get('tts-volume').listeners.input({ target: { value: '40' } });
+    assert.equal(app.get('tts-volume-value').textContent, '40%');
+    app.handlers.speak({ audioBase64: 'AAAA' });
+    assert.equal(app.audios.at(-1).volume, 0.4);
+    app.get('music-volume').listeners.input({ target: { value: '20' } });
+    assert.equal(app.audios.at(-1).volume, 0.4);
+    app.get('tts-volume').listeners.input({ target: { value: '100' } });
+    assert.equal(app.audios.at(-1).volume, 1);
+    app.get('tts-volume').listeners.input({ target: { value: '150' } });
+    assert.equal(app.audios.at(-1).volume, 1);
+    for (const page of ['pixel.html', 'vsaturn.html']) {
+        const html = fs.readFileSync(__dirname + `/../overlay/${page}`, 'utf8');
+        assert.match(html, /id="tts-volume" type="range" min="0" max="100" value="100"/, page);
+        assert.match(html, /id="tts-volume-value" for="tts-volume">100%</, page);
+    }
+});
 test('overlay starts with useful defaults and an empty chat until messages arrive', () => {
     const app = overlay();
     assert.match(app.get('desktop-clock').textContent, /^\d{2}:\d{2}$/);
     const html = fs.readFileSync(__dirname + '/../overlay/pixel.html', 'utf8');
     assert.match(html, /id="topbar-requester" class="topbar-requester" hidden>/);
     assert.doesNotMatch(html, /desktop-date|chat-empty|El chat está listo/);
-    assert.match(html, /id="music-volume" type="range" min="0" max="100" value="90"/);
-    assert.match(html, /id="volume-value" for="music-volume">90%</);
-    assert.match(fs.readFileSync(__dirname + '/../overlay/app.js', 'utf8'), /musicVolume = 90;/);
+    assert.match(html, /id="music-volume" type="range" min="0" max="100" value="60"/);
+    assert.match(html, /id="volume-value" for="music-volume">60%</);
+    assert.match(fs.readFileSync(__dirname + '/../overlay/app.js', 'utf8'), /musicVolume = 60, ttsVolume = 100;/);
 
     app.handlers.chatMessage({ user: 'viewer', content: '¡Hola!' });
     assert.equal(app.get('chat-messages').children[0].children[1].textContent, '¡Hola!');
@@ -342,18 +335,13 @@ test('lite mode is the default and stops continuous animations and rotates tips 
     assert.match(block, /body\.lite \.tip\.current \{ display: flex; \}/);
     assert.match(css, /#alert-box:not\(\.show\)::before[^{]*\{ animation-play-state: paused; \}/);
 });
-test('clock and emoji meter skip DOM writes when nothing changed', () => {
+test('clock skips DOM writes when nothing changed', () => {
     const app = overlay();
     const clock = app.get('desktop-clock');
     let writes = 0, value = clock.textContent;
     Object.defineProperty(clock, 'textContent', { get: () => value, set: text => { writes++; value = text; } });
     app.context.intervals.find(i => i.delay === 1000).fn();
     assert.equal(writes, 0);
-    const top = app.get('emoji-top');
-    app.handlers.chatMessage({ user: 'a', content: '🔥' });
-    const rendered = top.children[0];
-    app.context.intervals.find(i => i.delay === 5000).fn();
-    assert.equal(top.children[0], rendered);
 });
 test('winner presentation replaces the drawn board to leave the chat unobstructed', () => {
     const css = fs.readFileSync(__dirname + '/../overlay/style.css', 'utf8');
@@ -470,45 +458,20 @@ test('TTS audio is sequential and cleared on disconnect', () => {
     assert.equal(app.audios.length, 2); assert.equal(app.audios[1].src, 'data:audio/mp3;base64,BBBB');
     app.handlers.disconnect('transport close'); assert.equal(app.audios[1].paused, true);
 });
-test('TikTok plays in the official embed, obeys transport and advances once when it ends', async () => {
+test('legacy TikTok queue items are skipped without building an embed', async () => {
     const app = overlay(); app.handlers.playbackRole({ active: true });
     app.handlers.syncQueue({ items: [{ ...item('tt', null), tiktokId: '7440114099565972791' }], version: 1 });
     await new Promise(resolve => setImmediate(resolve));
-    const frame = app.get('youtube-player').children[0];
-    assert.match(frame.src, /^https:\/\/www\.tiktok\.com\/player\/v1\/7440114099565972791\?autoplay=1&controls=0/);
-    assert.equal(app.get('media-widget').getAttribute('data-source'), 'tiktok');
-    const sent = [];
-    frame.contentWindow = { postMessage: (message, origin) => sent.push([message.type, message.value, origin, message['x-tiktok-player']]) };
-    const receive = (data, origin = 'https://www.tiktok.com', source = frame.contentWindow) => app.windowListeners.message({ origin, source, data });
-    receive({ type: 'onStateChange', value: 0 }, 'https://evil.example');
-    receive({ type: 'onStateChange', value: 0 }, 'https://www.tiktok.com', {});
-    assert.equal(app.emitted.length, 0);
-    receive({ type: 'onPlayerReady' });
-    assert.deepEqual(sent.find(message => message[0] === 'changeVolume')?.slice(0, 2), ['changeVolume', 90]);
-    assert.deepEqual(sent.at(-1), ['play', undefined, 'https://www.tiktok.com', true]);
-    receive(JSON.stringify({ type: 'onStateChange', value: 1 }));
-    assert.equal(app.get('music-transport').getAttribute('data-state'), 'playing');
-    app.get('music-pause').listeners.click();
-    assert.equal(sent.at(-1)[0], 'pause');
-    app.get('music-restart').listeners.click();
-    assert.deepEqual(sent.at(-1).slice(0, 2), ['seekTo', 0]);
-    app.get('music-volume').listeners.input({ target: { value: '0' } });
-    assert.equal(sent.at(-1)[0], 'mute');
-    receive({ type: 'onStateChange', value: 0 }); receive({ type: 'onPlayerError', value: { errorCode: 3001 } });
+    assert.equal(app.get('youtube-player').children.length, 0);
     assert.equal(JSON.stringify(app.emitted), JSON.stringify([['advanceQueue', { id: 'tt', version: 1 }]]));
 });
-test('TikTok autoplay blocking keeps the head and invalid IDs never build an embed', async () => {
-    const app = overlay(); app.handlers.playbackRole({ active: true });
-    app.handlers.syncQueue({ items: [{ ...item('tt', null), tiktokId: '7440114099565972791' }], version: 1 });
-    await new Promise(resolve => setImmediate(resolve));
-    const frame = app.get('youtube-player').children[0]; frame.contentWindow = { postMessage() {} };
-    app.windowListeners.message({ origin: 'https://www.tiktok.com', source: frame.contentWindow, data: { type: 'onPlayerError', value: { errorCode: 3002 } } });
-    assert.equal(app.emitted.length, 0);
-    const other = overlay(); other.handlers.playbackRole({ active: true });
-    other.handlers.syncQueue({ items: [{ ...item('bad', null), tiktokId: '../../evil' }], version: 1 });
-    await new Promise(resolve => setImmediate(resolve));
-    assert.equal(other.get('youtube-player').children.length, 0);
-    assert.equal(JSON.stringify(other.emitted), JSON.stringify([['advanceQueue', { id: 'bad', version: 1 }]]));
+test('chat messages with emoji do not render an emoji meter', () => {
+    const app = overlay();
+    app.handlers.chatMessage({ user: 'viewer', content: '😀😀 [emote:37226:KEKW]' });
+    assert.ok(!app.context.intervals.some(i => i.delay === 5000));
+    for (const page of ['pixel.html', 'vsaturn.html']) {
+        assert.doesNotMatch(fs.readFileSync(__dirname + `/../overlay/${page}`, 'utf8'), /emoji-meter/, page);
+    }
 });
 test('a reloaded OBS source resumes the same queue head where it stopped and forgets it when it ends', async () => {
     const data = new Map();
@@ -531,18 +494,6 @@ test('a reloaded OBS source resumes the same queue head where it stopped and for
     assert.equal(app.players[0].time, 93.5);
     app.players[0].options.events.onStateChange({ data: 0 });
     assert.equal(data.has('daibot:resume:alpha'), false);
-
-    app = await start({ tiktokId: '7440114099565972791' });
-    let frame = app.get('youtube-player').children[0]; const sent = [];
-    frame.contentWindow = { postMessage: message => sent.push([message.type, message.value]) };
-    const receive = (target, value) => target.windowListeners.message({ origin: 'https://www.tiktok.com', source: frame.contentWindow, data: value });
-    receive(app, { type: 'onPlayerReady' }); receive(app, { type: 'onCurrentTime', value: { currentTime: 40, duration: 60 } });
-    app.windowListeners.pagehide();
-    app = await start({ tiktokId: '7440114099565972791' });
-    frame = app.get('youtube-player').children[0];
-    frame.contentWindow = { postMessage: message => sent.push([message.type, message.value]) };
-    receive(app, { type: 'onPlayerReady' });
-    assert.deepEqual(sent.slice(-2).map(([type, value]) => `${type}:${value}`), ['seekTo:38', 'play:undefined']);
 
     data.set('daibot:resume:alpha', JSON.stringify({ id: 'head', time: 12 }));
     app = await start({ url: 'https://cdn.example/video.mp4' });

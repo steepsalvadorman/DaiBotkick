@@ -86,7 +86,6 @@ async fn oauth_pkce_browser_binding_reauthorization_and_failures() {
     let item = queue::VideoItem {
         id: "persistent".into(),
         video_id: None,
-        tiktok_id: None,
         url: Some("https://cdn.example/video.mp4".into()),
         title: "saved".into(),
         user: "viewer".into(),
@@ -205,7 +204,6 @@ async fn queue_concurrency_conflicts_db_failures_and_readiness() {
     let item = queue::VideoItem {
         id: "one".into(),
         video_id: None,
-        tiktok_id: None,
         url: Some("https://cdn.example/video.mp4".into()),
         title: "one".into(),
         user: "viewer".into(),
@@ -621,7 +619,6 @@ async fn socket_authorization_player_takeover_and_channel_isolation() {
             q.push(queue::VideoItem {
                 id: id.into(),
                 video_id: None,
-                tiktok_id: None,
                 url: Some("https://cdn.example/video.mp4".into()),
                 title: "same video".into(),
                 user: "viewer".into(),
@@ -868,7 +865,6 @@ async fn database_persistence_oauth_and_webhook_idempotency() {
     let first = queue::VideoItem {
         id: "unique-one".into(),
         video_id: Some("dQw4w9WgXcQ".into()),
-        tiktok_id: None,
         url: None,
         title: "same video".into(),
         user: "viewer".into(),

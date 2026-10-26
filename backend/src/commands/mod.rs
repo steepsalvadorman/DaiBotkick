@@ -7,7 +7,6 @@ use crate::{
 use std::sync::Arc;
 use tracing::warn;
 mod search;
-mod tiktok;
 
 /// Datos del mensaje de chat que reciben todos los grupos de comandos.
 #[derive(Clone, Copy)]
@@ -634,24 +633,6 @@ pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global:
         return;
     }
 
-    if tiktok::is_link(&url) {
-        let resolved = tokio::select! {
-            _ = ch.cancel.cancelled() => return,
-            result = tiktok::resolve(&url) => result,
-        };
-        match resolved {
-            Ok((tiktok_id, title)) => {
-                let item = VideoItem {
-                    tiktok_id: Some(tiktok_id),
-                    ..new_item(username.clone(), title)
-                };
-                add_announced(item, &username, ch, global).await;
-            }
-            Err(message) => sender::send(&format!("@{username} {message}"), ch, global).await,
-        }
-        return;
-    }
-
     if is_direct_video(&url) {
         let title = url
             .split('/')
@@ -709,12 +690,11 @@ pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global:
     }
 }
 
-/// Item de cola sin fuente; quien lo usa rellena `video_id`, `tiktok_id` o `url`.
+/// Item de cola sin fuente; quien lo usa rellena `video_id` o `url`.
 fn new_item(user: String, title: String) -> VideoItem {
     VideoItem {
         id: uuid::Uuid::new_v4().to_string(),
         video_id: None,
-        tiktok_id: None,
         url: None,
         title,
         user,
@@ -788,21 +768,9 @@ async fn visibility(ch: &Arc<ChannelState>, global: &Arc<AppState>, visible: boo
     }
 }
 
-/// Acepta enlaces pegados sin esquema (www.youtube.com/..., vm.tiktok.com/...) y el ID
-/// numérico de un video de TikTok solo: el chat de Kick rechaza mensajes con muchos símbolos.
+/// Acepta enlaces de YouTube pegados sin esquema (www.youtube.com/..., youtu.be/...).
 fn with_scheme(url: String) -> String {
-    if (15..=25).contains(&url.len()) && url.bytes().all(|b| b.is_ascii_digit()) {
-        return format!("https://www.tiktok.com/video/{url}");
-    }
-    const HOSTS: [&str; 7] = [
-        "www.",
-        "youtube.com",
-        "youtu.be",
-        "m.youtube.com",
-        "tiktok.com",
-        "vm.tiktok.com",
-        "vt.tiktok.com",
-    ];
+    const HOSTS: [&str; 4] = ["www.", "youtube.com", "youtu.be", "m.youtube.com"];
     if !url.contains("://") && !url.contains(' ') && HOSTS.iter().any(|h| url.starts_with(h)) {
         format!("https://{url}")
     } else {
@@ -972,8 +940,8 @@ mod tests {
     #[test]
     fn pasted_links_without_scheme_become_https() {
         assert_eq!(
-            with_scheme("vm.tiktok.com/ZMhvqjqjq/".into()),
-            "https://vm.tiktok.com/ZMhvqjqjq/"
+            with_scheme("youtu.be/dQw4w9WgXcQ".into()),
+            "https://youtu.be/dQw4w9WgXcQ"
         );
         assert_eq!(
             with_scheme("www.youtube.com/watch?v=dQw4w9WgXcQ".into()),
@@ -981,16 +949,19 @@ mod tests {
         );
         assert_eq!(
             with_scheme("7671109760938265874".into()),
-            "https://www.tiktok.com/video/7671109760938265874"
+            "7671109760938265874"
         );
-        assert_eq!(with_scheme("1999".into()), "1999");
+        assert_eq!(
+            with_scheme("vm.tiktok.com/ZMhvqjqjq/".into()),
+            "vm.tiktok.com/ZMhvqjqjq/"
+        );
         assert_eq!(
             with_scheme("cervecita flor pileña".into()),
             "cervecita flor pileña"
         );
         assert_eq!(
-            with_scheme("tiktok.com es genial".into()),
-            "tiktok.com es genial"
+            with_scheme("youtube.com es genial".into()),
+            "youtube.com es genial"
         );
     }
     #[test]

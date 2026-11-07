@@ -378,13 +378,19 @@
         if (playingId !== queue[0]?.id) stop(); display(); playHead();
     });
     socket.on('toggleVideo', data => { visible = Boolean(data.showVideo); display(); });
-    // Luces de concierto sobre el video: el streamer las enciende o apaga con !luces.
+    // Luces de fiesta sobre todo el overlay: el streamer las enciende o apaga con !luces.
     const stageLights = document.createElement('div');
     stageLights.className = 'stage-lights'; stageLights.setAttribute('aria-hidden', 'true');
-    for (const part of ['beam beam-1', 'beam beam-2', 'beam beam-3', 'beam beam-4', 'laser laser-1', 'laser laser-2', 'pulse']) {
-        const layer = document.createElement('span'); layer.className = part; stageLights.append(layer);
+    const lightParts = ['wash wash-1', 'wash wash-2', 'wash wash-3', 'pulse',
+        ...[1, 2, 3, 4, 5, 6].map(n => `beam beam-${n}`), ...[1, 2, 3, 4].map(n => `laser laser-${n}`),
+        'garland garland-top', 'garland garland-bottom'];
+    for (const part of lightParts) {
+        const layer = document.createElement('span'); layer.className = part;
+        // Cada guirnalda tiene tres tiras de focos que se encienden en cadena.
+        if (part.startsWith('garland')) for (let i = 0; i < 3; i++) layer.append(document.createElement('i'));
+        stageLights.append(layer);
     }
-    el('video-container').append(stageLights);
+    document.body.append(stageLights);
     socket.on('stageLights', data => { document.body.classList.toggle('stage-lights-on', data?.on === true); });
     socket.on('playerAvailable', () => { if (token && !active) { socket.disconnect(); socket.connect(); } });
     socket.on('channelError', message => notify(String(message)));

@@ -188,12 +188,15 @@ test('banned users appear as plain text without emotes', () => {
     assert.equal(normal.className, 'msg');
     assert.equal(normal.children[1].children[1].alt, 'KEKW');
 });
-test('stage lights sit over the video and follow the !luces state from the server', () => {
+test('party lights cover the whole overlay and follow the !luces state from the server', () => {
     const app = overlay('', '?ch=alpha');
-    const layer = app.get('video-container').children.at(-1);
-    assert.equal(layer.className, 'stage-lights');
+    const layer = app.context.document.body.children.find(child => child.className === 'stage-lights');
+    assert.ok(layer);
     assert.equal(layer.getAttribute('aria-hidden'), 'true');
-    assert.ok(layer.children.some(child => child.className.startsWith('beam')));
+    assert.equal(app.get('video-container').children.length, 0);
+    const parts = layer.children.map(child => child.className.split(' ')[0]);
+    for (const part of ['beam', 'wash', 'laser', 'garland', 'pulse']) assert.ok(parts.includes(part), part);
+    for (const garland of layer.children.filter(child => child.className.startsWith('garland'))) assert.equal(garland.children.length, 3);
     const body = app.context.document.body.classList;
     assert.ok(!body.contains('stage-lights-on'));
     app.handlers.stageLights({ on: true }); assert.ok(body.contains('stage-lights-on'));
@@ -203,10 +206,13 @@ test('stage lights sit over the video and follow the !luces state from the serve
         assert.match(fs.readFileSync(__dirname + '/../overlay/' + page, 'utf8'), /<link rel="stylesheet" href="\/lights\.css">/, page);
     }
     const lights = fs.readFileSync(__dirname + '/../overlay/lights.css', 'utf8');
-    assert.match(lights, /\.stage-lights \{[^}]*pointer-events: none;[^}]*opacity: 0;/);
+    assert.match(lights, /\.stage-lights \{[^}]*inset: 0;[^}]*pointer-events: none;[^}]*opacity: 0;/);
+    // Above chat (20), player (45) and topbar (50); below alerts (80) and notices (100).
+    const z = Number(lights.match(/\.stage-lights \{[^}]*z-index: (\d+);/)[1]);
+    assert.ok(z > 50 && z < 80, `z-index ${z}`);
     assert.match(lights, /body\.stage-lights-on \.stage-lights \{ opacity: 1; \}/);
     // Beat glow below three flashes per second (photosensitivity guidance).
-    const beat = Number(lights.match(/stage-beat (\d+)ms/)[1]);
+    const beat = Number(lights.match(/party-beat (\d+)ms/)[1]);
     assert.ok(beat >= 334, `beat ${beat}ms`);
 });
 test('topbar controls toggle local panels, chat and player without changing queue permissions', () => {

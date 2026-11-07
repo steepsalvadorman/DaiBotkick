@@ -702,7 +702,7 @@ fn lights_target(args: &str, current: bool) -> Option<bool> {
     }
 }
 
-/// `!luces [on|off]`: enciende o apaga las luces de concierto sobre el video.
+/// `!luces [on|off]`: enciende o apaga las luces de fiesta sobre todo el overlay.
 async fn stage_lights(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
     use std::sync::atomic::Ordering;
     let Some(on) = lights_target(args, ch.stage_lights.load(Ordering::Relaxed)) else {

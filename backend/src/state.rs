@@ -72,7 +72,7 @@ pub struct ChannelState {
     pub avatar_url: RwLock<String>,
     /// Usuarios baneados con !ban (en minúsculas): su chat se muestra como texto y nada más.
     pub banned: RwLock<std::collections::HashSet<String>>,
-    /// Luces de concierto sobre el video, activadas por el streamer con !luces.
+    /// Luces de fiesta sobre todo el overlay, activadas por el streamer con !luces.
     pub stage_lights: std::sync::atomic::AtomicBool,
 }
 

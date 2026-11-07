@@ -107,6 +107,37 @@ pub async fn update_follow_goal(pool: &PgPool, slug: &str, goal: i64) -> Result<
     Ok(())
 }
 
+/// Usernames banned on a channel, already normalized to lowercase.
+pub async fn load_bans(pool: &PgPool, slug: &str) -> Result<Vec<String>, sqlx::Error> {
+    sqlx::query_scalar("SELECT username FROM chat_bans WHERE slug=$1 ORDER BY created_at")
+        .bind(slug)
+        .fetch_all(pool)
+        .await
+}
+
+/// Stores a ban; returns `false` when the user was already banned.
+pub async fn add_ban(pool: &PgPool, slug: &str, username: &str) -> Result<bool, sqlx::Error> {
+    let inserted = sqlx::query(
+        "INSERT INTO chat_bans (slug, username, created_at) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING",
+    )
+    .bind(slug)
+    .bind(username)
+    .bind(unix_now() as i64)
+    .execute(pool)
+    .await?;
+    Ok(inserted.rows_affected() == 1)
+}
+
+/// Removes a ban; returns `false` when the user was not banned.
+pub async fn remove_ban(pool: &PgPool, slug: &str, username: &str) -> Result<bool, sqlx::Error> {
+    let deleted = sqlx::query("DELETE FROM chat_bans WHERE slug=$1 AND username=$2")
+        .bind(slug)
+        .bind(username)
+        .execute(pool)
+        .await?;
+    Ok(deleted.rows_affected() == 1)
+}
+
 pub async fn update_tokens(
     pool: &PgPool,
     slug: &str,

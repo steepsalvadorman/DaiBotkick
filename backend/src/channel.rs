@@ -21,6 +21,13 @@ pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) -> Result<(),
         old.cancel.cancel();
         global.user_id_to_slug.retain(|_, v| v != &slug);
     }
+    let bans = match crate::db::load_bans(&global.db, &slug).await {
+        Ok(list) => list.into_iter().collect(),
+        Err(e) => {
+            tracing::error!("[Channel][{slug}] No se pudieron cargar los baneos: {e}");
+            Default::default()
+        }
+    };
     let (tts_tx, tts_rx) = mpsc::channel(32);
     let ch = Arc::new(ChannelState {
         slug: slug.clone(),
@@ -57,6 +64,8 @@ pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) -> Result<(),
         recent_sent: Mutex::new(std::collections::VecDeque::new()),
         display_name: RwLock::new(String::new()),
         avatar_url: RwLock::new(String::new()),
+        banned: RwLock::new(bans),
+        stage_lights: AtomicBool::new(false),
     });
     if let Some(id) = row.broadcaster_user_id {
         global.user_id_to_slug.insert(id as u64, slug.clone());

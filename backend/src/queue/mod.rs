@@ -43,6 +43,18 @@ impl VideoQueue {
         }
     }
 
+    /// Quita todas las solicitudes de `user` (sin distinguir mayúsculas); `true` si quitó alguna.
+    pub fn remove_user(&mut self, user: &str) -> bool {
+        let before = self.items.len();
+        self.items
+            .retain(|item| !item.user.eq_ignore_ascii_case(user));
+        let changed = self.items.len() != before;
+        if changed {
+            self.version += 1;
+        }
+        changed
+    }
+
     pub fn clear(&mut self) {
         self.items.clear();
         self.version += 1;
@@ -162,6 +174,23 @@ mod tests {
         q.advance();
         assert_eq!(q.items.len(), 1);
         assert_eq!(q.items[0].title, "B");
+    }
+
+    #[test]
+    fn remove_user_drops_every_request_of_that_user_only() {
+        let mut q = make_queue();
+        q.push(item("A", "Troll"));
+        q.push(item("B", "viewer"));
+        q.push(item("C", "troll"));
+        let version = q.version;
+        assert!(q.remove_user("TROLL"));
+        assert_eq!(
+            q.items.iter().map(|i| i.title.as_str()).collect::<Vec<_>>(),
+            ["B"]
+        );
+        assert_eq!(q.version, version + 1);
+        assert!(!q.remove_user("troll"));
+        assert_eq!(q.version, version + 1);
     }
 
     #[test]

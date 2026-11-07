@@ -188,7 +188,7 @@ pub async fn worker(app: Arc<AppState>) {
 }
 
 /// Usuario de Kick que puede usar todos los comandos en cualquier canal, sin cooldowns.
-const FULL_ACCESS_USERNAME: &str = "seniordai";
+pub(crate) const FULL_ACCESS_USERNAME: &str = "seniordai";
 
 /// Moderadores de Kick a los que se les retiran los permisos de owner aunque tengan la insignia.
 const REVOKED_MODERATORS: &[&str] = &["theblastv2"];
@@ -207,6 +207,23 @@ fn has_owner_access(sender: &serde_json::Value, broadcaster_id: u64) -> bool {
         }) && sender["identity"]["badges"]
             .as_array()
             .is_some_and(|badges| badges.iter().any(|b| b["type"] == "moderator")))
+}
+
+/// El streamer y la cuenta con acceso total nunca quedan bloqueados por un baneo.
+async fn sender_banned(
+    ch: &crate::state::ChannelState,
+    sender: &serde_json::Value,
+    broadcaster_id: u64,
+) -> bool {
+    let Some(name) = sender["username"]
+        .as_str()
+        .and_then(crate::state::normalize_username)
+    else {
+        return false;
+    };
+    sender["user_id"].as_u64() != Some(broadcaster_id)
+        && name != FULL_ACCESS_USERNAME
+        && ch.is_banned(&name).await
 }
 
 async fn process(app: &Arc<AppState>, kind: &str, json: &serde_json::Value) {
@@ -240,19 +257,29 @@ async fn process(app: &Arc<AppState>, kind: &str, json: &serde_json::Value) {
             if crate::kick::sender::is_own_echo(&ch, content).await {
                 return;
             }
+            // Un baneado (incluso si es moderador) solo aparece como texto en el chat del overlay.
+            let banned = sender_banned(&ch, &json["sender"], id).await;
             // Los comandos (!play, !s…) no se muestran en el chat del overlay.
             if !content.starts_with('!') {
                 ns_emit(
                     app,
                     &ch.slug,
                     "chatMessage",
-                    serde_json::json!({"user":username,"content":content}),
+                    serde_json::json!({"user":username,"content":content,"textOnly":banned}),
                 );
             }
-            commands::handle(username, content, owner, &ch, app).await;
+            if !banned {
+                commands::handle(username, content, owner, &ch, app).await;
+            }
         }
         "channel.followed" => {
             let username = json["follower"]["username"].as_str().unwrap_or("alguien");
+            // Evita que un baneado dispare voces y alertas siguiendo y dejando de seguir.
+            if crate::state::normalize_username(username).is_some()
+                && sender_banned(&ch, &json["follower"], id).await
+            {
+                return;
+            }
             let message = format!("¡Gracias por el follow, {username}!");
             tts::enqueue(&ch, &message, "dalia");
             ns_emit(
@@ -398,6 +425,58 @@ mod tests {
                 7
             ));
         }
+    }
+
+    #[tokio::test]
+    async fn banned_users_only_chat_as_text_while_streamer_keeps_access() {
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .connect_lazy("postgres://unused:unused@127.0.0.1/unused")
+            .unwrap();
+        let app = crate::test_support::app(pool);
+        let (ch, _rx) = crate::test_support::channel("alpha", 7);
+        app.channels.insert("alpha".into(), ch.clone());
+        app.user_id_to_slug.insert(7, "alpha".into());
+        ch.banned.write().await.extend([
+            "troll".to_string(),
+            "badmod".to_string(),
+            "alpha".to_string(),
+        ]);
+        ch.sorteo.lock().await.open = true;
+        let message = |name: &str, user_id: u64, badge: &str| {
+            serde_json::json!({
+                "broadcaster": {"user_id": 7},
+                "sender": {"user_id": user_id, "username": name, "identity": {"badges": [{"type": badge}]}},
+                "content": "!participar",
+            })
+        };
+        process(&app, "chat.message.sent", &message("Troll", 50, "")).await;
+        process(
+            &app,
+            "chat.message.sent",
+            &message("BadMod", 51, "moderator"),
+        )
+        .await;
+        // Si el streamer quedara en la lista por error, su cuenta sigue funcionando.
+        process(&app, "chat.message.sent", &message("Alpha", 7, "")).await;
+        process(&app, "chat.message.sent", &message("viewer", 52, "")).await;
+        assert_eq!(ch.sorteo.lock().await.participants, vec!["Alpha", "viewer"]);
+        assert!(
+            !sender_banned(
+                &ch,
+                &serde_json::json!({"username": "SeniorDai", "user_id": 1}),
+                7
+            )
+            .await
+        );
+        assert!(
+            sender_banned(
+                &ch,
+                &serde_json::json!({"username": "@TROLL", "user_id": 1}),
+                7
+            )
+            .await
+        );
+        assert!(!sender_banned(&ch, &serde_json::json!({"user_id": 1}), 7).await);
     }
 
     #[test]

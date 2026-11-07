@@ -70,9 +70,18 @@ pub struct ChannelState {
     pub display_name: RwLock<String>,
     /// Foto de perfil del streamer en Kick (URL https); vacía hasta consultarla.
     pub avatar_url: RwLock<String>,
+    /// Usuarios baneados con !ban (en minúsculas): su chat se muestra como texto y nada más.
+    pub banned: RwLock<std::collections::HashSet<String>>,
+    /// Luces de concierto sobre el video, activadas por el streamer con !luces.
+    pub stage_lights: std::sync::atomic::AtomicBool,
 }
 
 impl ChannelState {
+    /// `username` debe venir ya normalizado con `normalize_username`.
+    pub async fn is_banned(&self, username: &str) -> bool {
+        self.banned.read().await.contains(username)
+    }
+
     /// Datos del canal para el overlay: nombre original si se conoce, si no el slug.
     pub async fn overlay_config(&self) -> serde_json::Value {
         let name = self.display_name.read().await.clone();
@@ -102,6 +111,18 @@ pub fn avatar_url_valid(url: &str) -> bool {
         })
 }
 
+/// Nombre de usuario de Kick comparable: sin `@`, sin espacios y en minúsculas.
+/// Devuelve `None` si no es un nombre válido de Kick.
+pub fn normalize_username(raw: &str) -> Option<String> {
+    let name = raw.trim().trim_start_matches('@');
+    (!name.is_empty()
+        && name.len() <= 25
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'))
+    .then(|| name.to_ascii_lowercase())
+}
+
 pub fn display_name_matches(name: &str, slug: &str) -> bool {
     !name.is_empty()
         && name.len() <= 100
@@ -114,7 +135,24 @@ pub fn display_name_matches(name: &str, slug: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{avatar_url_valid, display_name_matches};
+    use super::{avatar_url_valid, display_name_matches, normalize_username};
+
+    #[test]
+    fn usernames_normalize_for_bans() {
+        assert_eq!(
+            normalize_username(" @Troll_99 ").as_deref(),
+            Some("troll_99")
+        );
+        assert_eq!(
+            normalize_username("Some-User").as_deref(),
+            Some("some-user")
+        );
+        assert_eq!(normalize_username(""), None);
+        assert_eq!(normalize_username("@"), None);
+        assert_eq!(normalize_username("dos palabras"), None);
+        assert_eq!(normalize_username("<script>"), None);
+        assert_eq!(normalize_username(&"a".repeat(26)), None);
+    }
 
     #[test]
     fn avatar_url_only_accepts_plain_https_urls() {

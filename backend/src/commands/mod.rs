@@ -68,6 +68,18 @@ async fn owner_commands(c: &Ctx<'_>) -> bool {
             configure(args, ch, global).await;
             return true;
         }
+        if let Some(args) = command_args(content, "!ban") {
+            ban(args, ch, global).await;
+            return true;
+        }
+        if let Some(args) = command_args(content, "!unban") {
+            unban(args, ch, global).await;
+            return true;
+        }
+        if let Some(args) = command_args(content, "!luces") {
+            stage_lights(args, ch, global).await;
+            return true;
+        }
         match cmd {
             "!von" => {
                 visibility(ch, global, true).await;
@@ -83,6 +95,21 @@ async fn owner_commands(c: &Ctx<'_>) -> bool {
                     true
                 })
                 .await;
+                return true;
+            }
+            "!baneados" | "!banlist" => {
+                let list = {
+                    let banned = ch.banned.read().await;
+                    let mut names: Vec<&str> = banned.iter().map(String::as_str).collect();
+                    names.sort_unstable();
+                    names.join(", ")
+                };
+                let msg = if list.is_empty() {
+                    "✅ No hay usuarios baneados".to_string()
+                } else {
+                    format!("🚫 Baneados: {}", trunc(&list, 400))
+                };
+                sender::send(&msg, ch, global).await;
                 return true;
             }
             "!next" | "!skip" => {
@@ -597,6 +624,100 @@ async fn configure(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
     sender::send(&msg, ch, global).await;
 }
 
+const BAN_USAGE: &str = "🚫 Uso: !ban usuario · !unban usuario · !baneados";
+
+/// Nombres que nunca se pueden banear: el propio canal y la cuenta con acceso total.
+async fn ban_protected(name: &str, ch: &ChannelState) -> bool {
+    let display = ch.display_name.read().await.to_ascii_lowercase();
+    name == crate::webhook::FULL_ACCESS_USERNAME
+        || name == ch.slug.to_ascii_lowercase()
+        || (!display.is_empty() && name == display)
+}
+
+/// `!ban usuario`: su chat queda como texto; pierde comandos, cola, sorteo, bingo y TTS.
+async fn ban(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
+    let Some(name) = crate::state::normalize_username(args) else {
+        sender::send(BAN_USAGE, ch, global).await;
+        return;
+    };
+    if ban_protected(&name, ch).await {
+        sender::send("No se puede banear al streamer.", ch, global).await;
+        return;
+    }
+    if let Err(e) = crate::db::add_ban(&global.db, &ch.slug, &name).await {
+        tracing::error!("[Ban][{}] {e}", ch.slug);
+        sender::send(
+            "No se pudo guardar el baneo. Intenta más tarde.",
+            ch,
+            global,
+        )
+        .await;
+        return;
+    }
+    let added = ch.banned.write().await.insert(name.clone());
+    if !added {
+        sender::send(&format!("@{name} ya estaba baneado."), ch, global).await;
+        return;
+    }
+    // Lo que ya había pedido tampoco sigue activo en el overlay.
+    queue_edit(ch, global, |q| q.remove_user(&name)).await;
+    ch.sorteo
+        .lock()
+        .await
+        .participants
+        .retain(|p| !p.eq_ignore_ascii_case(&name));
+    sender::send(
+        &format!("🚫 @{name} baneado: solo puede escribir en el chat."),
+        ch,
+        global,
+    )
+    .await;
+}
+
+async fn unban(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
+    let Some(name) = crate::state::normalize_username(args) else {
+        sender::send(BAN_USAGE, ch, global).await;
+        return;
+    };
+    if let Err(e) = crate::db::remove_ban(&global.db, &ch.slug, &name).await {
+        tracing::error!("[Ban][{}] {e}", ch.slug);
+        sender::send("No se pudo quitar el baneo. Intenta más tarde.", ch, global).await;
+        return;
+    }
+    let msg = if ch.banned.write().await.remove(&name) {
+        format!("✅ @{name} ya puede usar los comandos otra vez.")
+    } else {
+        format!("@{name} no estaba baneado.")
+    };
+    sender::send(&msg, ch, global).await;
+}
+
+/// Interpreta `!luces`, `!luces on` y `!luces off`; `None` si el argumento no es válido.
+fn lights_target(args: &str, current: bool) -> Option<bool> {
+    match args.to_lowercase().as_str() {
+        "" => Some(!current),
+        "on" | "si" | "sí" | "encender" | "prender" => Some(true),
+        "off" | "no" | "apagar" => Some(false),
+        _ => None,
+    }
+}
+
+/// `!luces [on|off]`: enciende o apaga las luces de concierto sobre el video.
+async fn stage_lights(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
+    use std::sync::atomic::Ordering;
+    let Some(on) = lights_target(args, ch.stage_lights.load(Ordering::Relaxed)) else {
+        sender::send("💡 Uso: !luces · !luces on · !luces off", ch, global).await;
+        return;
+    };
+    ch.stage_lights.store(on, Ordering::Relaxed);
+    crate::server::ns_emit(
+        global,
+        &ch.slug,
+        "stageLights",
+        serde_json::json!({"on": on}),
+    );
+}
+
 pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
     if ch.cancel.is_cancelled() {
         return;
@@ -995,6 +1116,16 @@ mod tests {
         }
         assert!(!is_play_blocked("viewer"));
         assert!(!is_play_blocked("theblastv22"));
+    }
+    #[test]
+    fn lights_command_toggles_or_sets_explicitly() {
+        assert_eq!(lights_target("", false), Some(true));
+        assert_eq!(lights_target("", true), Some(false));
+        assert_eq!(lights_target("ON", false), Some(true));
+        assert_eq!(lights_target("on", true), Some(true));
+        assert_eq!(lights_target("off", true), Some(false));
+        assert_eq!(lights_target("apagar", true), Some(false));
+        assert_eq!(lights_target("azul", false), None);
     }
     #[test]
     fn unicode_truncation_never_splits_code_points() {

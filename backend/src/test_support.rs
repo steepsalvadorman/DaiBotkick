@@ -170,6 +170,8 @@ pub fn channel(
             recent_sent: Mutex::new(std::collections::VecDeque::new()),
             display_name: RwLock::new(String::new()),
             avatar_url: RwLock::new(String::new()),
+            banned: RwLock::new(Default::default()),
+            stage_lights: AtomicBool::new(false),
         }),
         rx,
     )

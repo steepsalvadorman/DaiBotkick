@@ -53,6 +53,7 @@
     if (!channel) { notify('Falta el canal. Copia la URL que aparece al conectar con Kick.'); return; }
     const socket = io({ query: { ch: channel }, auth: { token }, reconnectionDelayMax: 10000 });
     let active = false, queue = [], version = 0, playingId = null, pending = false, visible = true;
+    let myEpoch = null, pongTimer = null;
     let player = null, retry, generation = 0, apiPromise;
     let musicShown = true, musicVolume = 60, ttsVolume = 100;
     let mediaReady = false, paused = false, actuallyPlaying = false;
@@ -321,8 +322,25 @@
     });
     socket.on('playbackRole', data => {
         active = Boolean(data.active);
+        myEpoch = active ? data.epoch ?? null : null;
         if (!active) { stop(); stopSpeech(); notify(token ? '' : 'Vista pública. Usa la URL privada de OBS para reproducir.'); }
         else { notify(''); playHead(); } display();
+    });
+    // Relevo del slot: si otra página lo tomó, el pong avisa y cortamos el audio enseguida;
+    // sin pong en 10s la conexión está caída aunque el socket crea estar vivo (half-open).
+    function losePlayback() {
+        if (!active) return;
+        active = false; myEpoch = null; stop(); stopSpeech(); display();
+        socket.disconnect(); socket.connect();
+    }
+    setInterval(() => {
+        if (!active || !socket.connected || myEpoch == null || pongTimer) return;
+        socket.emit('playerPing', { epoch: myEpoch });
+        pongTimer = setTimeout(losePlayback, 10000);
+    }, 4000);
+    socket.on('playerPong', data => {
+        clearTimeout(pongTimer); pongTimer = null;
+        if (!data?.active || data.epoch !== myEpoch) losePlayback();
     });
     socket.on('syncQueue', data => {
         if (!Array.isArray(data?.items) || !Number.isSafeInteger(data.version) || data.version < version) return;
@@ -339,7 +357,8 @@
     socket.on('disconnect', reason => {
         bingoState = null; el('bingo-widget').hidden = true; resumeAfterBingo = false;
         document.body.classList.remove('bingo-active');
-        active = false; stop(); stopSpeech(); queue = []; display(); notify('Sin conexión. Reintentando...');
+        active = false; myEpoch = null; clearTimeout(pongTimer); pongTimer = null;
+        stop(); stopSpeech(); queue = []; display(); notify('Sin conexión. Reintentando...');
         renderQueue(); closePanels();
         if (reason === 'io server disconnect') socket.connect();
     });

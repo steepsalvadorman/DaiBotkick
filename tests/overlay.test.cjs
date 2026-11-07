@@ -612,3 +612,36 @@ test('every overlay theme page provides the elements app.js drives', () => {
     assert.match(css, /body\.lite \.tip\.current \{ display: flex; \}/);
     assert.doesNotMatch(css, /^\s*backdrop-filter\s*:/m);
 });
+
+test('displaced player stops audio the moment the server says the slot moved', () => {
+    const app = overlay();
+    app.handlers.playbackRole({ active: true, epoch: 7 });
+    app.handlers.syncQueue({ items: [item('one')], version: 1 });
+    const video = app.get('direct-video');
+    video.onplaying();
+    const beat = app.context.intervals.find(entry => entry.delay === 4000);
+    beat.fn();
+    assert.equal(app.emitted.at(-1)[0], 'playerPing');
+    assert.equal(app.emitted.at(-1)[1].epoch, 7);
+    // Correct pong keeps playback running.
+    app.handlers.playerPong({ active: true, epoch: 7 });
+    assert.equal(video.paused, false);
+    // Another page took the slot: stop right away and resync the role.
+    beat.fn();
+    app.handlers.playerPong({ active: false, epoch: 8 });
+    assert.equal(video.paused, true);
+    assert.deepEqual(app.calls.slice(-2), ['disconnect', 'connect']);
+    assert.equal(app.get('music-transport').getAttribute('data-state'), 'idle');
+});
+
+test('player without pong within ten seconds stops and reconnects (half-open socket)', () => {
+    const app = overlay();
+    app.handlers.playbackRole({ active: true, epoch: 3 });
+    app.handlers.syncQueue({ items: [item('one')], version: 1 });
+    const video = app.get('direct-video');
+    video.onplaying();
+    app.context.intervals.find(entry => entry.delay === 4000).fn();
+    [...app.timers.values()].at(-1)();
+    assert.equal(video.paused, true);
+    assert.deepEqual(app.calls.slice(-2), ['disconnect', 'connect']);
+});

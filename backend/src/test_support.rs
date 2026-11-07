@@ -164,6 +164,7 @@ pub fn channel(
             refresh_lock: Mutex::new(()),
             token_expires: AtomicU64::new(0),
             player: Mutex::new(None),
+            player_epoch: AtomicU64::new(0),
             show_video: AtomicBool::new(true),
             live_since: RwLock::new(None),
             recent_sent: Mutex::new(std::collections::VecDeque::new()),

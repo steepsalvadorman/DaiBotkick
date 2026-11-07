@@ -26,6 +26,15 @@ pub struct GlobalConfig {
     pub fish_audio_api_key: String,
 }
 
+/// Slot de reproducción: qué socket suena y con qué generación.
+/// La epoch crece en cada asignación; un cliente desplazado la consulta con
+/// `playerPing` para dejar de sonar apenas descubre que perdió el slot
+/// (evita el audio doble durante el relevo entre dos páginas del overlay).
+pub struct PlayerSlot {
+    pub socket_id: String,
+    pub epoch: u64,
+}
+
 /// Estado de un canal específico (un streamer).
 pub struct ChannelState {
     pub slug: String,
@@ -49,7 +58,9 @@ pub struct ChannelState {
     pub cancel: CancellationToken,
     pub refresh_lock: Mutex<()>,
     pub token_expires: AtomicU64,
-    pub player: Mutex<Option<String>>,
+    pub player: Mutex<Option<PlayerSlot>>,
+    /// Contador monótono de asignaciones del slot; nunca se reinicia aunque el slot quede libre.
+    pub player_epoch: AtomicU64,
     pub show_video: std::sync::atomic::AtomicBool,
     pub live_since: RwLock<Option<chrono::DateTime<chrono::Utc>>>,
     /// Últimos mensajes que envió el bot; su eco en el webhook no se muestra en el overlay.

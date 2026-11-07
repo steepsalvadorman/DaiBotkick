@@ -224,7 +224,7 @@ pub async fn spawn_processor(
 }
 
 async fn player_sid(ch: &crate::state::ChannelState) -> Option<socketioxide::socket::Sid> {
-    ch.player.lock().await.as_deref()?.parse().ok()
+    ch.player.lock().await.as_ref()?.socket_id.parse().ok()
 }
 
 #[cfg(test)]

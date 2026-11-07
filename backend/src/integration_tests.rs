@@ -593,6 +593,45 @@ async fn tts_audio_reaches_the_player_socket_and_skips_public_overlays() {
 }
 
 #[tokio::test]
+async fn player_ping_confirms_only_the_current_epoch() {
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .connect_lazy("postgres://unused:unused@127.0.0.1/unused")
+        .unwrap();
+    let (layer, io) = socketioxide::SocketIo::new_layer();
+    let app = test_support::app_with_io(pool, io);
+    let (ch, _receiver) = test_support::channel("alpha", 1);
+    app.channels.insert("alpha".into(), ch.clone());
+    server::setup(&app.io, app.clone());
+    let http = test_support::HttpServer::start(axum::Router::new().layer(layer)).await;
+    let mut player = SocketClient::connect(&http.url, "alpha", Some("play-secret")).await;
+    let mut standby = SocketClient::connect(&http.url, "alpha", Some("play-secret")).await;
+    let role = player.event("playbackRole").await;
+    assert_eq!(role["active"], true);
+    let epoch = role["epoch"].as_u64().expect("playbackRole trae epoch");
+    assert_eq!(standby.event("playbackRole").await["active"], false);
+
+    // El player vigente con su epoch sigue activo.
+    player.emit("playerPing", json!({"epoch": epoch})).await;
+    let pong = player.event("playerPong").await;
+    assert_eq!(pong["active"], true);
+    assert_eq!(pong["epoch"], epoch);
+
+    // Epoch ajena o socket desplazado: inactivo, así la página deja de sonar.
+    player.emit("playerPing", json!({"epoch": epoch + 1})).await;
+    assert_eq!(player.event("playerPong").await["active"], false);
+    standby.emit("playerPing", json!({"epoch": epoch})).await;
+    assert_eq!(standby.event("playerPong").await["active"], false);
+
+    // Tras un relevo, la epoch crece: el cliente viejo detecta que fue desplazado.
+    player.packet("41".into()).await;
+    standby.event("playerAvailable").await;
+    let mut replacement = SocketClient::connect(&http.url, "alpha", Some("play-secret")).await;
+    let role = replacement.event("playbackRole").await;
+    assert_eq!(role["active"], true);
+    assert!(role["epoch"].as_u64().unwrap() > epoch);
+}
+
+#[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL"]
 async fn socket_authorization_player_takeover_and_channel_isolation() {
     let database = test_support::TestDatabase::new().await;

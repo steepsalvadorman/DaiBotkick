@@ -1,6 +1,6 @@
 use crate::{
     commands, queue,
-    state::{AppState, ChannelState},
+    state::{AppState, ChannelState, PlayerSlot},
     tts,
 };
 use socketioxide::extract::{Data, SocketRef, TryData};
@@ -15,6 +15,10 @@ struct Auth {
 struct AdvanceCmd {
     id: String,
     version: u64,
+}
+#[derive(serde::Deserialize)]
+struct PingCmd {
+    epoch: Option<u64>,
 }
 #[derive(serde::Deserialize)]
 struct PanelCmd {
@@ -44,10 +48,16 @@ pub fn setup(io: &socketioxide::SocketIo, global: Arc<AppState>) {
             let socket_id = socket.id.to_string();
             if player_ok {
                 let mut player = ch.player.lock().await;
-                if player.is_none() { *player = Some(socket_id.clone()); }
+                if player.is_none() {
+                    let epoch = ch.player_epoch.fetch_add(1, Ordering::Relaxed) + 1;
+                    *player = Some(PlayerSlot { socket_id: socket_id.clone(), epoch });
+                }
             }
-            let active = *ch.player.lock().await == Some(socket_id.clone());
-            socket.emit("playbackRole", serde_json::json!({"active":active})).ok();
+            let slot = ch.player.lock().await;
+            let active = slot.as_ref().is_some_and(|p| p.socket_id == socket_id);
+            let epoch = slot.as_ref().filter(|p| p.socket_id == socket_id).map(|p| p.epoch);
+            drop(slot);
+            socket.emit("playbackRole", serde_json::json!({"active":active,"epoch":epoch})).ok();
             socket.emit("config", ch.overlay_config().await).ok();
             socket.emit("toggleVideo", serde_json::json!({"showVideo":ch.show_video.load(Ordering::Relaxed)})).ok();
             let q = ch.video_queue.read().await;
@@ -63,8 +73,9 @@ pub fn setup(io: &socketioxide::SocketIo, global: Arc<AppState>) {
                 let (ch, app) = (dc.clone(), dg.clone());
                 async move {
                     let mut player = ch.player.lock().await;
-                    if *player == Some(s.id.to_string()) {
+                    if player.as_ref().is_some_and(|p| p.socket_id == s.id.to_string()) {
                         *player = None;
+                        drop(player);
                         ns_emit(&app, &ch.slug, "playerAvailable", serde_json::json!({}));
                     }
                 }
@@ -73,7 +84,7 @@ pub fn setup(io: &socketioxide::SocketIo, global: Arc<AppState>) {
             socket.on("advanceQueue", move |s: SocketRef, Data(data): Data<AdvanceCmd>| {
                 let (ch, app) = (ac.clone(), ag.clone());
                 async move {
-                    if ch.cancel.is_cancelled() || *ch.player.lock().await != Some(s.id.to_string()) { return; }
+                    if ch.cancel.is_cancelled() || !ch.player.lock().await.as_ref().is_some_and(|p| p.socket_id == s.id.to_string()) { return; }
                     if let Err(e) = queue::change(&ch, &app, |q| q.advance_if(&data.id, data.version)).await {
                         tracing::error!("[Queue][{}] Advance: {e}", ch.slug);
                         s.emit("operationError", "No se pudo guardar el avance").ok();
@@ -82,6 +93,23 @@ pub fn setup(io: &socketioxide::SocketIo, global: Arc<AppState>) {
                     s.emit("syncQueue", serde_json::json!({"items":q.items,"version":q.version})).ok();
                 }
             });
+            // Heartbeat del player: una página desplazada (el slot pasó a otra) se entera
+            // acá y corta el audio enseguida, en vez de seguir sonando hasta su propio timeout.
+            if player_ok {
+                let hc = ch.clone();
+                socket.on("playerPing", move |s: SocketRef, Data(data): Data<PingCmd>| {
+                    let ch = hc.clone();
+                    async move {
+                        let slot = ch.player.lock().await;
+                        let active = slot.as_ref().is_some_and(|p| {
+                            p.socket_id == s.id.to_string() && Some(p.epoch) == data.epoch
+                        });
+                        let epoch = slot.as_ref().map(|p| p.epoch);
+                        drop(slot);
+                        s.emit("playerPong", serde_json::json!({"active":active,"epoch":epoch})).ok();
+                    }
+                });
+            }
             let (pc, pg) = (ch.clone(), global.clone());
             socket.on("panelCommand", move |s: SocketRef, Data(data): Data<PanelCmd>| {
                 let (ch, app) = (pc.clone(), pg.clone());

@@ -76,7 +76,7 @@ async fn owner_commands(c: &Ctx<'_>) -> bool {
             unban(args, ch, global).await;
             return true;
         }
-        if let Some(args) = command_args(content, "!luces") {
+        if let Some(args) = command_args(content, "!disco") {
             stage_lights(args, ch, global).await;
             return true;
         }
@@ -692,7 +692,7 @@ async fn unban(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
     sender::send(&msg, ch, global).await;
 }
 
-/// Interpreta `!luces`, `!luces on` y `!luces off`; `None` si el argumento no es válido.
+/// Interpreta `!disco`, `!disco on` y `!disco off`; `None` si el argumento no es válido.
 fn lights_target(args: &str, current: bool) -> Option<bool> {
     match args.to_lowercase().as_str() {
         "" => Some(!current),
@@ -702,11 +702,11 @@ fn lights_target(args: &str, current: bool) -> Option<bool> {
     }
 }
 
-/// `!luces [on|off]`: enciende o apaga las luces de fiesta sobre todo el overlay.
+/// `!disco [on|off]`: enciende o apaga las luces de fiesta sobre todo el overlay.
 async fn stage_lights(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
     use std::sync::atomic::Ordering;
     let Some(on) = lights_target(args, ch.stage_lights.load(Ordering::Relaxed)) else {
-        sender::send("💡 Uso: !luces · !luces on · !luces off", ch, global).await;
+        sender::send("🪩 Uso: !disco · !disco on · !disco off", ch, global).await;
         return;
     };
     ch.stage_lights.store(on, Ordering::Relaxed);
@@ -1126,6 +1126,11 @@ mod tests {
         assert_eq!(lights_target("off", true), Some(false));
         assert_eq!(lights_target("apagar", true), Some(false));
         assert_eq!(lights_target("azul", false), None);
+        // !disco must not swallow !discord, which shares its prefix.
+        assert_eq!(command_args("!disco off", "!disco"), Some("off"));
+        assert_eq!(command_args("!DISCO", "!disco"), Some(""));
+        assert_eq!(command_args("!discord", "!disco"), None);
+        assert_eq!(command_args("!luces on", "!disco"), None);
     }
     #[test]
     fn unicode_truncation_never_splits_code_points() {

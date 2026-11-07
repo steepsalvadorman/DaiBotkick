@@ -80,14 +80,14 @@ La fuente autorizada también puede reiniciar la canción actual, pausar/reanuda
 | `!uptime` | Tiempo desde el inicio real del stream, si está disponible |
 | `!seguidores` | Total y meta, si Kick proporciona ese dato |
 | `!discord`, `!redes`, `!pc`, `!horario`, `!comandos` | Información |
-| `!luces` / `!luces on` / `!luces off` | Dueño: alternar, encender o apagar las luces de fiesta sobre todo el overlay |
+| `!disco` / `!disco on` / `!disco off` | Dueño: alternar, encender o apagar las luces de fiesta sobre todo el overlay |
 | `!ban usuario` / `!unban usuario` / `!baneados` | Dueño: bloquear a un usuario de todas las funciones del bot y del overlay, desbloquearlo o listar los baneados |
 
 Solo la identidad del broadcaster, verificada por su ID en el webhook firmado, puede usar `!von`, `!voff`, `!vstop`, `!skip` / `!next` y `!sorteo abrir|cerrar|ganador`. El skip modifica la cola en el backend incluso sin overlay conectado.
 
 ### Luces de fiesta
 
-`!luces` enciende o apaga sobre **todo el overlay** un show de luces de fiesta vernácula peruana con paleta chicha fosforescente (fucsia, amarillo, naranja, verde, cian y violeta): seis cabezas móviles que barren desde arriba, manchas de color que recorren el escenario, cuatro láseres desde las esquinas inferiores, guirnaldas de focos arriba y abajo que se encienden en cadena, un pulso suave a 128 BPM (por debajo de tres destellos por segundo, sin estrobo de pantalla completa) y el marco del video brillando con los mismos colores. Es una capa decorativa (`overlay/lights.css`) por encima del chat, el reproductor y la barra, pero por debajo de las alertas; no intercepta clics, no cambia el audio y funciona en `pixel.html` y `vsaturn.html`. Solo anima `transform` y `opacity` para que la GPU la componga barata. Se anima también en modo ligero porque la pidió el streamer; con movimiento reducido se queda quieta. El estado vive en memoria del servidor: los overlays que se conectan lo reciben al instante, y al reiniciar el backend vuelve a apagado.
+`!disco on` enciende y `!disco off` apaga (`!disco` solo alterna) sobre **todo el overlay** un show de luces de fiesta vernácula peruana con paleta chicha fosforescente (fucsia, amarillo, naranja, verde, cian y violeta): seis cabezas móviles que barren desde arriba, manchas de color que recorren el escenario, cuatro láseres desde las esquinas inferiores, guirnaldas de focos arriba y abajo que se encienden en cadena, un pulso suave a 128 BPM (por debajo de tres destellos por segundo, sin estrobo de pantalla completa) y el marco del video brillando con los mismos colores. Es una capa decorativa (`overlay/lights.css`) por encima del chat, el reproductor y la barra, pero por debajo de las alertas; no intercepta clics, no cambia el audio y funciona en `pixel.html` y `vsaturn.html`. Solo anima `transform` y `opacity` para que la GPU la componga barata. Se anima también en modo ligero porque la pidió el streamer; con movimiento reducido se queda quieta. El estado vive en memoria del servidor: los overlays que se conectan lo reciben al instante, y al reiniciar el backend vuelve a apagado.
 
 ### Baneos del chat
 

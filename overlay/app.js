@@ -378,7 +378,7 @@
         if (playingId !== queue[0]?.id) stop(); display(); playHead();
     });
     socket.on('toggleVideo', data => { visible = Boolean(data.showVideo); display(); });
-    // Luces de fiesta sobre todo el overlay: el streamer las enciende o apaga con !luces.
+    // Luces de fiesta sobre todo el overlay: el streamer las enciende o apaga con !disco.
     const stageLights = document.createElement('div');
     stageLights.className = 'stage-lights'; stageLights.setAttribute('aria-hidden', 'true');
     const lightParts = ['wash wash-1', 'wash wash-2', 'wash wash-3', 'pulse',

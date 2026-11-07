@@ -1,5 +1,5 @@
 /* Peruvian vernacular party lights over the whole overlay (chicha palette: fuchsia, yellow,
-   orange, green and cyan). The streamer toggles them with !luces; app.js adds the layer to
+   orange, green and cyan). The streamer toggles them with !disco; app.js adds the layer to
    <body> and toggles body.stage-lights-on. Shared by every overlay theme. It sits above the
    chat, player and topbar but below alerts and connection notices, never intercepts clicks,
    and only animates transform and opacity so the GPU composites it cheaply. Animations run

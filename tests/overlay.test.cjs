@@ -188,7 +188,7 @@ test('banned users appear as plain text without emotes', () => {
     assert.equal(normal.className, 'msg');
     assert.equal(normal.children[1].children[1].alt, 'KEKW');
 });
-test('party lights cover the whole overlay and follow the !luces state from the server', () => {
+test('party lights cover the whole overlay and follow the !disco state from the server', () => {
     const app = overlay('', '?ch=alpha');
     const layer = app.context.document.body.children.find(child => child.className === 'stage-lights');
     assert.ok(layer);

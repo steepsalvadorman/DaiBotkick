@@ -259,6 +259,24 @@
         }).catch(error => { apiPromise = null; throw error; });
         return apiPromise;
     }
+    /** Pide 720p al iframe de YouTube cuando el video lo ofrece; si no, la mejor calidad por debajo. */
+    function preferYouTubeQuality(target) {
+        if (!target?.getAvailableQualityLevels || !target.setPlaybackQuality) return;
+        let levels;
+        try { levels = target.getAvailableQualityLevels(); } catch { return; }
+        if (!Array.isArray(levels) || !levels.length) return;
+        let quality = null;
+        if (levels.includes('hd720')) quality = 'hd720';
+        else {
+            for (const q of ['large', 'medium', 'small', 'tiny']) {
+                if (levels.includes(q)) { quality = q; break; }
+            }
+        }
+        if (!quality) return;
+        try {
+            if (target.getPlaybackQuality?.() !== quality) target.setPlaybackQuality(quality);
+        } catch {}
+    }
     function finish(id) {
         clearResume(id);
         if (!active || pending || playingId !== id || queue[0]?.id !== id || !socket.connected) return;
@@ -285,9 +303,20 @@
                     width: '100%', height: '100%', videoId: item.videoId,
                     playerVars: { autoplay: 1, playsinline: 1, controls: 0, rel: 0, origin: location.origin },
                     events: {
-                        onReady: event => { if (run === generation) { mediaReady = true; updateTransport(); applyEmbedVolume(); if (resumeAt) { event.target.seekTo(resumeAt, true); resumeAt = 0; } if (!paused && !bingoLive()) event.target.playVideo(); } },
+                        onReady: event => {
+                            if (run !== generation) return;
+                            mediaReady = true;
+                            updateTransport();
+                            applyEmbedVolume();
+                            preferYouTubeQuality(event.target);
+                            if (resumeAt) { event.target.seekTo(resumeAt, true); resumeAt = 0; }
+                            if (!paused && !bingoLive()) event.target.playVideo();
+                        },
                         onStateChange: event => {
                             if (run !== generation) return;
+                            if (event.data === YT.PlayerState.BUFFERING || event.data === YT.PlayerState.PLAYING) {
+                                preferYouTubeQuality(event.target);
+                            }
                             actuallyPlaying = event.data === YT.PlayerState.PLAYING;
                             if (actuallyPlaying) { paused = false; notify(''); applyEmbedVolume(); }
                             if (event.data === YT.PlayerState.PAUSED) paused = true;
@@ -349,6 +378,14 @@
         if (playingId !== queue[0]?.id) stop(); display(); playHead();
     });
     socket.on('toggleVideo', data => { visible = Boolean(data.showVideo); display(); });
+    // Luces de concierto sobre el video: el streamer las enciende o apaga con !luces.
+    const stageLights = document.createElement('div');
+    stageLights.className = 'stage-lights'; stageLights.setAttribute('aria-hidden', 'true');
+    for (const part of ['beam beam-1', 'beam beam-2', 'beam beam-3', 'beam beam-4', 'laser laser-1', 'laser laser-2', 'pulse']) {
+        const layer = document.createElement('span'); layer.className = part; stageLights.append(layer);
+    }
+    el('video-container').append(stageLights);
+    socket.on('stageLights', data => { document.body.classList.toggle('stage-lights-on', data?.on === true); });
     socket.on('playerAvailable', () => { if (token && !active) { socket.disconnect(); socket.connect(); } });
     socket.on('channelError', message => notify(String(message)));
     socket.on('operationError', message => { clearTimeout(retry); pending = false; updateTransport(); notify(String(message)); });
@@ -386,7 +423,10 @@
         const item = document.createElement('div'); item.className = 'msg';
         const user = document.createElement('div'); user.className = 'msg-user'; user.textContent = data.user || '';
         const text = document.createElement('div'); text.className = 'msg-text';
-        renderChatContent(text, typeof data.content === 'string' ? data.content : '');
+        const content = typeof data.content === 'string' ? data.content : '';
+        // Un usuario baneado solo comenta texto: sin emotes ni estilo destacado.
+        if (data.textOnly === true) { item.className = 'msg text-only'; text.textContent = content; }
+        else renderChatContent(text, content);
         item.append(user, text); const body = el('chat-messages'); body.append(item);
         while (body.children.length > 4) body.firstChild.remove();
     });

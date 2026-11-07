@@ -1006,3 +1006,6 @@ body.lite #video-title.scrolling { text-overflow: ellipsis; }
     .tip.current { display: flex; opacity: 1; }
     #video-title.scrolling { text-overflow: ellipsis; }
 }
+
+/* Usuario baneado con !ban: su mensaje queda apagado y en texto plano. */
+.msg.text-only { opacity: .62; filter: grayscale(1); }

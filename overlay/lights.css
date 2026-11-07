@@ -1,0 +1,85 @@
+/* Concert stage lights drawn over the music video. The streamer toggles them with !luces;
+   app.js adds the layer inside #video-container and toggles body.stage-lights-on.
+   Shared by every overlay theme. Animations only run while the lights are on, also in lite
+   mode, because the streamer asked for them explicitly. */
+.stage-lights {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    overflow: hidden;
+    pointer-events: none;
+    opacity: 0;
+    mix-blend-mode: screen;
+    transition: opacity 600ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+body.stage-lights-on .stage-lights { opacity: 1; }
+.stage-lights span { position: absolute; display: block; }
+
+/* Moving-head beams: cones hanging from the top edge that sweep left and right. */
+.stage-lights .beam {
+    top: -6%;
+    width: 46%;
+    height: 130%;
+    transform-origin: 50% 0;
+    clip-path: polygon(46% 0, 54% 0, 100% 100%, 0 100%);
+    opacity: .7;
+}
+.stage-lights .beam-1 { left: -8%; background: linear-gradient(to bottom, rgba(83, 252, 24, .95), rgba(83, 252, 24, 0) 82%); }
+.stage-lights .beam-2 { left: 18%; background: linear-gradient(to bottom, rgba(255, 43, 214, .95), rgba(255, 43, 214, 0) 82%); }
+.stage-lights .beam-3 { left: 44%; background: linear-gradient(to bottom, rgba(34, 228, 255, .95), rgba(34, 228, 255, 0) 82%); }
+.stage-lights .beam-4 { left: 66%; background: linear-gradient(to bottom, rgba(138, 92, 255, .95), rgba(138, 92, 255, 0) 82%); }
+body.stage-lights-on .stage-lights .beam { animation: stage-sweep 3.6s cubic-bezier(0.65, 0, 0.35, 1) infinite alternate; }
+body.stage-lights-on .stage-lights .beam-2 { animation-duration: 2.9s; animation-delay: -1.2s; }
+body.stage-lights-on .stage-lights .beam-3 { animation-duration: 3.2s; animation-delay: -2.1s; animation-direction: alternate-reverse; }
+body.stage-lights-on .stage-lights .beam-4 { animation-duration: 4.1s; animation-delay: -.6s; animation-direction: alternate-reverse; }
+
+/* Lasers: thin bright lines fanning out from the bottom corners. */
+.stage-lights .laser {
+    bottom: 0;
+    width: 3px;
+    height: 150%;
+    transform-origin: 50% 100%;
+    border-radius: 2px;
+}
+.stage-lights .laser-1 { left: 6%; background: #53fc18; box-shadow: 0 0 6px 2px rgba(83, 252, 24, .8); }
+.stage-lights .laser-2 { right: 6%; background: #ff2bd6; box-shadow: 0 0 6px 2px rgba(255, 43, 214, .8); }
+body.stage-lights-on .stage-lights .laser-1 { animation: stage-laser-left 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite alternate; }
+body.stage-lights-on .stage-lights .laser-2 { animation: stage-laser-right 2.1s cubic-bezier(0.65, 0, 0.35, 1) -.8s infinite alternate; }
+
+/* Beat glow from the bottom at 128 BPM. Soft amplitude, never a full-screen strobe. */
+.stage-lights .pulse {
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 110%, rgba(255, 255, 255, .55), rgba(255, 43, 214, .25) 40%, rgba(0, 0, 0, 0) 75%);
+    opacity: .15;
+}
+body.stage-lights-on .stage-lights .pulse { animation: stage-beat 469ms cubic-bezier(0.32, 0.72, 0, 1) infinite; }
+
+/* The player frame glows with the show. */
+body.stage-lights-on #video-container { animation: stage-frame 3.8s steps(1, end) infinite; }
+
+@keyframes stage-sweep {
+    from { transform: rotate(-32deg); }
+    to { transform: rotate(32deg); }
+}
+@keyframes stage-laser-left {
+    from { transform: rotate(18deg); }
+    to { transform: rotate(68deg); }
+}
+@keyframes stage-laser-right {
+    from { transform: rotate(-18deg); }
+    to { transform: rotate(-68deg); }
+}
+@keyframes stage-beat {
+    0% { opacity: .45; }
+    100% { opacity: .1; }
+}
+@keyframes stage-frame {
+    0% { box-shadow: 0 0 18px 4px rgba(83, 252, 24, .75); }
+    25% { box-shadow: 0 0 18px 4px rgba(255, 43, 214, .75); }
+    50% { box-shadow: 0 0 18px 4px rgba(34, 228, 255, .75); }
+    75% { box-shadow: 0 0 18px 4px rgba(138, 92, 255, .75); }
+}
+@media (prefers-reduced-motion: reduce) {
+    body.stage-lights-on .stage-lights *,
+    body.stage-lights-on #video-container { animation: none !important; }
+}

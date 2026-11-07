@@ -177,6 +177,38 @@ test('chat preserves Unicode emoji and renders Kick emotes safely with explicit 
     app.handlers.chatMessage({ user: 'viewer', content: '[emote:https://evil.example:x] <script>' });
     assert.equal(app.get('chat-messages').children[2].children[1].textContent, '[emote:https://evil.example:x] <script>');
 });
+test('banned users appear as plain text without emotes', () => {
+    const app = overlay();
+    app.handlers.chatMessage({ user: 'troll', content: 'hola [emote:37226:KEKW]', textOnly: true });
+    app.handlers.chatMessage({ user: 'viewer', content: 'hola [emote:37226:KEKW]', textOnly: 'yes' });
+    const [banned, normal] = app.get('chat-messages').children;
+    assert.equal(banned.className, 'msg text-only');
+    assert.equal(banned.children[1].textContent, 'hola [emote:37226:KEKW]');
+    assert.equal(banned.children[1].children.length, 0);
+    assert.equal(normal.className, 'msg');
+    assert.equal(normal.children[1].children[1].alt, 'KEKW');
+});
+test('stage lights sit over the video and follow the !luces state from the server', () => {
+    const app = overlay('', '?ch=alpha');
+    const layer = app.get('video-container').children.at(-1);
+    assert.equal(layer.className, 'stage-lights');
+    assert.equal(layer.getAttribute('aria-hidden'), 'true');
+    assert.ok(layer.children.some(child => child.className.startsWith('beam')));
+    const body = app.context.document.body.classList;
+    assert.ok(!body.contains('stage-lights-on'));
+    app.handlers.stageLights({ on: true }); assert.ok(body.contains('stage-lights-on'));
+    app.handlers.stageLights({ on: 'true' }); assert.ok(!body.contains('stage-lights-on'));
+    app.handlers.stageLights({ on: true }); app.handlers.stageLights(null); assert.ok(!body.contains('stage-lights-on'));
+    for (const page of ['pixel.html', 'vsaturn.html']) {
+        assert.match(fs.readFileSync(__dirname + '/../overlay/' + page, 'utf8'), /<link rel="stylesheet" href="\/lights\.css">/, page);
+    }
+    const lights = fs.readFileSync(__dirname + '/../overlay/lights.css', 'utf8');
+    assert.match(lights, /\.stage-lights \{[^}]*pointer-events: none;[^}]*opacity: 0;/);
+    assert.match(lights, /body\.stage-lights-on \.stage-lights \{ opacity: 1; \}/);
+    // Beat glow below three flashes per second (photosensitivity guidance).
+    const beat = Number(lights.match(/stage-beat (\d+)ms/)[1]);
+    assert.ok(beat >= 334, `beat ${beat}ms`);
+});
 test('topbar controls toggle local panels, chat and player without changing queue permissions', () => {
     const app = overlay('#token=private', '?ch=alpha');
     assert.equal(app.get('chat-toggle').getAttribute('aria-pressed'), 'false');
@@ -259,19 +291,34 @@ test('top area is a single desktop bar without stream status cards', () => {
     assert.match(html, /id="stream-title-display"[^>]*>seniordai</);
     assert.match(html, /id="music-anchor"/);
 });
-test('original kinetic artwork stays decorative and the game canvas stays transparent', () => {
+test('the game canvas stays transparent and decorative art never intercepts clicks', () => {
     const html = fs.readFileSync(__dirname + '/../overlay/pixel.html', 'utf8');
     const css = fs.readFileSync(__dirname + '/../overlay/style.css', 'utf8');
-    assert.match(html, /class="kinetic-corner kinetic-corner-left" aria-hidden="true"/);
-    assert.match(html, /class="kinetic-corner kinetic-corner-right" aria-hidden="true"/);
-    assert.match(css, /\.kinetic-corner \{[^}]*height: 68px;[^}]*overflow: hidden;[^}]*pointer-events: none;/);
+    assert.doesNotMatch(html, /kinetic-corner/);
     assert.match(css, /html, body \{[^}]*background: transparent;/);
-    assert.match(css, /url\('\/kinetic-burst\.svg'\)/);
-    assert.ok(fs.existsSync(__dirname + '/../overlay/kinetic-burst.svg'));
     const hand = fs.readFileSync(__dirname + '/../overlay/daibot.svg', 'utf8');
     assert.doesNotMatch(hand, /<image|href=|<script|on\w+=/);
     assert.doesNotMatch(html, /widget-heading|heading-sticker|heading-mark|>Chat en vivo</);
     assert.match(html, /class="alert-art channel-avatar-sync" src="\/daibot\.svg" alt="" aria-hidden="true"/);
+});
+test('panels share one tilt and one top and bottom edge', () => {
+    const css = fs.readFileSync(__dirname + '/../overlay/style.css', 'utf8');
+    assert.match(css, /--tilt: -4deg;/);
+    for (const selector of ['.topbar-start {', '#media-widget[data-shown="true"] {', '#alert-box.show {', '.tip {', '.msg {']) {
+        const start = css.indexOf(selector);
+        assert.notEqual(start, -1, selector);
+        const rule = css.slice(start, css.indexOf('}', start));
+        assert.match(rule, /skewX\(var\(--tilt\)\)/, selector);
+        assert.doesNotMatch(rule, /rotate\(/, selector);
+    }
+    for (const selector of ['#chat-widget', '#tips']) {
+        const start = css.indexOf(`${selector} {`);
+        assert.match(css.slice(start, css.indexOf('}', start)), /bottom: var\(--edge-bottom\);/, selector);
+    }
+    for (const selector of ['#hud.system-topbar', '#media-widget {']) {
+        const start = css.indexOf(selector.endsWith('{') ? selector : `${selector} {`);
+        assert.match(css.slice(start, css.indexOf('}', start)), /top: var\(--edge-top\);/, selector);
+    }
 });
 test('visual system pairs comic headings with readable body type and preserves scale and motion', () => {
     const html = fs.readFileSync(__dirname + '/../overlay/pixel.html', 'utf8');
@@ -327,13 +374,12 @@ test('lite mode is the default and stops continuous animations and rotates tips 
     assert.ok(!normal.context.document.body.classList.contains('lite'));
 
     const css = fs.readFileSync(__dirname + '/../overlay/style.css', 'utf8');
-    const block = css.slice(css.indexOf('body.lite .kinetic-corner::before'), css.indexOf('@media (prefers-reduced-motion: reduce)'));
-    for (const selector of ['.kinetic-corner::before', '.topbar-center::after', '#alert-box::before', '.brand-live::before', '.vinyl-record', '.music-bars i', '.title-inner.marquee', '.tip::after']) {
+    const block = css.slice(css.indexOf('body.lite .brand-live::before'), css.indexOf('@media (prefers-reduced-motion: reduce)'));
+    for (const selector of ['.brand-live::before', '.vinyl-record', '.music-bars i', '.equalizer i', '.bingo-drum i', '.title-inner.marquee', '.tip']) {
         assert.ok(block.includes(`body.lite ${selector}`), selector);
     }
     assert.match(block, /\{ animation: none !important; \}/);
     assert.match(block, /body\.lite \.tip\.current \{ display: flex; \}/);
-    assert.match(css, /#alert-box:not\(\.show\)::before[^{]*\{ animation-play-state: paused; \}/);
 });
 test('clock skips DOM writes when nothing changed', () => {
     const app = overlay();

@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@500;600&family=Manrope:wght@400;500;600;700&family=VT323&display=swap" rel="stylesheet">
     <script src="/sio.js"></script>
-    <link rel="stylesheet" href="/vsaturn.css?v=hero-cyan">
+    <link rel="stylesheet" href="/vsaturn.css?v=console-lcd2">
     <link rel="stylesheet" href="/lights.css">
 </head>
 <body>
@@ -40,10 +40,6 @@
         </div></div>
         <div class="island-slot" data-slot="music"><div class="island-clip">
         <span class="pad-rule" aria-hidden="true"></span>
-        <div id="topbar-requester" class="topbar-requester" hidden>
-            <span class="requester-label">Pedido por</span>
-            <span id="video-requester">---</span>
-        </div>
         <div id="music-transport" class="aero-control-cluster music-transport" role="group" aria-label="Reproducción musical" data-state="idle">
             <div class="transport-row">
             <span class="vinyl-record" aria-hidden="true"></span>
@@ -112,8 +108,13 @@
         <div class="media-info deck-lcd">
             <!-- Mascota pixelada original: salta mientras suena la música. -->
             <span class="deck-pet" aria-hidden="true"><i></i></span>
-            <div class="media-label"><span class="equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i></span> Ahora suena</div>
+            <div class="media-label"><span class="equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i></span> <span class="np-text" role="text" aria-label="Ahora suena"><span aria-hidden="true"><i style="--i:0">A</i><i style="--i:1">h</i><i style="--i:2">o</i><i style="--i:3">r</i><i style="--i:4">a</i><i style="--i:5">&nbsp;</i><i style="--i:6">s</i><i style="--i:7">u</i><i style="--i:8">e</i><i style="--i:9">n</i><i style="--i:10">a</i></span></span></div>
             <div id="video-title">---</div>
+            <!-- Quién pidió la canción, en la pantalla del reproductor. -->
+            <div id="topbar-requester" class="deck-requester" hidden>
+                <span class="requester-label">pedido por</span>
+                <span id="video-requester">---</span>
+            </div>
             <span id="queue-indicator"></span>
         </div>
         <!-- Controles de la música: botones redondos de goma del reproductor. -->

@@ -17,6 +17,10 @@ struct AdvanceCmd {
     version: u64,
 }
 #[derive(serde::Deserialize)]
+struct PreviousCmd {
+    version: u64,
+}
+#[derive(serde::Deserialize)]
 struct PingCmd {
     epoch: Option<u64>,
 }
@@ -96,12 +100,7 @@ pub fn setup(io: &socketioxide::SocketIo, global: Arc<AppState>) {
                     )
                     .ok();
                 let q = ch.video_queue.read().await;
-                socket
-                    .emit(
-                        "syncQueue",
-                        serde_json::json!({"items":q.items,"version":q.version}),
-                    )
-                    .ok();
+                socket.emit("syncQueue", q.sync_payload()).ok();
                 drop(q);
                 let bingo = ch.bingo.lock().await;
                 socket.emit("bingoState", bingo.snapshot()).ok();
@@ -155,11 +154,35 @@ pub fn setup(io: &socketioxide::SocketIo, global: Arc<AppState>) {
                                     .ok();
                             }
                             let q = ch.video_queue.read().await;
-                            s.emit(
-                                "syncQueue",
-                                serde_json::json!({"items":q.items,"version":q.version}),
-                            )
-                            .ok();
+                            s.emit("syncQueue", q.sync_payload()).ok();
+                        }
+                    },
+                );
+                let (bc, bg) = (ch.clone(), global.clone());
+                socket.on(
+                    "previousQueue",
+                    move |s: SocketRef, Data(data): Data<PreviousCmd>| {
+                        let (ch, app) = (bc.clone(), bg.clone());
+                        async move {
+                            if ch.cancel.is_cancelled()
+                                || !ch
+                                    .player
+                                    .lock()
+                                    .await
+                                    .as_ref()
+                                    .is_some_and(|p| p.socket_id == s.id.to_string())
+                            {
+                                return;
+                            }
+                            if let Err(e) =
+                                queue::change(&ch, &app, |q| q.previous_if(data.version)).await
+                            {
+                                tracing::error!("[Queue][{}] Previous: {e}", ch.slug);
+                                s.emit("operationError", "No se pudo volver a la canción anterior")
+                                    .ok();
+                            }
+                            let q = ch.video_queue.read().await;
+                            s.emit("syncQueue", q.sync_payload()).ok();
                         }
                     },
                 );

@@ -21,12 +21,17 @@
     --violet-deep: #5b45b5;
     --aqua: #7fd8ff;
     --led: #53fc18;
+    /* Naranja fosforescente: el LED de lectura del frontal; con --led forma el borde del video. */
+    --led-orange: #ff7a00;
+    /* Neón del avatar: cian y magenta, opuestos al naranja y verde del video para que no se confundan. */
+    --neon-cyan: #00e5ff;
+    --neon-magenta: #ff2bd6;
     --white: #ffffff;
     --safe: 24px;
     /* Zonas del lienzo OBS 1920×1080. El centro del juego queda libre salvo cuando el bingo está activo. */
     --rail-top: 0px;
     --rail-h: 128px;
-    --avatar: 88px;
+    --avatar: 96px;
     --yt-w: 384px;
     --yt-slot: 416px;
     --chat-w: 440px;
@@ -178,17 +183,15 @@ button:focus-visible, input:focus-visible {
     place-items: center;
     width: var(--avatar-size);
     height: var(--avatar-size);
-    padding: 8px;
+    padding: 6px;
     border-radius: 9999px;
+    /* Protagonista: anillo de neón cian y magenta (distinto del naranja y verde del video) que
+       gira sin parar, con reflejo vítreo arriba y un halo que late como un foco. Es pequeño, así
+       que se anima también en modo ligero. */
     background:
-        radial-gradient(120% 70% at 50% 0%, rgba(255, 248, 220, 0.95) 0 20%, rgba(255, 248, 220, 0) 46%),
-        conic-gradient(from 210deg, #8a5a12, #ffe7a0, #fff8dc, #e2b340, #a56b14, #fff1c2, #c9922a, #8a5a12);
-    box-shadow:
-        0 0 0 2px #fff4cc,
-        0 0 16px 2px rgba(255, 198, 64, 0.9),
-        0 0 34px 8px rgba(214, 146, 24, 0.55),
-        inset 0 -6px 8px rgba(90, 52, 8, 0.35);
-    animation: gold-place 2200ms var(--swing) infinite;
+        radial-gradient(120% 70% at 50% 0%, rgba(255, 255, 255, 0.7) 0 18%, rgba(255, 255, 255, 0) 44%),
+        conic-gradient(from var(--edge-angle), var(--neon-cyan), #8ff4ff, #ffffff, #ff8ae9, var(--neon-magenta), #ff8ae9, #ffffff, #8ff4ff, var(--neon-cyan));
+    animation: edge-spin 4000ms linear infinite, hero-glow 2400ms var(--swing) infinite;
 }
 /* Brillo que recorre el aro, como el reflejo de un trofeo. */
 .disc-lid::before {
@@ -213,7 +216,7 @@ button:focus-visible, input:focus-visible {
 .disc-lid .channel-avatar {
     position: relative;
     z-index: 1;
-    box-shadow: 0 0 0 2px #fff8e4, 0 0 0 4px #d4a017;
+    box-shadow: 0 0 0 2px var(--white), 0 0 0 4px var(--ink), 0 0 12px 4px rgba(0, 0, 0, 0.35);
 }
 .brand-copy { display: flex; flex-direction: column; gap: 6px; min-width: 0; justify-content: center; }
 .brand-meta { display: flex; align-items: center; gap: 8px; }
@@ -592,10 +595,22 @@ body.no-chat #chat-widget { display: none; }
     margin: 0;
     aspect-ratio: 16 / 9;
     overflow: hidden;
-    border-radius: 8px;
-    background: var(--ink);
-    box-shadow: 0 0 0 4px var(--slate-light), 0 0 0 5px rgba(22, 29, 54, 0.35), inset 0 0 24px rgba(0, 0, 0, 0.6);
+    border-radius: 10px;
+    /* Borde iluminado de neón en los dos LEDs de la consola, naranja y verde fosforescentes. Gira
+       despacio mientras suena la música y cada lado proyecta su propio resplandor. */
+    border: 3px solid transparent;
+    background:
+        linear-gradient(var(--ink), var(--ink)) padding-box,
+        conic-gradient(from var(--edge-angle), var(--led-orange), #ffd23f, var(--led), #b6ff94, var(--led), #ffd23f, var(--led-orange)) border-box;
+    box-shadow:
+        -8px 0 22px -2px rgba(255, 122, 0, 0.85),
+        8px 0 22px -2px rgba(83, 252, 24, 0.8),
+        0 0 32px 2px rgba(255, 210, 63, 0.25),
+        0 0 0 1px rgba(22, 29, 54, 0.4),
+        inset 0 0 24px rgba(0, 0, 0, 0.6);
+    animation: edge-spin 6000ms linear infinite paused;
 }
+#media-widget[data-state="playing"] #video-container { animation-play-state: running; }
 /* TikTok es vertical: el reproductor pasa a 9:16 y se pega al borde izquierdo, bajo la hora;
    queda por encima del bingo y del chat mientras suena. YouTube permanece arriba a la derecha. */
 #youtube-player, #direct-video { width: 100%; height: 100%; display: block; }
@@ -1222,20 +1237,20 @@ body.bingo-active #media-widget {
 }
 @keyframes msg-out { to { opacity: 0; transform: translateY(-8px); filter: blur(4px); } }
 @keyframes led-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
-@keyframes gold-place {
+@keyframes hero-glow {
     0%, 100% {
         box-shadow:
-            0 0 0 2px #fff4cc,
-            0 0 12px 1px rgba(255, 198, 64, 0.7),
-            0 0 26px 6px rgba(214, 146, 24, 0.38),
-            inset 0 -6px 8px rgba(90, 52, 8, 0.35);
+            0 0 0 2px rgba(255, 255, 255, 0.9),
+            -6px 0 16px 2px rgba(0, 229, 255, 0.75),
+            6px 0 16px 2px rgba(255, 43, 214, 0.7),
+            0 0 28px 6px rgba(190, 140, 255, 0.3);
     }
     50% {
         box-shadow:
-            0 0 0 2px #fffdf4,
-            0 0 22px 4px rgba(255, 214, 96, 1),
-            0 0 46px 14px rgba(232, 168, 32, 0.78),
-            inset 0 -6px 8px rgba(90, 52, 8, 0.28);
+            0 0 0 2px var(--white),
+            -8px 0 26px 6px rgba(0, 229, 255, 0.95),
+            8px 0 26px 6px rgba(255, 43, 214, 0.9),
+            0 0 48px 14px rgba(190, 140, 255, 0.45);
     }
 }
 @keyframes notch-drop {
@@ -1243,6 +1258,9 @@ body.bingo-active #media-widget {
     to { opacity: 1; transform: none; }
 }
 @keyframes pet-hop { 50% { transform: translateY(-3px); } }
+/* Ángulo animable para el borde iluminado del video. */
+@property --edge-angle { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+@keyframes edge-spin { to { --edge-angle: 360deg; } }
 @keyframes disc-spin { to { transform: rotate(360deg); } }
 @keyframes music-bars { to { transform: scaleY(.3); } }
 @keyframes title-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
@@ -1254,9 +1272,9 @@ body.bingo-active #media-widget {
 }
 /* Modo ligero (?lite=1): conserva entradas y alertas, pero elimina todo movimiento continuo
    para que la página quede quieta entre eventos. app.js rota los consejos cada 9 s. */
-body.lite .brand-live::before, body.lite .disc-lid, body.lite .disc-lid::before, body.lite .vinyl-record,
+body.lite .brand-live::before, body.lite .disc-lid::before, body.lite .vinyl-record,
 body.lite .music-bars i, body.lite .equalizer i,
-body.lite .bingo-drum i, body.lite .deck-pet i, body.lite .title-inner.marquee,
+body.lite .bingo-drum i, body.lite .deck-pet i, body.lite #video-container, body.lite .title-inner.marquee,
 body.lite #video-title.scrolling { text-overflow: ellipsis; }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }

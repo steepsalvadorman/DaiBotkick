@@ -249,12 +249,11 @@ async fn dynamic_commands(c: &Ctx<'_>) -> bool {
                 return true;
             }
             if !ch.followers_known.load(Ordering::Relaxed) {
-                chat::send(
-                    "Kick no proporciona un total de seguidores disponible ahora.",
-                    ch,
-                    global,
-                )
-                .await;
+                let message = format!(
+                    "{} no proporciona un total de seguidores disponible ahora.",
+                    ch.platform.name()
+                );
+                chat::send(&message, ch, global).await;
                 return true;
             }
             let actual = ch.followers.load(Ordering::Relaxed);

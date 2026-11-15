@@ -1382,6 +1382,10 @@ struct MockTwitch {
     validations: AtomicUsize,
     subscriptions: Mutex<Vec<(String, Value)>>,
     subscription_status: Mutex<Option<StatusCode>>,
+    /// Mensajes enviados al chat, con el token usado y el instante de llegada.
+    chat: Mutex<Vec<(String, Value, std::time::Instant)>>,
+    /// Respuestas 401 que devolverá el envío al chat antes de aceptar.
+    chat_unauthorized: AtomicUsize,
 }
 
 impl MockTwitch {
@@ -1419,8 +1423,34 @@ impl MockTwitch {
                 .await
                 .unwrap_or(StatusCode::ACCEPTED)
         }
+        async fn chat(
+            State(mock): State<Arc<MockTwitch>>,
+            headers: HeaderMap,
+            axum::Json(body): axum::Json<Value>,
+        ) -> (StatusCode, axum::Json<Value>) {
+            // Los envíos de un canal van de uno en uno, así que leer y restar no compite.
+            if mock.chat_unauthorized.load(Ordering::Relaxed) > 0 {
+                mock.chat_unauthorized.fetch_sub(1, Ordering::Relaxed);
+                return (StatusCode::UNAUTHORIZED, axum::Json(json!({})));
+            }
+            let token = headers["authorization"].to_str().unwrap().to_owned();
+            let dropped = body["message"] == "drop me";
+            mock.chat
+                .lock()
+                .await
+                .push((token, body, std::time::Instant::now()));
+            (
+                StatusCode::OK,
+                axum::Json(if dropped {
+                    json!({"data":[{"is_sent":false,"drop_reason":{"code":"msg_duplicate","message":"duplicado"}}]})
+                } else {
+                    json!({"data":[{"message_id":"x","is_sent":true}]})
+                }),
+            )
+        }
         test_support::HttpServer::start(
             axum::Router::new()
+                .route("/helix/chat/messages", axum::routing::post(chat))
                 .route(
                     "/helix/eventsub/subscriptions",
                     axum::routing::post(subscribe),
@@ -1820,6 +1850,94 @@ async fn twitch_eventsub_subscribes_and_delivers_chat_and_alerts() {
     )
     .await;
     assert!(ch.live_since.read().await.is_none());
+    app.shutdown.cancel();
+    database.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL"]
+async fn twitch_commands_reply_in_chat_as_the_bot_spaced_and_in_order() {
+    use crate::twitch::{bot, ingest};
+    let database = test_support::TestDatabase::new().await;
+    let mock = Arc::new(MockTwitch::default());
+    let service = mock.serve().await;
+    let mut app = test_support::app(database.pool.clone());
+    Arc::get_mut(&mut app).unwrap().twitch_endpoints = crate::twitch::Endpoints {
+        oauth: format!("{}/oauth2", service.url),
+        api: format!("{}/helix", service.url),
+    };
+    let row = db::ChannelRow {
+        platform: "twitch".into(),
+        ..test_support::row("ana", 5)
+    };
+    db::upsert_channel(&database.pool, &row).await.unwrap();
+    channel::start_channel(
+        db::load_channel(&database.pool, Platform::Twitch, "ana")
+            .await
+            .unwrap(),
+        app.clone(),
+    )
+    .await
+    .unwrap();
+    let ch = app.channels.get("twitch:ana").unwrap().clone();
+
+    // Sin cuenta bot no se envía nada.
+    crate::chat::send("hola", &ch, &app).await;
+    assert!(mock.chat.lock().await.is_empty());
+    *app.twitch_bot.write().await = Some(bot::BotAccount {
+        user_id: bot::BOT_USER_ID.into(),
+        login: "daibotsito".into(),
+        access_token: "bot-access".into(),
+        refresh_token: "bot-refresh".into(),
+        token_expires: i64::MAX,
+    });
+
+    // Un comando escrito en Twitch recibe respuesta de DaiBotsito en ese mismo chat.
+    let command = json!({"subscription":{"type":"channel.chat.message"},"event":{
+        "broadcaster_user_id":"5","chatter_user_id":"9","chatter_user_login":"viewer",
+        "chatter_user_name":"Viewer","message":{"text":"!dado"},"badges":[]}});
+    ingest::process(&app, "channel.chat.message", &command).await;
+    let sent = mock.chat.lock().await.clone();
+    assert_eq!(sent.len(), 1);
+    let (token, body, _) = &sent[0];
+    assert_eq!(token, "Bearer tw-access-1");
+    assert_eq!(body["broadcaster_id"], "5");
+    assert_eq!(body["sender_id"], bot::BOT_USER_ID);
+    assert!(
+        body["message"].as_str().unwrap().contains("Viewer"),
+        "{body}"
+    );
+
+    // Dos respuestas a la vez salen una tras otra, separadas al menos 1,5 s.
+    tokio::join!(
+        crate::chat::send("primero", &ch, &app),
+        crate::chat::send("segundo", &ch, &app)
+    );
+    let sent = mock.chat.lock().await.clone();
+    let mut tail: Vec<_> = sent[1..]
+        .iter()
+        .map(|(_, b, _)| b["message"].clone())
+        .collect();
+    tail.sort_by_key(|m| m.to_string());
+    assert_eq!(tail, [json!("primero"), json!("segundo")]);
+    for pair in sent.windows(2) {
+        assert!(pair[1].2.duration_since(pair[0].2) >= std::time::Duration::from_millis(1450));
+    }
+
+    // Un token de app rechazado se renueva y el mensaje se reenvía una vez.
+    let before = mock.token_requests.load(Ordering::Relaxed);
+    mock.chat_unauthorized.store(1, Ordering::Relaxed);
+    crate::chat::send("tras 401", &ch, &app).await;
+    assert_eq!(mock.token_requests.load(Ordering::Relaxed), before + 1);
+    let last = mock.chat.lock().await.last().unwrap().clone();
+    assert_eq!(last.1["message"], "tras 401");
+    assert_eq!(last.0, format!("Bearer tw-access-{}", before + 1));
+    // Un mensaje que Twitch descarta no rompe nada.
+    crate::chat::send("drop me", &ch, &app).await;
+    // Los mensajes largos se cortan en 500 caracteres.
+    crate::chat::send(&"é".repeat(600), &ch, &app).await;
+    let last = mock.chat.lock().await.last().unwrap().clone();
+    assert_eq!(last.1["message"].as_str().unwrap().chars().count(), 500);
     app.shutdown.cancel();
     database.cleanup().await;
 }

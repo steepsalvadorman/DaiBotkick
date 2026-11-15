@@ -11,6 +11,14 @@ pub enum Platform {
 }
 
 impl Platform {
+    /// Nombre de la plataforma para los mensajes del chat.
+    pub fn name(self) -> &'static str {
+        match self {
+            Platform::Kick => "Kick",
+            Platform::Twitch => "Twitch",
+        }
+    }
+
     /// Nombre guardado en la columna `platform` de la base.
     pub fn as_str(self) -> &'static str {
         match self {

@@ -12,10 +12,7 @@ use std::sync::Arc;
 pub async fn send(text: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
     match ch.platform {
         Platform::Kick => crate::kick::sender::send(text, ch, global).await,
-        // El emisor de Twitch llega en la etapa 5 del plan.
-        Platform::Twitch => {
-            tracing::warn!("[Chat][{}] Twitch aún no puede enviar mensajes", ch.slug)
-        }
+        Platform::Twitch => crate::twitch::sender::send(text, ch, global).await,
     }
 }
 

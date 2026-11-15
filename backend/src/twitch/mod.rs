@@ -5,6 +5,7 @@ pub mod auth;
 pub mod bot;
 pub mod eventsub;
 pub mod ingest;
+pub mod sender;
 
 use crate::state::{AppState, ChannelState};
 use std::sync::{atomic::Ordering, Arc};

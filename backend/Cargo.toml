@@ -25,6 +25,7 @@ chrono          = "0.4"
 url             = "2"
 rand            = "0.8"
 sha2            = { version = "0.10", features = ["oid"] }
+hmac            = "0.12"
 rsa             = "0.9"
 sqlx            = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "postgres", "macros", "migrate"] }
 dashmap         = "6"

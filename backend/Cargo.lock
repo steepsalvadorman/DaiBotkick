@@ -284,6 +284,7 @@ dependencies = [
  "chrono",
  "dashmap",
  "dotenvy",
+ "hmac",
  "rand 0.8.6",
  "reqwest",
  "rsa",

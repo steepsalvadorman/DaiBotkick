@@ -146,6 +146,7 @@ async fn main() {
         kick_endpoints,
         twitch_endpoints: twitch::Endpoints::default(),
         twitch_bot: RwLock::new(None),
+        twitch_app_token: Mutex::new(None),
         io: io_inner,
         db,
         channels: Arc::new(DashMap::new()),
@@ -274,6 +275,7 @@ fn build_router(
         .route("/auth/bingo", get(bingo_auth::login))
         .route("/auth/bingo/callback", get(bingo_auth::callback))
         .route("/kick_webhook", post(webhook::receive))
+        .route("/twitch_webhook", post(twitch::eventsub::receive))
         .route("/auth/twitch", get(twitch::auth::redirect_channel))
         .route("/auth/twitch/callback", get(twitch::auth::channel_callback))
         .route("/auth/twitch/bot", get(twitch::auth::redirect_bot))

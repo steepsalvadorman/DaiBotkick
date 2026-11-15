@@ -40,6 +40,7 @@ pub fn app_with_io(db: sqlx::PgPool, io: socketioxide::SocketIo) -> Arc<AppState
         kick_endpoints: crate::kick::Endpoints::default(),
         twitch_endpoints: crate::twitch::Endpoints::default(),
         twitch_bot: RwLock::new(None),
+        twitch_app_token: Mutex::new(None),
         io,
         db,
         channels: Arc::new(DashMap::new()),

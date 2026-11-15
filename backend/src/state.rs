@@ -196,6 +196,8 @@ pub struct AppState {
     pub twitch_endpoints: crate::twitch::Endpoints,
     /// Cuenta DaiBotsito; `None` hasta autorizarla en `/auth/twitch/bot`.
     pub twitch_bot: RwLock<Option<crate::twitch::bot::BotAccount>>,
+    /// Token de app de Twitch para EventSub y su vencimiento (unix).
+    pub twitch_app_token: Mutex<Option<(String, i64)>>,
     pub io: socketioxide::SocketIo,
     pub db: sqlx::PgPool,
     /// Clave del canal (`Platform::channel_key`) → ChannelState

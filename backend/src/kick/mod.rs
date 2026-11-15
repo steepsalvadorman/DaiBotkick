@@ -1,3 +1,4 @@
+pub mod ingest;
 pub mod sender;
 use crate::{
     db,

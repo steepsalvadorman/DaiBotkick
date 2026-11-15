@@ -52,9 +52,8 @@ pub async fn youtube(query: &str, app: &Arc<AppState>) -> Result<(String, String
     }
     let data: serde_json::Value = serde_json::from_slice(&output.stdout)
         .map_err(|_| "La búsqueda devolvió datos inválidos.")?;
-    choose(&data).ok_or(
-        "No encontré una canción reproducible. Prueba con el nombre y artista o un enlace.",
-    )
+    choose(&data)
+        .ok_or("No encontré una canción reproducible. Prueba con el nombre y artista o un enlace.")
 }
 
 fn choose(data: &serde_json::Value) -> Option<(String, String)> {
@@ -115,7 +114,10 @@ mod tests {
             Some(("eeeeeeeeeee".into(), "Cervecita - Flor Pileña".into()))
         );
         let long = serde_json::json!({"entries":[{"id":"ggggggggggg", "duration":5400, "title":"Mix de 90 minutos"}]});
-        assert_eq!(choose(&long), Some(("ggggggggggg".into(), "Mix de 90 minutos".into())));
+        assert_eq!(
+            choose(&long),
+            Some(("ggggggggggg".into(), "Mix de 90 minutos".into()))
+        );
         assert!(choose(&serde_json::json!({"entries":[]})).is_none());
         assert!(choose(&serde_json::json!({})).is_none());
     }

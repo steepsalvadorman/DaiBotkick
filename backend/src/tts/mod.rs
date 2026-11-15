@@ -307,7 +307,7 @@ mod tests {
             ("!comedia", "comedia"),
             ("!jacinta", fish_audio::VOICE_ALIAS),
         ] {
-            crate::commands::handle("Ana_7", &format!("{command} Hola"), true, &channel, &app)
+            crate::commands::handle_text("Ana_7", &format!("{command} Hola"), true, &channel, &app)
                 .await;
             let item = receiver.try_recv().unwrap();
             assert_eq!(item.text, "Ana 7 dice: Hola");
@@ -315,7 +315,7 @@ mod tests {
         }
         let mut used = std::collections::HashSet::new();
         for _ in 0..64 {
-            crate::commands::handle("Ana_7", "!s Hola", true, &channel, &app).await;
+            crate::commands::handle_text("Ana_7", "!s Hola", true, &channel, &app).await;
             let item = receiver.try_recv().unwrap();
             assert_eq!(item.text, "Ana 7 dice: Hola");
             assert!(DEFAULT_CHAT_VOICES.contains(&item.voice.as_str()));
@@ -326,7 +326,7 @@ mod tests {
             DEFAULT_CHAT_VOICES.len(),
             "!s debe alternar entre las voces masculinas"
         );
-        crate::commands::handle("Ana_7", "!dai Hola", true, &channel, &app).await;
+        crate::commands::handle_text("Ana_7", "!dai Hola", true, &channel, &app).await;
         assert!(receiver.try_recv().is_err());
     }
     #[tokio::test]

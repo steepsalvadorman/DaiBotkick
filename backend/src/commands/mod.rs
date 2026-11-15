@@ -80,6 +80,10 @@ async fn owner_commands(c: &Ctx<'_>) -> bool {
             stage_lights(args, ch, global).await;
             return true;
         }
+        if let Some(args) = command_args(content, "!meteoros") {
+            meteor_shower(args, ch, global).await;
+            return true;
+        }
         match cmd {
             "!von" => {
                 visibility(ch, global, true).await;
@@ -718,6 +722,41 @@ async fn stage_lights(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>
     );
 }
 
+/// Interpreta la intensidad de `!meteoros`; `None` si el argumento no es válido.
+fn meteor_level(args: &str) -> Option<&'static str> {
+    match args.to_lowercase().as_str() {
+        "" | "normal" => Some("normal"),
+        "suave" | "poca" | "poco" => Some("light"),
+        "tormenta" | "fuerte" | "max" | "apocalipsis" => Some("storm"),
+        _ => None,
+    }
+}
+
+/// `!meteoros [suave|tormenta]`: lanza una lluvia de meteoritos sobre todo el overlay.
+async fn meteor_shower(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
+    let Some(level) = meteor_level(args) else {
+        sender::send(
+            "☄️ Uso: !meteoros · !meteoros suave · !meteoros tormenta",
+            ch,
+            global,
+        )
+        .await;
+        return;
+    };
+    crate::server::ns_emit(
+        global,
+        &ch.slug,
+        "meteorShower",
+        serde_json::json!({"level": level}),
+    );
+    let announce = if level == "storm" {
+        "☄️☄️☄️ ¡TORMENTA DE METEORITOS! ¡Agárrense, chat! ☄️☄️☄️"
+    } else {
+        "☄️ ¡Lluvia de meteoritos! ☄️"
+    };
+    sender::send(announce, ch, global).await;
+}
+
 pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
     if ch.cancel.is_cancelled() {
         return;
@@ -1095,6 +1134,15 @@ mod tests {
             "https://user:pass@cdn.example.com/video.mp4"
         ));
     }
+    #[test]
+    fn meteor_level_accepts_spanish_intensities() {
+        assert_eq!(meteor_level(""), Some("normal"));
+        assert_eq!(meteor_level("SUAVE"), Some("light"));
+        assert_eq!(meteor_level("tormenta"), Some("storm"));
+        assert_eq!(meteor_level("fuerte"), Some("storm"));
+        assert_eq!(meteor_level("mil"), None);
+    }
+
     #[test]
     fn command_args_ignores_case_and_requires_separator() {
         assert_eq!(

@@ -440,6 +440,46 @@
     }
     document.body.append(stageLights);
     socket.on('stageLights', data => { document.body.classList.toggle('stage-lights-on', data?.on === true); });
+    // Lluvia de meteoritos en pixel art (!meteoros). Cada meteorito es un sprite de meteors.css
+    // con posición, tamaño, velocidad y paleta al azar; se borra al terminar su caída.
+    const meteorLevels = {
+        light: { count: 16, seconds: 10, scale: [0.6, 1.1] },
+        normal: { count: 36, seconds: 15, scale: [0.6, 1.4] },
+        storm: { count: 90, seconds: 20, scale: [0.7, 2.2] },
+    };
+    const meteorLayer = document.createElement('div');
+    meteorLayer.className = 'meteor-shower'; meteorLayer.setAttribute('aria-hidden', 'true');
+    document.body.append(meteorLayer);
+    let meteorsUntil = 0, meteorTimer;
+    const between = ([low, high]) => low + Math.random() * (high - low);
+    function launchMeteor(config) {
+        const meteor = document.createElement('span');
+        const roll = Math.random();
+        meteor.className = `meteor${roll < 0.2 ? ' neon' : roll < 0.3 ? ' toxic' : ''}`;
+        meteor.style.setProperty('--x', `${between([15, 125]).toFixed(1)}%`);
+        meteor.style.setProperty('--scale', between(config.scale).toFixed(2));
+        meteor.style.setProperty('--dur', `${Math.round(between([1600, 3200]))}ms`);
+        meteor.style.setProperty('--dist', `${Math.round(between([1100, 1500]))}px`);
+        meteor.append(document.createElement('i'));
+        meteor.addEventListener('animationend', event => { if (event.target === meteor) meteor.remove(); });
+        meteorLayer.append(meteor);
+    }
+    function meteorShower(data) {
+        const level = Object.hasOwn(meteorLevels, data?.level) ? data.level : 'normal';
+        const config = meteorLevels[level];
+        const span = config.seconds * 1000;
+        meteorLayer.classList.add('active');
+        if (level === 'storm') {
+            const flash = document.createElement('div'); flash.className = 'meteor-flash';
+            flash.addEventListener('animationend', () => flash.remove());
+            meteorLayer.append(flash);
+        }
+        for (let n = 0; n < config.count; n++) setTimeout(() => launchMeteor(config), Math.random() * span);
+        meteorsUntil = Math.max(meteorsUntil, Date.now() + span + 3500);
+        clearTimeout(meteorTimer);
+        meteorTimer = setTimeout(() => { if (Date.now() >= meteorsUntil) meteorLayer.classList.remove('active'); }, meteorsUntil - Date.now());
+    }
+    socket.on('meteorShower', meteorShower);
     socket.on('playerAvailable', () => { if (token && !active) { socket.disconnect(); socket.connect(); } });
     socket.on('channelError', message => notify(String(message)));
     socket.on('operationError', message => { clearTimeout(retry); pending = false; updateTransport(); notify(String(message)); });
@@ -656,7 +696,8 @@
     });
     updateTransport();
     if (demo) startDemo();
-    // Guion del modo demo. Teclas: 1 alerta · 2 chat · 3 bingo (avanza fase) · 4 luces · 5 añade canción.
+    // Guion del modo demo. Teclas: 1 alerta · 2 chat · 3 bingo (avanza fase) · 4 luces · 5 añade canción
+    // · 7 meteoritos · 8 tormenta de meteoritos.
     function startDemo() {
         const songs = [
             { title: 'lofi hip hop radio — beats to relax/study to', videoId: 'jfKfPfyJRdk' },
@@ -722,10 +763,10 @@
         setTimeout(alert, 3000);
         addEventListener('keydown', event => {
             if (event.target?.closest?.('input')) return;
-            const action = { 1: alert, 2: chat, 3: nextBingo, 4: toggleLights, 5: () => { addSong(); sync(); } }[event.key];
+            const action = { 1: alert, 2: chat, 3: nextBingo, 4: toggleLights, 5: () => { addSong(); sync(); }, 7: () => meteorShower({ level: 'normal' }), 8: () => meteorShower({ level: 'storm' }) }[event.key];
             if (action) { event.preventDefault(); action(); }
         });
-        notify('Modo demo · 1 alerta · 2 chat · 3 bingo · 4 luces · 5 canción');
+        notify('Modo demo · 1 alerta · 2 chat · 3 bingo · 4 luces · 5 canción · 7 meteoritos · 8 tormenta');
         setTimeout(() => notify(''), 8000);
     }
 })();

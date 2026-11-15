@@ -697,3 +697,23 @@ test('player without pong within ten seconds stops and reconnects (half-open soc
     assert.equal(video.paused, true);
     assert.deepEqual(app.calls.slice(-2), ['disconnect', 'connect']);
 });
+
+test('meteor shower launches pixel meteors for the level and falls back to normal', () => {
+    const app = overlay();
+    const layer = app.context.document.body.children.find(node => node.className === 'meteor-shower');
+    assert.ok(layer, 'la capa de meteoritos existe en todos los temas');
+    app.handlers.meteorShower({ level: 'light' });
+    assert.equal(layer.classList.contains('active'), true);
+    for (const fn of [...app.timers.values()]) fn();
+    const meteors = layer.children.filter(node => /^meteor( |$)/.test(node.className));
+    assert.equal(meteors.length, 16);
+    for (const meteor of meteors) {
+        assert.match(meteor.style['--x'], /^\d+(\.\d)?%$/);
+        assert.equal(meteor.children.length, 1);
+    }
+    const before = layer.children.length;
+    app.timers.clear();
+    app.handlers.meteorShower({ level: '<script>' });
+    for (const fn of [...app.timers.values()]) fn();
+    assert.equal(layer.children.length - before >= 36, true);
+});

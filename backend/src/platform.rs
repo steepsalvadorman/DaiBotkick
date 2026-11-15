@@ -86,6 +86,23 @@ pub struct ChatMessage {
     pub color: String,
     /// Tipos de insignia tal como los nombra la plataforma (`moderator`, `subscriber`…).
     pub badges: Vec<String>,
+    /// Texto y emotes en orden, si la plataforma los separa (Twitch). Vacío en Kick, cuyo
+    /// overlay reconoce los emotes `[emote:ID:NOMBRE]` dentro del propio texto.
+    pub parts: Vec<Part>,
+}
+
+/// Trozo de un mensaje de chat para el overlay.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum Part {
+    Text {
+        text: String,
+    },
+    /// Emote de Twitch: el overlay arma la URL del CDN a partir del `id`.
+    Emote {
+        id: String,
+        name: String,
+    },
 }
 
 #[cfg(test)]
@@ -102,6 +119,7 @@ impl ChatMessage {
             },
             color: String::new(),
             badges: Vec::new(),
+            parts: Vec::new(),
         }
     }
 }

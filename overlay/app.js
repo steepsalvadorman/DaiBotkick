@@ -2,7 +2,15 @@
 (() => {
     'use strict';
     const el = id => document.getElementById(id);
-    const channel = new URLSearchParams(location.search).get('ch') || '';
+    // ?ch=slug es un canal de Kick; ?tw=login, uno de Twitch.
+    const twitchChannel = new URLSearchParams(location.search).get('tw') || '';
+    const channel = twitchChannel || new URLSearchParams(location.search).get('ch') || '';
+    const platformHost = twitchChannel ? 'twitch.tv' : 'kick.com';
+    // Twitch solo usa el tema V-Saturn: cualquier otra página lleva allí, con el mismo token.
+    if (twitchChannel && !/\/vsaturn\.html$/.test(location.pathname)) {
+        location.replace(`/vsaturn.html${location.search}${location.hash}`);
+        return;
+    }
     const avatarOverride = new URLSearchParams(location.search).get('avatar') || '';
     function setChannelAvatar(url) {
         const raw = typeof url === 'string' ? url.trim() : '';
@@ -53,8 +61,8 @@
     // ?demo=1: sin servidor ni canal. Un socket falso simula música, chat, alertas, bingo y luces
     // para diseñar el overlay en local.
     const demo = new URLSearchParams(location.search).has('demo');
-    if (!channel && !demo) { notify('Falta el canal. Copia la URL que aparece al conectar con Kick.'); return; }
-    const socket = demo ? demoSocket() : io({ query: { ch: channel }, auth: { token }, reconnectionDelayMax: 10000 });
+    if (!channel && !demo) { notify('Falta el canal. Copia la URL que aparece al conectar tu canal.'); return; }
+    const socket = demo ? demoSocket() : io({ query: twitchChannel ? { tw: channel } : { ch: channel }, auth: { token }, reconnectionDelayMax: 10000 });
     function demoSocket() {
         const handlers = {};
         const fake = {
@@ -76,7 +84,7 @@
     let musicShown = true, musicVolume = 85, ttsVolume = 100;
     let mediaReady = false, paused = false, actuallyPlaying = false, canGoBack = false;
     // Posición del video actual, para retomarlo si OBS recarga la fuente.
-    const resumeKey = `daibot:resume:${channel}`;
+    const resumeKey = `daibot:resume:${twitchChannel ? 'twitch:' : ''}${channel}`;
     let resumeAt = 0;
     function readResume() {
         try { return JSON.parse(localStorage.getItem(resumeKey) || 'null'); } catch { return null; }
@@ -389,12 +397,12 @@
         } else finish(item.id);
     }
     socket.on('config', config => {
-        // Nombre tal cual en Kick: conserva mayúsculas y guiones bajos (Frank_Arr).
+        // Nombre tal cual en la plataforma: conserva mayúsculas y guiones bajos (Frank_Arr).
         const name = String(config.channel_name || channel || 'seniordai');
         document.title = name;
         el('stream-title-display').textContent = name;
         if (!avatarOverride && setChannelAvatar(config.avatar_url || config.avatar)) el('channel-avatar').alt = `Avatar de ${name}`;
-        document.querySelectorAll('.kick-channel-url').forEach(node => { node.textContent = config.kick_url || `kick.com/${channel}`; });
+        document.querySelectorAll('.kick-channel-url').forEach(node => { node.textContent = config.channel_url || config.kick_url || `${platformHost}/${channel}`; });
     });
     socket.on('playbackRole', data => {
         active = Boolean(data.active);
@@ -493,21 +501,37 @@
         renderQueue(); closePanels();
         if (reason === 'io server disconnect') socket.connect();
     });
+    // Emote del chat; si la imagen no carga, queda su nombre como texto.
+    function emoteImage(name, src) {
+        const image = document.createElement('img');
+        image.className = 'chat-emote';
+        image.alt = name; image.title = name;
+        image.src = src;
+        image.referrerPolicy = 'no-referrer';
+        image.addEventListener('error', () => {
+            image.replaceWith(document.createTextNode(`:${name}:`));
+            notify(`No se pudo cargar el emote ${name}.`);
+        }, { once: true });
+        return image;
+    }
+    // Twitch envía el mensaje en partes: texto y emotes por ID. La URL se arma aquí, solo con
+    // el CDN de Twitch y un ID de letras, números y _.
+    function renderChatParts(target, parts) {
+        for (const part of parts) {
+            if (part?.type === 'emote' && /^[A-Za-z0-9_]{1,80}$/.test(String(part.id))) {
+                const name = String(part.name || '').slice(0, 100);
+                target.append(emoteImage(name, `https://static-cdn.jtvnw.net/emoticons/v2/${part.id}/default/dark/2.0`));
+            } else {
+                target.append(document.createTextNode(String(part?.text ?? part?.name ?? '')));
+            }
+        }
+    }
     function renderChatContent(target, content) {
         const pattern = /\[emote:(\d{1,20}):([^\]\r\n]{1,100})\]/g;
         let offset = 0;
         for (const match of content.matchAll(pattern)) {
             target.append(document.createTextNode(content.slice(offset, match.index)));
-            const image = document.createElement('img');
-            image.className = 'chat-emote';
-            image.alt = match[2]; image.title = match[2];
-            image.src = `https://files.kick.com/emotes/${match[1]}/fullsize`;
-            image.referrerPolicy = 'no-referrer';
-            image.addEventListener('error', () => {
-                image.replaceWith(document.createTextNode(`:${match[2]}:`));
-                notify(`No se pudo cargar el emote ${match[2]} de Kick.`);
-            }, { once: true });
-            target.append(image);
+            target.append(emoteImage(match[2], `https://files.kick.com/emotes/${match[1]}/fullsize`));
             offset = match.index + match[0].length;
         }
         if (offset === 0) target.textContent = content;
@@ -520,6 +544,7 @@
         const content = typeof data.content === 'string' ? data.content : '';
         // Un usuario baneado solo comenta texto: sin emotes ni estilo destacado.
         if (data.textOnly === true) { item.className = 'msg text-only'; text.textContent = content; }
+        else if (Array.isArray(data.parts) && data.parts.length) renderChatParts(text, data.parts.slice(0, 200));
         else renderChatContent(text, content);
         item.append(user, text); const body = el('chat-messages'); body.append(item);
         while (body.children.length > 4) body.firstChild.remove();
@@ -753,7 +778,7 @@
             } else bingo = { round: bingo.round, phase, drawn: [], participants: 0 };
             sendBingo();
         };
-        socket.fire('config', { channel_name: channel || 'seniordai', kick_url: `kick.com/${channel || 'seniordai'}` });
+        socket.fire('config', { channel_name: channel || 'seniordai', channel_url: `${platformHost}/${channel || 'seniordai'}` });
         socket.fire('playbackRole', { active: true, epoch: 1 });
         addSong(); addSong(); sync();
         socket.fire('bingoState', bingo);

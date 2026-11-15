@@ -456,11 +456,16 @@ struct SocketClient {
 
 impl SocketClient {
     async fn connect(base: &str, slug: &str, token: Option<&str>) -> Self {
+        Self::connect_query(base, &format!("ch={slug}"), token).await
+    }
+
+    /// `query` elige el canal: `ch=slug` (Kick) o `tw=login` (Twitch).
+    async fn connect_query(base: &str, query: &str, token: Option<&str>) -> Self {
         let http = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(3))
             .build()
             .unwrap();
-        let url = format!("{base}/socket.io/?EIO=4&transport=polling&ch={slug}");
+        let url = format!("{base}/socket.io/?EIO=4&transport=polling&{query}");
         let handshake = http
             .get(&url)
             .send()
@@ -1940,4 +1945,46 @@ async fn twitch_commands_reply_in_chat_as_the_bot_spaced_and_in_order() {
     assert_eq!(last.1["message"].as_str().unwrap().chars().count(), 500);
     app.shutdown.cancel();
     database.cleanup().await;
+}
+
+#[tokio::test]
+async fn twitch_overlays_join_their_own_room_and_get_twitch_config() {
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .connect_lazy("postgres://unused:unused@127.0.0.1/unused")
+        .unwrap();
+    let (layer, io) = socketioxide::SocketIo::new_layer();
+    let app = test_support::app_with_io(pool, io);
+    let (kick, _k) = test_support::channel("ana", 1);
+    let (twitch, _t) = test_support::channel_on(Platform::Twitch, "ana", 1);
+    *twitch.display_name.write().await = "Ana".into();
+    app.channels.insert(kick.key(), kick.clone());
+    app.channels.insert(twitch.key(), twitch.clone());
+    server::setup(&app.io, app.clone());
+    let http = test_support::HttpServer::start(axum::Router::new().layer(layer)).await;
+    let mut on_twitch = SocketClient::connect_query(&http.url, "tw=ana", Some("play-secret")).await;
+    let mut on_kick = SocketClient::connect(&http.url, "ana", None).await;
+    let config = on_twitch.event("config").await;
+    assert_eq!(config["channel_name"], "Ana");
+    assert_eq!(config["channel_url"], "twitch.tv/ana");
+    assert_eq!(on_kick.event("config").await["channel_url"], "kick.com/ana");
+    // Un mensaje de Twitch con emotes llega solo al overlay de Twitch, con sus partes.
+    let mut msg = crate::platform::ChatMessage::for_test("viewer", "hola Kappa", false);
+    msg.parts = vec![
+        crate::platform::Part::Text {
+            text: "hola ".into(),
+        },
+        crate::platform::Part::Emote {
+            id: "25".into(),
+            name: "Kappa".into(),
+        },
+    ];
+    crate::chat::receive(&app, &twitch, &msg).await;
+    let chat = on_twitch.event("chatMessage").await;
+    assert_eq!(
+        chat["parts"][1],
+        json!({"type":"emote","id":"25","name":"Kappa"})
+    );
+    server::ns_emit(&app, &kick, "testMarker", json!({}));
+    on_kick.event("testMarker").await;
+    assert!(!on_kick.events.iter().any(|e| e[0] == "chatMessage"));
 }

@@ -142,11 +142,19 @@ pub fn channel(
     slug: &str,
     id: u64,
 ) -> (Arc<ChannelState>, mpsc::Receiver<crate::tts::TtsQueueItem>) {
+    channel_on(crate::platform::Platform::Kick, slug, id)
+}
+
+pub fn channel_on(
+    platform: crate::platform::Platform,
+    slug: &str,
+    id: u64,
+) -> (Arc<ChannelState>, mpsc::Receiver<crate::tts::TtsQueueItem>) {
     let (tts_tx, rx) = mpsc::channel(32);
     (
         Arc::new(ChannelState {
             slug: slug.into(),
-            platform: crate::platform::Platform::Kick,
+            platform,
             access_token: Arc::new(RwLock::new("access".into())),
             refresh_token_val: Arc::new(RwLock::new("refresh".into())),
             persisted_refresh_token: RwLock::new("refresh".into()),

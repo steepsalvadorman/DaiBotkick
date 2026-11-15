@@ -24,6 +24,7 @@ pub fn chat_message(json: &serde_json::Value, broadcaster_id: u64) -> Option<Cha
         badges: badges(sender)
             .filter_map(|b| b["type"].as_str().map(str::to_owned))
             .collect(),
+        parts: Vec::new(),
     })
 }
 

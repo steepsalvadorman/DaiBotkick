@@ -131,6 +131,7 @@ pub async fn validate(global: &AppState, token: &str) -> Validation {
 /// Crea las suscripciones EventSub del canal y mantiene su token: lo valida cada hora y lo
 /// renueva antes de que venza o si Twitch lo invalida.
 pub async fn run_channel(ch: Arc<ChannelState>, global: Arc<AppState>) {
+    load_profile(&ch, &global).await;
     let subscriptions = async {
         sleep(Duration::from_secs(5)).await;
         let mut delay = 30;
@@ -141,6 +142,24 @@ pub async fn run_channel(ch: Arc<ChannelState>, global: Arc<AppState>) {
         }
     };
     tokio::join!(subscriptions, maintain_token(&ch, &global));
+}
+
+/// Nombre visible y foto del canal para el overlay. Si falla, el overlay usa el login y DaiBot.
+async fn load_profile(ch: &ChannelState, global: &AppState) {
+    let token = ch.access_token.read().await.clone();
+    match current_user(global, &token).await {
+        Ok(user) if user.login == ch.slug => {
+            *ch.display_name.write().await = user.display_name;
+            *ch.avatar_url.write().await = user.profile_image_url;
+            crate::server::ns_emit(global, ch, "config", ch.overlay_config().await);
+        }
+        Ok(user) => tracing::warn!(
+            "[Twitch][{}] El token es de {}; vuelve a conectar el canal",
+            ch.slug,
+            user.login
+        ),
+        Err(e) => tracing::warn!("[Twitch][{}] Perfil no disponible: {e}", ch.slug),
+    }
 }
 
 async fn maintain_token(ch: &Arc<ChannelState>, global: &Arc<AppState>) {

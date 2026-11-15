@@ -46,17 +46,7 @@ pub fn setup(io: &socketioxide::SocketIo, global: Arc<AppState>) {
         move |socket: SocketRef, TryData(auth): TryData<Auth>| {
             let global = global.clone();
             async move {
-                let slug = socket
-                    .req_parts()
-                    .uri
-                    .query()
-                    .and_then(|q| {
-                        url::form_urlencoded::parse(q.as_bytes())
-                            .find(|(k, _)| k == "ch")
-                            .map(|(_, v)| v.into_owned())
-                    })
-                    .unwrap_or_default();
-                let key = Platform::Kick.channel_key(&slug);
+                let key = channel_key_from_query(socket.req_parts().uri.query().unwrap_or(""));
                 let ch = global.channels.get(&key).map(|c| c.clone());
                 let Some(ch) = ch else {
                     socket.emit("channelError", "Canal no disponible").ok();
@@ -310,6 +300,23 @@ pub async fn set_visibility(
     Ok(())
 }
 
+/// Canal pedido por un overlay: `?ch=slug` en Kick o `?tw=login` en Twitch.
+fn channel_key_from_query(query: &str) -> String {
+    let params: Vec<(String, String)> = url::form_urlencoded::parse(query.as_bytes())
+        .into_owned()
+        .collect();
+    let get = |name: &str| {
+        params
+            .iter()
+            .find(|(k, _)| k == name)
+            .map(|(_, v)| v.as_str())
+    };
+    match get("tw").filter(|login| !login.is_empty()) {
+        Some(login) => Platform::Twitch.channel_key(login),
+        None => Platform::Kick.channel_key(get("ch").unwrap_or("")),
+    }
+}
+
 /// Envía un evento a todos los overlays y docks conectados al canal.
 pub fn ns_emit(global: &AppState, ch: &ChannelState, event: &'static str, data: serde_json::Value) {
     global.io.to(ch.key()).emit(event, data).ok();
@@ -317,6 +324,20 @@ pub fn ns_emit(global: &AppState, ch: &ChannelState, event: &'static str, data: 
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn overlays_pick_their_channel_by_platform() {
+        use super::channel_key_from_query as key;
+        assert_eq!(key("ch=pepe"), "pepe");
+        assert_eq!(key("tw=pepe"), "twitch:pepe");
+        assert_eq!(key("tw=pepe&ch=otro"), "twitch:pepe");
+        assert_eq!(key("tw=&ch=pepe"), "pepe");
+        assert_eq!(
+            key("EIO=4&transport=polling&tw=sr_dai_twitch"),
+            "twitch:sr_dai_twitch"
+        );
+        assert_eq!(key(""), "");
+    }
+
     use super::*;
     #[test]
     fn authorization_fails_closed() {

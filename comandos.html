@@ -460,15 +460,17 @@
 
 </div>
 <script>
-  // ?ch=canal muestra el canal del streamer; sin él la página es genérica.
+  // ?ch=canal (Kick) o ?tw=canal (Twitch) muestra el canal del streamer; sin ellos la página es genérica.
   (function () {
-    var ch = (new URLSearchParams(location.search).get('ch') || '').toLowerCase();
+    var params = new URLSearchParams(location.search);
+    var host = params.get('tw') ? 'twitch.tv' : 'kick.com';
+    var ch = (params.get('tw') || params.get('ch') || '').toLowerCase();
     if (!/^[a-z0-9_-]{1,100}$/.test(ch)) return;
     var badge = document.getElementById('channel-badge');
-    badge.textContent = 'KICK.COM / ' + ch.toUpperCase();
+    badge.textContent = host.toUpperCase() + ' / ' + ch.toUpperCase();
     badge.hidden = false;
     var footer = document.getElementById('channel-footer');
-    footer.textContent = ' · Canal ' + ch + ' · kick.com/' + ch;
+    footer.textContent = ' · Canal ' + ch + ' · ' + host + '/' + ch;
     footer.hidden = false;
   })();
 </script>

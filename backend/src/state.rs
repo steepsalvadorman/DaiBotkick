@@ -102,7 +102,16 @@ impl ChannelState {
             name
         };
         let avatar = self.avatar_url.read().await.clone();
-        let mut config = serde_json::json!({"channel_name": name, "kick_url": format!("kick.com/{}", self.slug)});
+        let channel_url = match self.platform {
+            crate::platform::Platform::Kick => format!("kick.com/{}", self.slug),
+            crate::platform::Platform::Twitch => format!("twitch.tv/{}", self.slug),
+        };
+        // `kick_url` se mantiene para overlays abiertos con una versión anterior de app.js.
+        let mut config = serde_json::json!({
+            "channel_name": name,
+            "channel_url": channel_url,
+            "kick_url": channel_url,
+        });
         if !avatar.is_empty() {
             config["avatar_url"] = avatar.into();
         }

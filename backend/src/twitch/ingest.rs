@@ -3,7 +3,7 @@
 
 use crate::{
     chat,
-    platform::{ChatMessage, Platform, Role},
+    platform::{ChatMessage, Part, Platform, Role},
     state::AppState,
 };
 use std::sync::Arc;
@@ -111,7 +111,41 @@ pub fn chat_message(event: &serde_json::Value) -> Option<ChatMessage> {
             .unwrap_or("")
             .to_owned(),
         badges,
+        parts: parts(&event["message"]["fragments"]),
     })
+}
+
+/// Fragmentos del mensaje: los emotes se separan del texto; menciones, cheermotes y el resto
+/// quedan como texto. Un emote con ID inesperado también queda como texto.
+fn parts(fragments: &serde_json::Value) -> Vec<Part> {
+    let mut parts: Vec<Part> = Vec::new();
+    for fragment in fragments.as_array().into_iter().flatten() {
+        let text = fragment["text"].as_str().unwrap_or("");
+        let emote = fragment["emote"]["id"]
+            .as_str()
+            .filter(|id| fragment["type"] == "emote" && valid_emote_id(id));
+        match (emote, parts.last_mut()) {
+            (Some(id), _) => parts.push(Part::Emote {
+                id: id.to_owned(),
+                name: text.to_owned(),
+            }),
+            (None, Some(Part::Text { text: previous })) => previous.push_str(text),
+            (None, _) => parts.push(Part::Text {
+                text: text.to_owned(),
+            }),
+        }
+    }
+    // Sin emotes no hace falta: el overlay usa `content`.
+    if parts.iter().any(|p| matches!(p, Part::Emote { .. })) {
+        parts
+    } else {
+        Vec::new()
+    }
+}
+
+/// IDs de emotes de Twitch: números (`25`) o `emotesv2_…` en hexadecimal.
+fn valid_emote_id(id: &str) -> bool {
+    (1..=80).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
 }
 
 /// Nombre visible si solo cambia mayúsculas respecto al login (`Sr_Dai` / `sr_dai`); si no
@@ -145,6 +179,43 @@ mod tests {
             "color": "#FF4500",
             "badges": badges,
         })
+    }
+
+    #[test]
+    fn emotes_are_split_from_the_text_and_unsafe_ids_stay_text() {
+        let fragments = serde_json::json!([
+            {"type": "text", "text": "hola "},
+            {"type": "emote", "text": "Kappa", "emote": {"id": "25"}},
+            {"type": "text", "text": " y "},
+            {"type": "mention", "text": "@ana", "mention": {"user_login": "ana"}},
+            {"type": "text", "text": " "},
+            {"type": "emote", "text": "LUL", "emote": {"id": "emotesv2_0123abcd"}},
+            {"type": "emote", "text": "evil", "emote": {"id": "../x\"onerror"}}
+        ]);
+        assert_eq!(
+            parts(&fragments),
+            [
+                Part::Text {
+                    text: "hola ".into()
+                },
+                Part::Emote {
+                    id: "25".into(),
+                    name: "Kappa".into()
+                },
+                Part::Text {
+                    text: " y @ana ".into()
+                },
+                Part::Emote {
+                    id: "emotesv2_0123abcd".into(),
+                    name: "LUL".into()
+                },
+                Part::Text {
+                    text: "evil".into()
+                },
+            ]
+        );
+        assert!(parts(&serde_json::json!([{"type": "text", "text": "solo texto"}])).is_empty());
+        assert!(parts(&serde_json::Value::Null).is_empty());
     }
 
     #[test]

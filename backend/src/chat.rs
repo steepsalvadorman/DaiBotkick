@@ -36,12 +36,13 @@ pub async fn receive(app: &Arc<AppState>, ch: &Arc<ChannelState>, msg: &ChatMess
     );
     // Los comandos (!play, !s…) no se muestran en el chat del overlay.
     if !msg.text.starts_with('!') {
-        ns_emit(
-            app,
-            ch,
-            "chatMessage",
-            serde_json::json!({"user":msg.username,"content":msg.text,"textOnly":banned}),
-        );
+        let mut data =
+            serde_json::json!({"user":msg.username,"content":msg.text,"textOnly":banned});
+        // Un baneado solo comenta texto: no se le envían emotes.
+        if !banned && !msg.parts.is_empty() {
+            data["parts"] = serde_json::json!(msg.parts);
+        }
+        ns_emit(app, ch, "chatMessage", data);
     }
     if !banned {
         crate::commands::handle(msg, ch, app).await;

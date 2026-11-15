@@ -28,7 +28,7 @@ function overlay(hash = '#token=private', search = '?ch=alpha', options = {}) {
     const socket = { connected: true, on(name, callback) { handlers[name] = callback; }, emit(...args) { emitted.push(args); }, disconnect() { calls.push('disconnect'); }, connect() { calls.push('connect'); } };
     const context = {
         document: { body: new Element(), head: new Element(), getElementById: id => get(id), createElement: () => new Element(), createTextNode: text => ({ textContent: text }), querySelectorAll: selector => selector === '.tip' ? options.tips || [] : [] },
-        location: { hash, search, origin: 'https://bot.example' },
+        location: { hash, search, origin: 'https://bot.example', pathname: options.pathname ?? '/pixel.html', replace(url) { context.redirectedTo = url; } },
         localStorage: options.storage, innerWidth: options.width ?? 1920, innerHeight: options.height ?? 1080, URLSearchParams, Date, Promise, Intl,
         CSS: { supports: (property, value) => property === 'zoom' && value === '1' && options.nativeScale !== false },
         io: options => { context.options = options; return socket; }, addEventListener(name, callback) { windowListeners[name] = callback; },
@@ -176,6 +176,45 @@ test('chat preserves Unicode emoji and renders Kick emotes safely with explicit 
     assert.match(app.context.document.body.children[0].textContent, /No se pudo cargar el emote KEKW/);
     app.handlers.chatMessage({ user: 'viewer', content: '[emote:https://evil.example:x] <script>' });
     assert.equal(app.get('chat-messages').children[2].children[1].textContent, '[emote:https://evil.example:x] <script>');
+});
+test('a Twitch overlay joins its channel with ?tw= and shows its Twitch name', () => {
+    const storage = new Map();
+    const app = overlay('#token=private', '?tw=sr_dai_twitch', {
+        pathname: '/vsaturn.html',
+        storage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
+    });
+    assert.equal(JSON.stringify(app.context.options.query), '{"tw":"sr_dai_twitch"}');
+    assert.equal(JSON.stringify(app.context.options.auth), '{"token":"private"}');
+    assert.equal(app.context.redirectedTo, undefined);
+    app.handlers.config({ channel_name: 'Sr_Dai_Twitch', channel_url: 'twitch.tv/sr_dai_twitch' });
+    assert.equal(app.get('stream-title-display').textContent, 'Sr_Dai_Twitch');
+    const kick = overlay('#token=private', '?ch=alpha');
+    assert.equal(JSON.stringify(kick.context.options.query), '{"ch":"alpha"}');
+});
+test('Twitch channels always open the V-Saturn theme with the same query and token', () => {
+    const app = overlay('#token=private', '?tw=sr_dai_twitch&lite=0', { pathname: '/pixel.html' });
+    assert.equal(app.context.redirectedTo, '/vsaturn.html?tw=sr_dai_twitch&lite=0#token=private');
+    assert.equal(app.context.options, undefined);
+});
+test('Twitch emotes render from their ID on the Twitch CDN and anything else stays text', () => {
+    const app = overlay('#token=private', '?tw=ana', { pathname: '/vsaturn.html' });
+    app.handlers.chatMessage({ user: 'viewer', content: 'hola Kappa ok', parts: [
+        { type: 'text', text: 'hola ' },
+        { type: 'emote', id: 'emotesv2_0a1b', name: 'Kappa' },
+        { type: 'emote', id: '"><img src=x>', name: 'evil' },
+        { type: 'text', text: ' [emote:1:x] <b>' },
+    ] });
+    const text = app.get('chat-messages').children[0].children[1];
+    assert.equal(text.children[0].textContent, 'hola ');
+    assert.equal(text.children[1].src, 'https://static-cdn.jtvnw.net/emoticons/v2/emotesv2_0a1b/default/dark/2.0');
+    assert.equal(text.children[1].alt, 'Kappa');
+    assert.equal(text.children[2].textContent, 'evil');
+    assert.equal(text.children[3].textContent, ' [emote:1:x] <b>');
+    text.children[1].listeners.error();
+    assert.equal(text.children[1].textContent, ':Kappa:');
+    // Un baneado solo muestra texto aunque lleguen partes.
+    app.handlers.chatMessage({ user: 'troll', content: 'Kappa', textOnly: true, parts: [{ type: 'emote', id: '25', name: 'Kappa' }] });
+    assert.equal(app.get('chat-messages').children[1].children[1].children.length, 0);
 });
 test('banned users appear as plain text without emotes', () => {
     const app = overlay();

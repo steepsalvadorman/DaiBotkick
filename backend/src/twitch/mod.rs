@@ -3,6 +3,8 @@
 
 pub mod auth;
 pub mod bot;
+pub mod eventsub;
+pub mod ingest;
 
 use crate::state::{AppState, ChannelState};
 use std::sync::{atomic::Ordering, Arc};
@@ -27,8 +29,7 @@ impl Default for Endpoints {
 pub struct Config {
     pub client_id: String,
     pub client_secret: String,
-    /// Firma de los webhooks EventSub; se usa desde la etapa 4.
-    #[allow(dead_code)]
+    /// Firma de los webhooks EventSub.
     pub eventsub_secret: String,
 }
 
@@ -126,15 +127,29 @@ pub async fn validate(global: &AppState, token: &str) -> Validation {
     }
 }
 
-/// Valida el token del canal cada hora y lo renueva antes de que venza o si Twitch lo invalida.
+/// Crea las suscripciones EventSub del canal y mantiene su token: lo valida cada hora y lo
+/// renueva antes de que venza o si Twitch lo invalida.
 pub async fn run_channel(ch: Arc<ChannelState>, global: Arc<AppState>) {
+    let subscriptions = async {
+        sleep(Duration::from_secs(5)).await;
+        let mut delay = 30;
+        // Sin la cuenta bot falta el chat: se reintenta hasta que se autorice.
+        while !eventsub::subscribe(&ch, &global).await {
+            sleep(Duration::from_secs(delay)).await;
+            delay = (delay * 2).min(300);
+        }
+    };
+    tokio::join!(subscriptions, maintain_token(&ch, &global));
+}
+
+async fn maintain_token(ch: &Arc<ChannelState>, global: &Arc<AppState>) {
     loop {
         let now = chrono::Utc::now().timestamp().max(0) as u64;
         let remaining = ch.token_expires.load(Ordering::Relaxed).saturating_sub(now);
         let token = ch.access_token.read().await.clone();
         let needs_refresh =
-            remaining < 600 || validate(&global, &token).await == Validation::Invalid;
-        if needs_refresh && !crate::oauth::refresh_if_current(&ch, &global, &token).await {
+            remaining < 600 || validate(global, &token).await == Validation::Invalid;
+        if needs_refresh && !crate::oauth::refresh_if_current(ch, global, &token).await {
             tracing::warn!(
                 "[Twitch][{}] No se pudo renovar el token; el streamer debe volver a conectar",
                 ch.slug

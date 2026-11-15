@@ -1,11 +1,4 @@
-use crate::{
-    commands,
-    kick::ingest::role as kick_role,
-    platform::{is_blocked, Platform},
-    server::ns_emit,
-    state::AppState,
-    tts,
-};
+use crate::{chat, kick::ingest::role as kick_role, platform::Platform, state::AppState};
 use axum::{
     body::Bytes,
     extract::State,
@@ -166,8 +159,10 @@ pub async fn worker(app: Arc<AppState>) {
                     serde_json::from_str(&payload).expect("validated inbox JSON");
                 match Platform::from_db(&platform) {
                     Some(Platform::Kick) => process(&app, &kind, &json).await,
-                    // Los eventos de Twitch se procesan a partir de la etapa 4 del plan.
-                    _ => tracing::warn!("[Webhook] Evento de {platform} sin procesador: {kind}"),
+                    Some(Platform::Twitch) => {
+                        crate::twitch::ingest::process(&app, &kind, &json).await
+                    }
+                    None => tracing::warn!("[Webhook] Plataforma desconocida {platform}: {kind}"),
                 }
                 sqlx::query(
                     "UPDATE webhook_events SET processed=TRUE WHERE platform=$1 AND message_id=$2",
@@ -221,51 +216,13 @@ async fn process(app: &Arc<AppState>, kind: &str, json: &serde_json::Value) {
                 return;
             };
             // El bot escribe como DaiBot: su eco no se muestra ni se procesa, venga de la app o del canal.
-            if crate::kick::sender::is_own_echo(&ch, &msg.text).await {
-                return;
-            }
-            // Un baneado (incluso si es moderador) solo aparece como texto en el chat del overlay.
-            let banned = is_blocked(&ch, &msg.username, msg.role).await;
-            // El dock de chat de OBS ve todo, comandos incluidos, con color e insignias.
-            ns_emit(
-                app,
-                &ch,
-                "dockChat",
-                serde_json::json!({
-                    "user": msg.username,
-                    "content": msg.text,
-                    "textOnly": banned,
-                    "color": msg.color,
-                    "badges": msg.badges,
-                }),
-            );
-            // Los comandos (!play, !s…) no se muestran en el chat del overlay.
-            if !msg.text.starts_with('!') {
-                ns_emit(
-                    app,
-                    &ch,
-                    "chatMessage",
-                    serde_json::json!({"user":msg.username,"content":msg.text,"textOnly":banned}),
-                );
-            }
-            if !banned {
-                commands::handle(&msg, &ch, app).await;
+            if !crate::kick::sender::is_own_echo(&ch, &msg.text).await {
+                chat::receive(app, &ch, &msg).await;
             }
         }
         "channel.followed" => {
             let username = json["follower"]["username"].as_str().unwrap_or("alguien");
-            // Evita que un baneado dispare voces y alertas siguiendo y dejando de seguir.
-            if is_blocked(&ch, username, kick_role(&json["follower"], id)).await {
-                return;
-            }
-            let message = format!("¡Gracias por el follow, {username}!");
-            tts::enqueue(&ch, &message, "dalia");
-            ns_emit(
-                app,
-                &ch,
-                "kickAlert",
-                serde_json::json!({"type":"follow","username":username,"message":message}),
-            );
+            chat::followed(app, &ch, username, kick_role(&json["follower"], id)).await;
         }
         "channel.subscription.new" | "channel.subscription.renewal" => {
             let username = json["subscriber"]["username"].as_str().unwrap_or("alguien");
@@ -273,43 +230,16 @@ async fn process(app: &Arc<AppState>, kind: &str, json: &serde_json::Value) {
                 .as_u64()
                 .or_else(|| json["months"].as_u64())
                 .unwrap_or(1);
-            let message = format!("¡{username} se suscribió por {months} meses!");
-            tts::enqueue(&ch, &message, "dalia");
-            ns_emit(
-                app,
-                &ch,
-                "kickAlert",
-                serde_json::json!({"type":"sub","username":username,"months":months,"message":message}),
-            );
+            chat::subscribed(app, &ch, username, months);
         }
         "channel.subscription.gifts" => {
             let username = json["gifter"]["username"].as_str().unwrap_or("alguien");
-            let count = json["giftees"].as_array().map_or(0, Vec::len);
-            let message = format!("¡{username} regaló {count} suscripciones!");
-            tts::enqueue(&ch, &message, "dalia");
-            ns_emit(
-                app,
-                &ch,
-                "kickAlert",
-                serde_json::json!({"type":"giftsub","message":message}),
-            );
+            let count = json["giftees"].as_array().map_or(0, Vec::len) as u64;
+            chat::gifted(app, &ch, username, count);
         }
         "livestream.status.updated" => {
             let live = json["is_live"].as_bool().unwrap_or(false);
-            *ch.live_since.write().await = if live {
-                json["started_at"]
-                    .as_str()
-                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-                    .map(|t| t.with_timezone(&chrono::Utc))
-            } else {
-                None
-            };
-            ns_emit(
-                app,
-                &ch,
-                "streamStatus",
-                serde_json::json!({"live":live,"startedAt":ch.live_since.read().await.map(|t| t.to_rfc3339())}),
-            );
+            chat::live_status(app, &ch, chat::parse_time(&json["started_at"]), live).await;
         }
         _ => tracing::debug!("[Webhook] Ignorando tipo {kind}"),
     }
@@ -387,6 +317,7 @@ mod tests {
         assert_eq!(ch.sorteo.lock().await.participants, vec!["Alpha", "viewer"]);
         let user =
             |name: &str, user_id: u64| serde_json::json!({"username": name, "user_id": user_id});
+        use crate::platform::is_blocked;
         assert!(!is_blocked(&ch, "SeniorDai", kick_role(&user("SeniorDai", 1), 7)).await);
         assert!(is_blocked(&ch, "@TROLL", kick_role(&user("@TROLL", 1), 7)).await);
         assert!(!is_blocked(&ch, "", kick_role(&serde_json::json!({"user_id": 1}), 7)).await);

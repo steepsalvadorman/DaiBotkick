@@ -1380,6 +1380,8 @@ struct MockTwitch {
     user: Mutex<Option<Value>>,
     validate_status: Mutex<Option<StatusCode>>,
     validations: AtomicUsize,
+    subscriptions: Mutex<Vec<(String, Value)>>,
+    subscription_status: Mutex<Option<StatusCode>>,
 }
 
 impl MockTwitch {
@@ -1405,8 +1407,24 @@ impl MockTwitch {
             assert_eq!(headers.get("client-id").unwrap(), "tw-client");
             axum::Json(json!({"data":[mock.user.lock().await.clone().unwrap()]}))
         }
+        async fn subscribe(
+            State(mock): State<Arc<MockTwitch>>,
+            headers: HeaderMap,
+            axum::Json(body): axum::Json<Value>,
+        ) -> StatusCode {
+            let token = headers["authorization"].to_str().unwrap().to_owned();
+            mock.subscriptions.lock().await.push((token, body));
+            mock.subscription_status
+                .lock()
+                .await
+                .unwrap_or(StatusCode::ACCEPTED)
+        }
         test_support::HttpServer::start(
             axum::Router::new()
+                .route(
+                    "/helix/eventsub/subscriptions",
+                    axum::routing::post(subscribe),
+                )
                 .route("/oauth2/token", axum::routing::post(token))
                 .route("/oauth2/validate", axum::routing::get(validate))
                 .route("/helix/users", axum::routing::get(users))
@@ -1616,6 +1634,192 @@ async fn twitch_channels_and_the_bot_account_connect_and_renew_tokens() {
         crate::twitch::validate(&app, "revoked").await,
         crate::twitch::Validation::Invalid
     );
+    app.shutdown.cancel();
+    database.cleanup().await;
+}
+
+/// Firma un envío de EventSub como Twitch (HMAC-SHA256 de id + timestamp + cuerpo).
+fn twitch_signed(secret: &str, id: &str, kind: &str, body: &Value) -> (HeaderMap, Bytes) {
+    use hmac::{Hmac, Mac};
+    let body = Bytes::from(body.to_string());
+    let timestamp = chrono::Utc::now().to_rfc3339();
+    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap();
+    mac.update(id.as_bytes());
+    mac.update(timestamp.as_bytes());
+    mac.update(&body);
+    let hex: String = mac
+        .finalize()
+        .into_bytes()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    let mut headers = HeaderMap::new();
+    headers.insert("Twitch-Eventsub-Message-Id", id.parse().unwrap());
+    headers.insert(
+        "Twitch-Eventsub-Message-Timestamp",
+        timestamp.parse().unwrap(),
+    );
+    headers.insert(
+        "Twitch-Eventsub-Message-Signature",
+        format!("sha256={hex}").parse().unwrap(),
+    );
+    headers.insert("Twitch-Eventsub-Message-Type", kind.parse().unwrap());
+    (headers, body)
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL"]
+async fn twitch_eventsub_subscribes_and_delivers_chat_and_alerts() {
+    use crate::twitch::{bot, eventsub, ingest};
+    use axum::response::IntoResponse;
+    let database = test_support::TestDatabase::new().await;
+    let mock = Arc::new(MockTwitch::default());
+    let service = mock.serve().await;
+    let mut app = test_support::app(database.pool.clone());
+    Arc::get_mut(&mut app).unwrap().twitch_endpoints = crate::twitch::Endpoints {
+        oauth: format!("{}/oauth2", service.url),
+        api: format!("{}/helix", service.url),
+    };
+    let row = db::ChannelRow {
+        platform: "twitch".into(),
+        ..test_support::row("ana", 5)
+    };
+    db::upsert_channel(&database.pool, &row).await.unwrap();
+    // Un canal de Kick con el mismo ID de broadcaster no recibe eventos de Twitch.
+    db::upsert_channel(&database.pool, &test_support::row("ana", 5))
+        .await
+        .unwrap();
+    for row in db::load_all_channels(&database.pool).await.unwrap() {
+        channel::start_channel(row, app.clone()).await.unwrap();
+    }
+    let ch = app.channels.get("twitch:ana").unwrap().clone();
+    let kick = app.channels.get("ana").unwrap().clone();
+
+    // 1. Sin la cuenta bot se crean las alertas, pero no el chat, y se reintentará.
+    assert!(!eventsub::subscribe(&ch, &app).await);
+    let subs = mock.subscriptions.lock().await.clone();
+    assert_eq!(subs.len(), 6);
+    assert!(subs
+        .iter()
+        .all(|(token, body)| token == "Bearer tw-access-1"
+            && body["transport"]["callback"] == "https://test.example/twitch_webhook"
+            && body["transport"]["secret"] == "tw-eventsub-secret"
+            && body["condition"]["broadcaster_user_id"] == "5"));
+    assert_eq!(
+        mock.forms.lock().await[0]["grant_type"],
+        "client_credentials"
+    );
+    // 2. Con el bot autorizado se suscribe al chat; el token de app se reutiliza y 409 cuenta como hecho.
+    *app.twitch_bot.write().await = Some(bot::BotAccount {
+        user_id: bot::BOT_USER_ID.into(),
+        login: "daibotsito".into(),
+        access_token: "bot-access".into(),
+        refresh_token: "bot-refresh".into(),
+        token_expires: i64::MAX,
+    });
+    *mock.subscription_status.lock().await = Some(StatusCode::CONFLICT);
+    assert!(eventsub::subscribe(&ch, &app).await);
+    let subs = mock.subscriptions.lock().await.clone();
+    let chat = subs
+        .iter()
+        .find(|(_, b)| b["type"] == "channel.chat.message")
+        .unwrap();
+    assert_eq!(chat.1["condition"]["user_id"], bot::BOT_USER_ID);
+    assert_eq!(mock.token_requests.load(Ordering::Relaxed), 1);
+
+    // 3. El webhook verifica la firma, responde el challenge y guarda notificaciones una sola vez.
+    let secret = "tw-eventsub-secret";
+    let (headers, body) = twitch_signed(
+        secret,
+        "verify-1",
+        "webhook_callback_verification",
+        &json!({"challenge":"abc123","subscription":{"type":"stream.online"}}),
+    );
+    let response = eventsub::receive(State(app.clone()), headers, body)
+        .await
+        .into_response();
+    assert_eq!(response.status(), StatusCode::OK);
+    let text = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    assert_eq!(&text[..], b"abc123");
+    let chat_event = |id: &str, user_id: &str, login: &str, text: &str| {
+        json!({"subscription":{"type":"channel.chat.message"},"event":{
+            "broadcaster_user_id":"5","chatter_user_id":user_id,"chatter_user_login":login,
+            "chatter_user_name":login,"message":{"text":text},"badges":[],"message_id":id}})
+    };
+    let payload = chat_event("m1", "9", "viewer", "!participar");
+    for _ in 0..2 {
+        let (headers, body) = twitch_signed(secret, "delivery-1", "notification", &payload);
+        let status = eventsub::receive(State(app.clone()), headers, body)
+            .await
+            .into_response()
+            .status();
+        assert_eq!(status, StatusCode::NO_CONTENT);
+    }
+    let stored: Vec<(String, String)> =
+        sqlx::query_as("SELECT platform, event_type FROM webhook_events")
+            .fetch_all(&database.pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        stored,
+        [("twitch".to_string(), "channel.chat.message".to_string())]
+    );
+    assert_eq!(app.metrics.webhook_duplicates.load(Ordering::Relaxed), 1);
+    let (headers, body) = twitch_signed("wrong-secret", "delivery-2", "notification", &payload);
+    let status = eventsub::receive(State(app.clone()), headers, body)
+        .await
+        .into_response()
+        .status();
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    // 4. Chat y comandos: el sorteo ve a los espectadores de Twitch; el eco del bot se ignora.
+    ch.sorteo.lock().await.open = true;
+    kick.sorteo.lock().await.open = true;
+    ingest::process(&app, "channel.chat.message", &payload).await;
+    ingest::process(
+        &app,
+        "channel.chat.message",
+        &chat_event("m2", bot::BOT_USER_ID, "daibotsito", "!participar"),
+    )
+    .await;
+    assert_eq!(ch.sorteo.lock().await.participants, ["viewer"]);
+    assert!(kick.sorteo.lock().await.participants.is_empty());
+    // Un baneado de Twitch no entra al sorteo.
+    ch.banned.write().await.insert("troll".into());
+    ingest::process(
+        &app,
+        "channel.chat.message",
+        &chat_event("m3", "10", "troll", "!participar"),
+    )
+    .await;
+    assert_eq!(ch.sorteo.lock().await.participants, ["viewer"]);
+
+    // 5. Directo: stream.online y stream.offline alimentan !uptime.
+    let event = |kind: &str, event: Value| json!({"subscription":{"type":kind},"event":event});
+    ingest::process(
+        &app,
+        "stream.online",
+        &event(
+            "stream.online",
+            json!({
+        "broadcaster_user_id":"5","started_at":"2026-11-15T18:00:00Z"}),
+        ),
+    )
+    .await;
+    assert_eq!(
+        ch.live_since.read().await.unwrap().to_rfc3339(),
+        "2026-11-15T18:00:00+00:00"
+    );
+    assert!(kick.live_since.read().await.is_none());
+    ingest::process(
+        &app,
+        "stream.offline",
+        &event("stream.offline", json!({"broadcaster_user_id":"5"})),
+    )
+    .await;
+    assert!(ch.live_since.read().await.is_none());
     app.shutdown.cancel();
     database.cleanup().await;
 }

@@ -67,6 +67,8 @@ pub struct ChannelState {
     pub player_epoch: AtomicU64,
     pub show_video: std::sync::atomic::AtomicBool,
     pub live_since: RwLock<Option<chrono::DateTime<chrono::Utc>>>,
+    /// Último envío del bot al chat de Twitch, para espaciar los mensajes; Kick no lo usa.
+    pub last_chat_send: Mutex<Option<std::time::Instant>>,
     /// Últimos mensajes que envió el bot; su eco en el webhook no se muestra en el overlay.
     pub recent_sent: Mutex<std::collections::VecDeque<String>>,
     /// Nombre de usuario tal como lo escribió el streamer en Kick (p. ej. `Frank_Arr`);

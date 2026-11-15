@@ -178,6 +178,7 @@ pub fn channel(
             show_video: AtomicBool::new(true),
             live_since: RwLock::new(None),
             recent_sent: Mutex::new(std::collections::VecDeque::new()),
+            last_chat_send: Mutex::new(None),
             display_name: RwLock::new(String::new()),
             avatar_url: RwLock::new(String::new()),
             banned: RwLock::new(Default::default()),

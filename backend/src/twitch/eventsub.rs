@@ -175,7 +175,7 @@ pub async fn receive(
 
 /// Token de app (`client_credentials`), el que exige EventSub por webhook. Se guarda en memoria
 /// y se pide otro un minuto antes de que venza.
-async fn app_token(app: &AppState) -> Option<String> {
+pub(crate) async fn app_token(app: &AppState) -> Option<String> {
     let mut cached = app.twitch_app_token.lock().await;
     let now = chrono::Utc::now().timestamp();
     if let Some((token, expires)) = cached.as_ref() {

@@ -220,8 +220,9 @@ pub async fn handle(
     let result = game.command(user, args, owner).map(|(message, round)| {
         if args == "carton" {
             (format!(
-                "{user}, abre tu cartón aquí: {} . Inicia sesión con tu cuenta de Kick para verlo y marcarlo. Reclama con !bingo en este chat.",
-                game.card_link(user, &app.config.base_url, &ch.slug)
+                "{user}, abre tu cartón aquí: {} . Inicia sesión con tu cuenta de {} para verlo y marcarlo. Reclama con !bingo en este chat.",
+                game.card_link(user, &app.config.base_url, &ch.slug),
+                ch.platform.name()
             ), round)
         } else {
             (message, round)

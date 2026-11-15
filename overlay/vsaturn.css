@@ -26,6 +26,20 @@
     /* Neón del avatar: cian y magenta, opuestos al naranja y verde del video para que no se confundan. */
     --neon-cyan: #00e5ff;
     --neon-magenta: #ff2bd6;
+    /* Pantalla del notch: la misma LCD a color del reproductor (rejilla, línea de barrido y
+       fondo noche). La línea de barrido usa px para recorrer el alto del notch. */
+    --notch-lcd:
+        repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px),
+        repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.14) 0 1px, transparent 1px 3px),
+        linear-gradient(180deg, rgba(143, 244, 255, 0) 0 44%, rgba(143, 244, 255, 0.12) 50%, rgba(143, 244, 255, 0) 56%),
+        linear-gradient(180deg, #2c1663 0%, #1a1046 55%, #0f2f5c 100%);
+    --notch-lcd-size: auto, auto, 100% 384px, 100% var(--rail-h);
+    /* La misma pantalla, quieta, para las demás piezas (alertas, reproductor, consejos...). */
+    --lcd-panel:
+        repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px),
+        repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.14) 0 1px, transparent 1px 3px),
+        linear-gradient(180deg, #2c1663 0%, #1a1046 55%, #0f2f5c 100%);
+    --lcd-glow: 0 0 0 2px var(--slate-deep), 0 8px 28px rgba(0, 229, 255, 0.2), 0 4px 18px rgba(255, 43, 214, 0.16), var(--lift);
     --white: #ffffff;
     --safe: 24px;
     /* Zonas del lienzo OBS 1920×1080. El centro del juego queda libre salvo cuando el bingo está activo. */
@@ -112,10 +126,18 @@ button:focus-visible, input:focus-visible {
     padding: 16px 24px 16px 16px;
     /* Notch: sale del borde superior, recto arriba y redondeado abajo. */
     border-radius: 0 0 56px 56px;
-    background: var(--sheen), var(--grain), rgba(236, 241, 248, 0.96);
-    box-shadow: var(--glass-edge), var(--lift);
+    background: var(--notch-lcd);
+    background-size: var(--notch-lcd-size);
+    /* Bloque recto arriba y redondeado abajo, con bisel pizarra y resplandor cian y magenta. */
+    box-shadow:
+        inset 0 -3px 0 rgba(0, 229, 255, 0.35),
+        0 0 0 2px var(--slate-deep),
+        0 8px 28px rgba(0, 229, 255, 0.22),
+        0 4px 18px rgba(255, 43, 214, 0.18),
+        var(--lift);
+    color: var(--white);
     z-index: 50;
-    animation: notch-drop 900ms var(--mass) both;
+    animation: notch-drop 900ms var(--mass) both, notch-scan 4000ms linear infinite;
     transition: translate 600ms var(--mass);
 }
 /* Recogido tras unos segundos sin interacción: solo asoma el borde inferior del notch.
@@ -123,29 +145,6 @@ button:focus-visible, input:focus-visible {
 #hud.system-topbar.tucked {
     translate: -50% calc(-100% + 12px);
     transition: translate 700ms var(--spring);
-}
-/* Curvas cóncavas a cada lado: el notch se funde con el borde del lienzo. Llevan el mismo
-   cristal esmerilado que la barra (reflejo a la altura del notch, grano y fondo) recortado
-   con una máscara, así el tono coincide exactamente. */
-#hud.system-topbar::before, #hud.system-topbar::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    width: 24px;
-    height: 24px;
-    pointer-events: none;
-    background: var(--sheen), var(--grain), rgba(236, 241, 248, 0.96);
-    background-size: 100% var(--rail-h), auto, auto;
-}
-#hud.system-topbar::before {
-    right: 100%;
-    -webkit-mask: radial-gradient(circle at 0 100%, transparent 23.5px, #000 24px);
-    mask: radial-gradient(circle at 0 100%, transparent 23.5px, #000 24px);
-}
-#hud.system-topbar::after {
-    left: 100%;
-    -webkit-mask: radial-gradient(circle at 100% 100%, transparent 23.5px, #000 24px);
-    mask: radial-gradient(circle at 100% 100%, transparent 23.5px, #000 24px);
 }
 .topbar-start {
     --avatar-size: var(--avatar);
@@ -384,18 +383,6 @@ button:focus-visible, input:focus-visible {
 /* «Pedido por» vive en la fila del mando, entre la pantalla y los botones de cara. */
 #music-transport { display: flex; align-items: center; }
 .transport-row { display: flex; align-items: center; gap: 8px; }
-.topbar-requester {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    max-width: 180px;
-    padding: 4px 12px;
-    border-radius: 9999px;
-    background: var(--ink);
-    color: var(--paper-hi);
-}
-.requester-label { flex-shrink: 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.12em; text-transform: lowercase; color: var(--slate-light); }
-#video-requester { min-width: 0; font-size: 12px; line-height: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--aqua); }
 
 /* CD iridiscente: gira a velocidad constante, como un disco real, solo cuando suena música. */
 .vinyl-record {
@@ -616,7 +603,7 @@ body.no-chat #chat-widget { display: none; }
 #youtube-player, #direct-video { width: 100%; height: 100%; display: block; }
 #youtube-player iframe { width: 100%; height: 100%; border: 0; }
 #direct-video { display: none; object-fit: contain; }
-/* Cabecera de la carcasa: LED de reproducción, nombre grabado en relieve y sello estéreo. */
+/* Cabecera de la carcasa: LED de reproducción y nombre grabado en relieve. */
 .deck-head {
     display: flex;
     align-items: center;
@@ -644,43 +631,49 @@ body.no-chat #chat-widget { display: none; }
     text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 .deck-head .window-jp { color: var(--ink-muted); }
-.deck-tag {
-    margin-left: auto;
-    padding: 0 8px;
-    border-radius: 4px;
-    background: var(--sheen), var(--violet-deep);
-    color: var(--white);
-    font-family: var(--mono);
-    font-size: 12px;
-    line-height: 16px;
-    font-weight: 600;
-    letter-spacing: 0.16em;
-}
-/* Pantalla de mascota virtual: LCD verde oliva con rejilla de píxeles, bisel grueso de
-   pizarra, letra pixelada y la mascota a la izquierda. */
+/* Pantalla de mascota virtual a color: LCD retroiluminada en noche violeta y azul que cambia de
+   tono despacio, rejilla de píxeles, una línea de barrido, letra pixelada en neón y la mascota.
+   Es una zona pequeña, así que se anima también en modo ligero. */
 .media-info.deck-lcd {
     display: grid;
     grid-template-columns: 40px minmax(0, 1fr);
-    grid-template-rows: auto auto auto;
+    grid-template-rows: repeat(4, auto);
     column-gap: 12px;
     align-items: center;
     margin: 0;
     padding: 8px 12px;
     border-radius: 12px;
+    position: relative;
+    overflow: hidden;
     background:
-        repeating-linear-gradient(0deg, rgba(38, 48, 28, 0.07) 0 1px, transparent 1px 3px),
-        repeating-linear-gradient(90deg, rgba(38, 48, 28, 0.07) 0 1px, transparent 1px 3px),
-        radial-gradient(120% 90% at 30% 20%, var(--pet-lcd-hi), var(--pet-lcd) 70%);
-    color: var(--pet-ink);
-    box-shadow: 0 0 0 4px var(--slate-deep), 0 0 0 5px rgba(22, 29, 54, 0.5), inset 0 2px 6px rgba(38, 48, 28, 0.45);
+        repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px),
+        repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.16) 0 1px, transparent 1px 3px),
+        radial-gradient(90% 120% at 15% 50%, rgba(255, 138, 31, 0.28), transparent 60%),
+        linear-gradient(120deg, #1a1046, #2c1663, #0f2f5c, #123f4f, #2c1663, #1a1046);
+    background-size: auto, auto, auto, 300% 100%;
+    color: var(--white);
+    box-shadow: 0 0 0 4px var(--slate-deep), 0 0 0 5px rgba(22, 29, 54, 0.5), inset 0 2px 8px rgba(0, 0, 0, 0.6);
     font-family: var(--pixel);
+    animation: lcd-backlight 12s ease-in-out infinite alternate;
+}
+/* Línea de barrido que recorre la pantalla de arriba abajo, como un LCD de bolsillo. */
+.media-info.deck-lcd::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 0 44%, rgba(143, 244, 255, 0.14) 50%, transparent 56%);
+    background-size: 100% 300%;
+    pointer-events: none;
+    animation: lcd-scan 3200ms linear infinite;
 }
 .deck-pet {
     grid-column: 1;
-    grid-row: 1 / span 3;
+    grid-row: 1 / -1;
     position: relative;
-    width: 33px;
-    height: 30px;
+    z-index: 1;
+    width: 36px;
+    height: 33px;
+    filter: drop-shadow(0 0 4px rgba(255, 138, 31, 0.6));
 }
 .deck-pet i {
     position: absolute;
@@ -688,13 +681,20 @@ body.no-chat #chat-widget { display: none; }
     left: 0;
     width: 3px;
     height: 3px;
+    /* Mascota original a color: contorno marrón oscuro, cuerpo naranja, barriga crema,
+       cuernos amarillos, ojos con brillo y mejillas rosadas. Brilla un poco sobre la pantalla. */
+    --pet-ink: #3a1600;
+    --pet-body: #ff8a1f;
+    --pet-belly: #ffe9b0;
+    --pet-horn: #ffd23f;
+    --pet-cheek: #ff6fae;
     box-shadow:
-        6px 0px 0 var(--pet-ink),
-        24px 0px 0 var(--pet-ink),
-        6px 3px 0 var(--pet-ink),
+        6px 0px 0 var(--pet-horn),
+        27px 0px 0 var(--pet-horn),
+        6px 3px 0 var(--pet-horn),
         9px 3px 0 var(--pet-ink),
-        21px 3px 0 var(--pet-ink),
         24px 3px 0 var(--pet-ink),
+        27px 3px 0 var(--pet-horn),
         6px 6px 0 var(--pet-ink),
         9px 6px 0 var(--pet-ink),
         12px 6px 0 var(--pet-ink),
@@ -702,68 +702,92 @@ body.no-chat #chat-widget { display: none; }
         18px 6px 0 var(--pet-ink),
         21px 6px 0 var(--pet-ink),
         24px 6px 0 var(--pet-ink),
+        27px 6px 0 var(--pet-ink),
         3px 9px 0 var(--pet-ink),
-        6px 9px 0 var(--pet-ink),
-        9px 9px 0 var(--pet-ink),
-        12px 9px 0 var(--pet-ink),
-        15px 9px 0 var(--pet-ink),
-        18px 9px 0 var(--pet-ink),
-        21px 9px 0 var(--pet-ink),
-        24px 9px 0 var(--pet-ink),
-        27px 9px 0 var(--pet-ink),
+        6px 9px 0 var(--pet-body),
+        9px 9px 0 var(--pet-body),
+        12px 9px 0 var(--pet-body),
+        15px 9px 0 var(--pet-body),
+        18px 9px 0 var(--pet-body),
+        21px 9px 0 var(--pet-body),
+        24px 9px 0 var(--pet-body),
+        27px 9px 0 var(--pet-body),
+        30px 9px 0 var(--pet-ink),
         3px 12px 0 var(--pet-ink),
-        6px 12px 0 var(--pet-ink),
-        12px 12px 0 var(--pet-ink),
-        15px 12px 0 var(--pet-ink),
-        18px 12px 0 var(--pet-ink),
-        24px 12px 0 var(--pet-ink),
-        27px 12px 0 var(--pet-ink),
+        6px 12px 0 var(--pet-body),
+        9px 12px 0 #ffffff,
+        12px 12px 0 #1b1b2b,
+        15px 12px 0 var(--pet-body),
+        18px 12px 0 var(--pet-body),
+        21px 12px 0 #ffffff,
+        24px 12px 0 #1b1b2b,
+        27px 12px 0 var(--pet-body),
+        30px 12px 0 var(--pet-ink),
         3px 15px 0 var(--pet-ink),
-        6px 15px 0 var(--pet-ink),
-        9px 15px 0 var(--pet-ink),
-        12px 15px 0 var(--pet-ink),
-        15px 15px 0 var(--pet-ink),
-        18px 15px 0 var(--pet-ink),
-        21px 15px 0 var(--pet-ink),
-        24px 15px 0 var(--pet-ink),
-        27px 15px 0 var(--pet-ink),
+        6px 15px 0 var(--pet-body),
+        9px 15px 0 #1b1b2b,
+        12px 15px 0 #1b1b2b,
+        15px 15px 0 var(--pet-body),
+        18px 15px 0 var(--pet-body),
+        21px 15px 0 #1b1b2b,
+        24px 15px 0 #1b1b2b,
+        27px 15px 0 var(--pet-body),
+        30px 15px 0 var(--pet-ink),
         0px 18px 0 var(--pet-ink),
         3px 18px 0 var(--pet-ink),
-        6px 18px 0 var(--pet-ink),
-        9px 18px 0 var(--pet-ink),
-        21px 18px 0 var(--pet-ink),
-        24px 18px 0 var(--pet-ink),
-        27px 18px 0 var(--pet-ink),
+        6px 18px 0 var(--pet-body),
+        9px 18px 0 var(--pet-cheek),
+        12px 18px 0 var(--pet-body),
+        15px 18px 0 var(--pet-body),
+        18px 18px 0 var(--pet-body),
+        21px 18px 0 var(--pet-body),
+        24px 18px 0 var(--pet-cheek),
+        27px 18px 0 var(--pet-body),
         30px 18px 0 var(--pet-ink),
+        33px 18px 0 var(--pet-ink),
         3px 21px 0 var(--pet-ink),
-        6px 21px 0 var(--pet-ink),
-        9px 21px 0 var(--pet-ink),
-        12px 21px 0 var(--pet-ink),
-        15px 21px 0 var(--pet-ink),
-        18px 21px 0 var(--pet-ink),
-        21px 21px 0 var(--pet-ink),
-        24px 21px 0 var(--pet-ink),
-        27px 21px 0 var(--pet-ink),
-        6px 24px 0 var(--pet-ink),
-        9px 24px 0 var(--pet-ink),
-        12px 24px 0 var(--pet-ink),
-        15px 24px 0 var(--pet-ink),
-        18px 24px 0 var(--pet-ink),
-        21px 24px 0 var(--pet-ink),
-        24px 24px 0 var(--pet-ink),
+        6px 21px 0 var(--pet-body),
+        9px 21px 0 var(--pet-body),
+        12px 21px 0 var(--pet-belly),
+        15px 21px 0 var(--pet-belly),
+        18px 21px 0 var(--pet-belly),
+        21px 21px 0 var(--pet-belly),
+        24px 21px 0 var(--pet-body),
+        27px 21px 0 var(--pet-body),
+        30px 21px 0 var(--pet-ink),
+        3px 24px 0 var(--pet-ink),
+        6px 24px 0 var(--pet-body),
+        9px 24px 0 var(--pet-body),
+        12px 24px 0 var(--pet-belly),
+        15px 24px 0 var(--pet-belly),
+        18px 24px 0 var(--pet-belly),
+        21px 24px 0 var(--pet-belly),
+        24px 24px 0 var(--pet-body),
+        27px 24px 0 var(--pet-body),
+        30px 24px 0 var(--pet-ink),
         6px 27px 0 var(--pet-ink),
         9px 27px 0 var(--pet-ink),
-        21px 27px 0 var(--pet-ink),
-        24px 27px 0 var(--pet-ink);
+        12px 27px 0 var(--pet-body),
+        15px 27px 0 var(--pet-body),
+        18px 27px 0 var(--pet-body),
+        21px 27px 0 var(--pet-body),
+        24px 27px 0 var(--pet-ink),
+        27px 27px 0 var(--pet-ink),
+        6px 30px 0 var(--pet-ink),
+        9px 30px 0 var(--pet-ink),
+        24px 30px 0 var(--pet-ink),
+        27px 30px 0 var(--pet-ink);
 }
 #media-widget[data-state="playing"] .deck-pet i { animation: pet-hop 700ms steps(1) infinite; }
-#media-widget[data-state="idle"] .deck-pet { opacity: .45; }
+/* Sin música la mascota duerme: pierde el color y queda tenue. */
+#media-widget[data-state="idle"] .deck-pet { opacity: .5; filter: grayscale(1); }
 .deck-lcd .media-label {
     grid-column: 2;
+    z-index: 1;
     background: transparent;
     box-shadow: none;
     padding: 0;
-    color: var(--pet-ink);
+    color: var(--neon-cyan);
     font-family: var(--pixel);
     font-size: 18px;
     line-height: 16px;
@@ -771,9 +795,25 @@ body.no-chat #chat-widget { display: none; }
     letter-spacing: 0.08em;
     text-transform: uppercase;
 }
-.deck-lcd .equalizer i { width: 3px; border-radius: 0; background: var(--pet-ink); }
+.deck-lcd .equalizer i { width: 3px; border-radius: 0; background: var(--led-orange); box-shadow: 0 0 4px currentColor; }
+.deck-lcd .equalizer i:nth-child(1) { background: var(--neon-magenta); color: var(--neon-magenta); }
+.deck-lcd .equalizer i:nth-child(2) { background: var(--led-orange); color: var(--led-orange); }
+.deck-lcd .equalizer i:nth-child(3) { background: var(--led); color: var(--led); }
+.deck-lcd .equalizer i:nth-child(4) { background: var(--neon-cyan); color: var(--neon-cyan); }
+/* "Ahora suena": cada letra sube y baja en ola y cambia de color con un pequeño desfase. */
+.np-text i {
+    display: inline-block;
+    font-style: normal;
+    text-shadow: 0 0 6px currentColor;
+}
+#media-widget[data-state="playing"] .np-text i {
+    animation: np-wave 1400ms var(--swing) infinite, np-hue 2800ms linear infinite;
+    animation-delay: calc(var(--i) * -90ms), calc(var(--i) * -160ms);
+}
+/* Título en neón: degradado de los colores del tema que fluye por las letras mientras corre. */
 .deck-lcd #video-title {
     grid-column: 2;
+    z-index: 1;
     margin-top: 2px;
     font-family: var(--pixel);
     font-size: 24px;
@@ -781,13 +821,57 @@ body.no-chat #chat-widget { display: none; }
     font-weight: 400;
     letter-spacing: 0.02em;
 }
+.deck-lcd #video-title .title-inner {
+    background: linear-gradient(90deg, var(--led-orange), #ffd23f, var(--led), var(--neon-cyan), var(--neon-magenta), var(--led-orange));
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 4px rgba(143, 244, 255, 0.45));
+}
+.deck-lcd #video-title .title-inner.marquee {
+    animation: title-marquee 24s var(--swing) infinite alternate, neon-flow 4s linear infinite;
+}
+/* "Pedido por": etiqueta cian pequeña y el nombre en amarillo neón con brillo. */
+.deck-requester {
+    grid-column: 2;
+    z-index: 1;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    margin-top: 2px;
+}
+.deck-requester[hidden] { display: none; }
+.deck-requester .requester-label {
+    flex-shrink: 0;
+    color: var(--neon-cyan);
+    font-size: 16px;
+    line-height: 16px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: .85;
+}
+.deck-requester .requester-label::before { content: "▸ "; color: var(--neon-magenta); }
+#video-requester {
+    min-width: 0;
+    overflow: hidden;
+    color: #ffd23f;
+    font-size: 20px;
+    line-height: 18px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    text-shadow: 0 0 6px rgba(255, 210, 63, 0.7);
+}
 .deck-lcd #queue-indicator {
     grid-column: 2;
+    z-index: 1;
     justify-self: start;
     margin-top: 4px;
     border-radius: 2px;
-    background: var(--pet-ink);
-    color: var(--pet-lcd-hi);
+    background: var(--neon-magenta);
+    color: var(--white);
+    box-shadow: 0 0 8px rgba(255, 43, 214, 0.6);
     font-family: var(--pixel);
     font-size: 16px;
     line-height: 16px;
@@ -1223,6 +1307,356 @@ body.bingo-active #media-widget {
     rotate: -12deg;
 }
 
+/* Notch con la estética de la pantalla de mascota: textos en letra pixelada y neón sobre la
+   LCD oscura. Solo cambian colores y tipografía; la disposición es la misma. */
+#hud .stream-title {
+    font-family: var(--pixel);
+    font-size: 28px;
+    line-height: 26px;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    background: linear-gradient(90deg, var(--neon-cyan), #ffffff, var(--neon-magenta), var(--neon-cyan));
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 5px rgba(0, 229, 255, 0.55));
+    animation: neon-flow 6s linear infinite;
+}
+.brand-live {
+    background: rgba(0, 0, 0, 0.35);
+    color: var(--led);
+    box-shadow: 0 0 0 1px rgba(83, 252, 24, 0.45), inset 0 0 8px rgba(83, 252, 24, 0.18);
+    font-family: var(--pixel);
+    font-size: 16px;
+    line-height: 16px;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-shadow: 0 0 6px rgba(83, 252, 24, 0.8);
+}
+.brand-jp { color: var(--neon-cyan); text-shadow: 0 0 6px rgba(0, 229, 255, 0.7); }
+.topbar-clock {
+    background: rgba(0, 0, 0, 0.35);
+    box-shadow: 0 0 0 1px rgba(255, 210, 63, 0.4), inset 0 0 8px rgba(255, 210, 63, 0.15);
+}
+.desktop-clock {
+    font-family: var(--pixel);
+    font-size: 22px;
+    line-height: 20px;
+    font-weight: 400;
+    color: #ffd23f;
+    text-shadow: 0 0 6px rgba(255, 210, 63, 0.75);
+}
+.pad-rule { background: rgba(0, 229, 255, 0.35); box-shadow: 0 0 6px rgba(0, 229, 255, 0.5); }
+/* Teclas LCD de neón del notch: oscuras y translúcidas con contorno e icono en su color.
+   Encendidas (aria-pressed/expanded = true) se rellenan de color con el icono oscuro, como un
+   píxel iluminado; apagadas quedan solo con el contorno, más tenue. */
+#bingo-toggle { --key: #ffd23f; }
+#music-anchor { --key: var(--neon-magenta); }
+#chat-toggle { --key: var(--neon-cyan); }
+#queue-toggle { --key: var(--led); }
+#volume-toggle { --key: var(--led-orange); }
+#hud .music-anchor, #hud .aero-icon-button {
+    background: rgba(8, 6, 28, 0.55);
+    color: var(--key);
+    box-shadow:
+        0 0 0 2px var(--key),
+        0 0 14px color-mix(in srgb, var(--key) 45%, transparent),
+        inset 0 0 12px color-mix(in srgb, var(--key) 22%, transparent);
+    font-family: var(--pixel);
+    font-size: 20px;
+    letter-spacing: 0.08em;
+    text-shadow: 0 0 6px color-mix(in srgb, var(--key) 80%, transparent);
+    filter: none;
+    opacity: 1;
+}
+#hud .music-anchor svg, #hud .aero-icon-button svg { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--key) 80%, transparent)); }
+#hud .music-anchor[aria-pressed="true"],
+#hud .aero-icon-button[aria-pressed="true"],
+#hud .aero-icon-button[aria-expanded="true"] {
+    background: var(--key);
+    color: #120c2a;
+    text-shadow: none;
+    box-shadow:
+        0 0 0 2px color-mix(in srgb, var(--key) 60%, white),
+        0 0 22px 2px color-mix(in srgb, var(--key) 70%, transparent),
+        inset 0 2px 0 rgba(255, 255, 255, 0.45);
+}
+#hud .music-anchor[aria-pressed="true"] svg,
+#hud .aero-icon-button[aria-pressed="true"] svg,
+#hud .aero-icon-button[aria-expanded="true"] svg { filter: none; }
+#hud .music-anchor[aria-pressed="false"],
+#hud .aero-icon-button[aria-pressed="false"] { opacity: .6; filter: none; }
+#hud .music-anchor:hover,
+#hud .aero-icon-button:hover:not(:disabled) { filter: brightness(1.2); transform: translateY(-2px); }
+#hud .music-anchor:active,
+#hud .aero-icon-button:active:not(:disabled) { transform: translateY(1px) scale(0.97); }
+/* Mientras suena música, la tecla music late suavemente. */
+#hud .music-anchor[data-playing="true"] { animation: key-pulse 1800ms var(--swing) infinite; }
+
+/* ── Toda la consola en modo pantalla: alertas, reproductor, consejos, paneles y decoración
+   comparten la LCD oscura del notch, letra pixelada y contornos de neón. ── */
+
+/* Reproductor: carcasa oscura de la misma consola. */
+#media-widget {
+    background: var(--lcd-panel);
+    box-shadow: var(--lcd-glow), inset 0 0 0 1px rgba(0, 229, 255, 0.25);
+}
+.deck-brand { color: var(--neon-cyan); text-shadow: 0 0 6px rgba(0, 229, 255, 0.7); }
+.deck-head .window-jp { color: var(--neon-magenta); text-shadow: 0 0 6px rgba(255, 43, 214, 0.6); }
+/* Botones del reproductor: teclas de neón como las del notch, cada una con su color. */
+#music-prev, #music-next { --key: var(--neon-cyan); }
+#music-restart { --key: var(--led); }
+#music-pause { --key: var(--led-orange); }
+#music-stop { --key: var(--neon-magenta); }
+.deck-keys .face-button {
+    background: rgba(8, 6, 28, 0.55);
+    color: var(--key);
+    box-shadow:
+        0 0 0 2px var(--key),
+        0 0 12px color-mix(in srgb, var(--key) 45%, transparent),
+        inset 0 0 10px color-mix(in srgb, var(--key) 22%, transparent);
+}
+.deck-keys .face-button svg { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--key) 80%, transparent)); }
+.deck-keys .face-button:disabled { opacity: .35; }
+.deck-keys .face-button:hover:not(:disabled) { filter: brightness(1.2); }
+/* Pausa encendida mientras la música está en pausa. */
+#media-widget[data-state="paused"] #music-pause:not(:disabled) {
+    background: var(--key);
+    color: #120c2a;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--key) 60%, white), 0 0 22px 2px color-mix(in srgb, var(--key) 70%, transparent);
+}
+
+/* Alertas: tarjeta LCD con contorno y disco de neón según el tipo. */
+#alert-box { --alert-key: var(--neon-cyan); }
+#alert-box[data-type="follow"] { --alert-key: var(--led); }
+#alert-box[data-type="sub"] { --alert-key: var(--neon-magenta); }
+#alert-box[data-type="giftsub"] { --alert-key: #ffd23f; }
+#alert-box {
+    background: var(--lcd-panel);
+    color: var(--white);
+    box-shadow:
+        0 0 0 2px var(--alert-key),
+        0 0 32px 4px color-mix(in srgb, var(--alert-key) 45%, transparent),
+        inset 0 0 24px color-mix(in srgb, var(--alert-key) 18%, transparent),
+        var(--lift);
+}
+#alert-box .alert-header,
+#alert-box[data-type] .alert-header {
+    background: var(--alert-key);
+    color: #120c2a;
+    box-shadow: 0 0 14px color-mix(in srgb, var(--alert-key) 60%, transparent);
+    text-shadow: none;
+    font-family: var(--pixel);
+    font-size: 20px;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+#alert-box .alert-disc,
+#alert-box[data-type] .alert-disc {
+    background: conic-gradient(from var(--edge-angle), var(--alert-key), #ffffff, var(--alert-key), color-mix(in srgb, var(--alert-key) 40%, #120c2a), var(--alert-key));
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 0 24px 4px color-mix(in srgb, var(--alert-key) 70%, transparent);
+    animation: edge-spin 3000ms linear infinite;
+}
+#alert-box .alert-art { box-shadow: 0 0 0 2px var(--white), 0 0 0 4px #120c2a; }
+.alert-jp { color: var(--alert-key); text-shadow: 0 0 6px color-mix(in srgb, var(--alert-key) 70%, transparent); }
+.alert-body {
+    font-family: var(--pixel);
+    font-size: 44px;
+    line-height: 40px;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.35);
+}
+
+/* Consejos flotantes: píldora LCD con contorno cian, etiqueta magenta y comandos en amarillo. */
+#tips .tip {
+    background: var(--lcd-panel);
+    color: var(--white);
+    box-shadow: 0 0 0 2px var(--neon-cyan), 0 0 18px rgba(0, 229, 255, 0.35), var(--lift);
+    font-family: var(--pixel);
+    font-size: 22px;
+    font-weight: 400;
+    letter-spacing: 0.03em;
+}
+#tips .tip-label {
+    background: var(--neon-magenta);
+    color: #120c2a;
+    box-shadow: 0 0 12px rgba(255, 43, 214, 0.6);
+    font-family: var(--pixel);
+    font-size: 18px;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+}
+#tips .tip b { color: #ffd23f; font-weight: 400; text-shadow: 0 0 6px rgba(255, 210, 63, 0.75); }
+
+/* Paneles de cola y volumen, y avisos de conexión: misma pantalla. */
+.topbar-panel, #connection-status {
+    background: var(--lcd-panel);
+    color: var(--white);
+    box-shadow: 0 0 0 2px var(--neon-cyan), 0 0 22px rgba(0, 229, 255, 0.3), var(--lift);
+}
+.topbar-panel .aero-window-title {
+    background: rgba(0, 0, 0, 0.35);
+    color: var(--neon-cyan);
+    box-shadow: inset 0 -1px 0 rgba(0, 229, 255, 0.4);
+    text-shadow: 0 0 6px rgba(0, 229, 255, 0.7);
+    font-family: var(--pixel);
+    font-size: 20px;
+    font-weight: 400;
+}
+.topbar-panel-body { color: var(--white); }
+.topbar-panel output { color: #ffd23f; }
+
+/* Decoración: estrella 新発売 en magenta neón que late, y eslogan en píldora LCD. */
+.deco-burst {
+    background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.55), transparent 60%), var(--neon-magenta);
+    filter: drop-shadow(0 0 10px rgba(255, 43, 214, 0.75));
+    animation: rise 1000ms var(--mass) 320ms both, burst-pulse 2200ms var(--swing) infinite;
+}
+.pad-tagline {
+    background: var(--lcd-panel);
+    color: var(--neon-cyan);
+    box-shadow: 0 0 0 2px var(--slate-deep), 0 0 14px rgba(0, 229, 255, 0.3);
+    text-shadow: 0 0 6px rgba(0, 229, 255, 0.7);
+}
+
+/* Chat: burbujas LCD con contorno neón que alterna cian y magenta; el usuario va en una
+   etiqueta rellena del mismo color y el texto en blanco legible. */
+.msg {
+    --msg-key: var(--neon-cyan);
+    background: var(--lcd-panel);
+    color: var(--white);
+    box-shadow:
+        0 0 0 2px var(--msg-key),
+        0 0 16px color-mix(in srgb, var(--msg-key) 35%, transparent),
+        var(--lift);
+}
+.msg:nth-child(even) { --msg-key: var(--neon-magenta); background: var(--lcd-panel); }
+.msg::before { box-shadow: -2px 2px 0 var(--msg-key); }
+.msg-user,
+.msg:nth-child(even) .msg-user {
+    background: var(--msg-key);
+    color: #120c2a;
+    box-shadow: 0 0 12px color-mix(in srgb, var(--msg-key) 60%, transparent);
+    text-shadow: none;
+    font-family: var(--pixel);
+    font-size: 18px;
+    line-height: 20px;
+    font-weight: 400;
+    letter-spacing: 0.06em;
+}
+
+/* Bingo: tablero en pantalla LCD con contorno amarillo (el color de la tecla bingo). Cada
+   columna B·I·N·G·O tiene su neón y las bolas sorteadas se encienden de ese color. */
+#bingo-widget {
+    background: var(--lcd-panel);
+    color: var(--white);
+    box-shadow: 0 0 0 2px #ffd23f, 0 0 36px 4px rgba(255, 210, 63, 0.35), var(--lift);
+}
+#bingo-widget .aero-window-title {
+    background: rgba(0, 0, 0, 0.35);
+    color: #ffd23f;
+    box-shadow: inset 0 -1px 0 rgba(255, 210, 63, 0.45);
+    text-shadow: 0 0 8px rgba(255, 210, 63, 0.75);
+    font-family: var(--pixel);
+    font-size: 28px;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.bingo-caption {
+    background: rgba(0, 0, 0, 0.4);
+    color: var(--neon-cyan);
+    box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.6);
+    text-shadow: 0 0 6px rgba(0, 229, 255, 0.7);
+    font-family: var(--pixel);
+    font-size: 24px;
+    font-weight: 400;
+}
+/* Bombo: esfera oscura con aro cian, jaula magenta y bolas de neón. */
+.bingo-drum i:nth-child(1) {
+    background: radial-gradient(circle at 50% 35%, rgba(0, 229, 255, 0.18), rgba(8, 6, 28, 0.85) 70%);
+    box-shadow: 0 0 0 2px var(--neon-cyan), 0 0 24px rgba(0, 229, 255, 0.45), inset 0 -8px 16px rgba(0, 0, 0, 0.5);
+}
+.bingo-drum i:nth-child(2) {
+    border-color: rgba(255, 43, 214, 0.7);
+    box-shadow:
+        0 -48px 0 -54px #ffd23f,
+        42px -24px 0 -56px var(--neon-magenta),
+        42px 24px 0 -56px var(--led),
+        0 48px 0 -54px var(--led-orange),
+        -42px 24px 0 -56px var(--neon-cyan),
+        -42px -24px 0 -56px var(--neon-magenta);
+}
+.bingo-drum i:nth-child(3) { background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.2)); }
+#bingo-ball {
+    background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.25), transparent 55%), #120c2a;
+    color: #ffd23f;
+    box-shadow: 0 0 0 3px #ffd23f, 0 0 24px 4px rgba(255, 210, 63, 0.6), inset 0 0 18px rgba(255, 210, 63, 0.3);
+    text-shadow: 0 0 8px rgba(255, 210, 63, 0.85);
+    font-family: var(--pixel);
+    font-size: 40px;
+    font-weight: 400;
+}
+#bingo-status {
+    font-family: var(--pixel);
+    font-size: 56px;
+    line-height: 52px;
+    font-weight: 400;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.35);
+}
+#bingo-widget[data-phase="won"] #bingo-status { color: #ffd23f; text-shadow: 0 0 12px rgba(255, 210, 63, 0.85); }
+#bingo-participants {
+    background: var(--neon-magenta);
+    color: #120c2a;
+    box-shadow: 0 0 12px rgba(255, 43, 214, 0.6);
+    font-family: var(--pixel);
+    font-size: 18px;
+    font-weight: 400;
+}
+#bingo-help { color: var(--neon-cyan); font-family: var(--pixel); font-size: 20px; font-weight: 400; text-shadow: 0 0 6px rgba(0, 229, 255, 0.6); }
+#bingo-history { color: #ffd23f; font-family: var(--pixel); font-size: 24px; font-weight: 400; text-shadow: 0 0 6px rgba(255, 210, 63, 0.6); }
+.bingo-board-row:nth-child(1) { --row: var(--neon-cyan); }
+.bingo-board-row:nth-child(2) { --row: var(--neon-magenta); }
+.bingo-board-row:nth-child(3) { --row: #ffd23f; }
+.bingo-board-row:nth-child(4) { --row: var(--led); }
+.bingo-board-row:nth-child(5) { --row: var(--led-orange); }
+.bingo-board-row b, .bingo-board-row span { font-family: var(--pixel); font-size: 22px; font-weight: 400; }
+.bingo-board-row b {
+    background: var(--row);
+    color: #120c2a;
+    box-shadow: 0 0 14px color-mix(in srgb, var(--row) 60%, transparent);
+    font-family: var(--pixel);
+    font-size: 28px;
+}
+.bingo-board-row span {
+    background: rgba(0, 0, 0, 0.3);
+    color: rgba(255, 255, 255, 0.45);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--row) 35%, transparent);
+}
+.bingo-board-row .called {
+    background: color-mix(in srgb, var(--row) 85%, #120c2a);
+    color: #120c2a;
+    box-shadow: 0 0 10px color-mix(in srgb, var(--row) 55%, transparent);
+}
+.bingo-board-row .latest {
+    background: var(--white);
+    color: #120c2a;
+    box-shadow: 0 0 0 3px var(--row), 0 0 22px 4px color-mix(in srgb, var(--row) 80%, transparent);
+}
+#bingo-winning-card {
+    background: rgba(0, 0, 0, 0.35);
+    box-shadow: 0 0 0 2px #ffd23f, 0 0 18px rgba(255, 210, 63, 0.35);
+    font-family: var(--pixel);
+    font-weight: 400;
+}
+#bingo-winning-card b { color: #ffd23f; text-shadow: 0 0 6px rgba(255, 210, 63, 0.7); }
+#bingo-winning-card span { background: rgba(255, 255, 255, 0.08); color: var(--white); font-family: var(--pixel); font-size: 24px; font-weight: 400; }
+#bingo-winning-card .winning { background: #ffd23f; color: #120c2a; box-shadow: 0 0 12px rgba(255, 210, 63, 0.7); }
+
 @keyframes rise {
     from { opacity: 0; transform: translateY(16px); filter: blur(8px); }
     to { opacity: 1; transform: none; filter: none; }
@@ -1261,6 +1695,22 @@ body.bingo-active #media-widget {
 /* Ángulo animable para el borde iluminado del video. */
 @property --edge-angle { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
 @keyframes edge-spin { to { --edge-angle: 360deg; } }
+@keyframes lcd-backlight { to { background-position: 0 0, 0 0, 0 0, 100% 0; } }
+@keyframes lcd-scan { from { background-position: 0 100%; } to { background-position: 0 0; } }
+@keyframes np-wave { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes np-hue {
+    0%, 100% { color: var(--neon-cyan); }
+    25% { color: var(--led); }
+    50% { color: #ffd23f; }
+    75% { color: var(--neon-magenta); }
+}
+@keyframes neon-flow { to { background-position: -200% 0; } }
+@keyframes notch-scan { from { background-position: 0 0, 0 0, 0 384px, 0 0; } to { background-position: 0 0, 0 0, 0 0, 0 0; } }
+@keyframes key-pulse {
+    0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--key) 60%, white), 0 0 14px 1px color-mix(in srgb, var(--key) 55%, transparent), inset 0 2px 0 rgba(255, 255, 255, 0.45); }
+    50% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--key) 60%, white), 0 0 28px 6px color-mix(in srgb, var(--key) 85%, transparent), inset 0 2px 0 rgba(255, 255, 255, 0.45); }
+}
+@keyframes burst-pulse { 50% { scale: 1.08; filter: drop-shadow(0 0 18px rgba(255, 43, 214, 0.95)); } }
 @keyframes disc-spin { to { transform: rotate(360deg); } }
 @keyframes music-bars { to { transform: scaleY(.3); } }
 @keyframes title-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
@@ -1273,9 +1723,15 @@ body.bingo-active #media-widget {
 /* Modo ligero (?lite=1): conserva entradas y alertas, pero elimina todo movimiento continuo
    para que la página quede quieta entre eventos. app.js rota los consejos cada 9 s. */
 body.lite .brand-live::before, body.lite .disc-lid::before, body.lite .vinyl-record,
-body.lite .music-bars i, body.lite .equalizer i,
-body.lite .bingo-drum i, body.lite .deck-pet i, body.lite #video-container, body.lite .title-inner.marquee,
-body.lite #video-title.scrolling { text-overflow: ellipsis; }
+body.lite .music-bars i, body.lite .equalizer i:not(.deck-lcd .equalizer i),
+body.lite .bingo-drum i, body.lite #video-container, body.lite #hud .music-anchor,
+body.lite #alert-box .alert-disc,
+body.lite .title-inner.marquee:not(.deck-lcd .title-inner) { animation: none !important; }
+/* El notch es grande: en modo ligero conserva su entrada pero no la línea de barrido. */
+body.lite #hud.system-topbar { animation: notch-drop 900ms var(--mass) both; }
+body.lite .deco-burst { animation: rise 1000ms var(--mass) 320ms both; }
+/* La pantalla del reproductor es pequeña y se mantiene animada; el resto del título se corta. */
+body.lite #video-title.scrolling:not(.deck-lcd #video-title) { text-overflow: ellipsis; }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
     .tip { display: none; }

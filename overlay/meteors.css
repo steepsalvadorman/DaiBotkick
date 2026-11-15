@@ -1,0 +1,137 @@
+/* Lluvia de meteoritos en pixel art (!meteoros). Compartida por todos los temas: app.js crea la
+   capa y cada meteorito. Cada uno es un sprite original de 14x13 píxeles de 4 px dibujado con
+   box-shadow: roca abajo a la izquierda y estela de fuego hacia arriba a la derecha. Cae en
+   diagonal hacia abajo a la izquierda y solo anima transform y opacity. No intercepta clics. */
+.meteor-shower {
+    position: absolute;
+    inset: 0;
+    z-index: 65;
+    overflow: hidden;
+    pointer-events: none;
+}
+/* Cielo que se oscurece un poco mientras dura la lluvia. */
+.meteor-shower::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(120% 70% at 70% 0%, rgba(43, 10, 60, 0.55), rgba(10, 6, 28, 0.25) 60%, transparent 85%);
+    opacity: 0;
+    transition: opacity 1200ms ease;
+}
+.meteor-shower.active::before { opacity: 1; }
+.meteor {
+    position: absolute;
+    top: -64px;
+    left: var(--x);
+    width: 56px;
+    height: 52px;
+    scale: var(--scale);
+    filter: drop-shadow(0 0 6px var(--flame-2)) drop-shadow(0 0 14px var(--flame-1));
+    animation: meteor-fall var(--dur) linear forwards;
+    will-change: transform, opacity;
+}
+/* Paletas: fuego clásico, neón cian y magenta, y verde tóxico. */
+.meteor {
+    --rock-dark: #3b2a3f;
+    --rock: #6b4a5e;
+    --rock-hi: #a07a8a;
+    --core: #ffffff;
+    --flame-1: #ffd23f;
+    --flame-2: #ff7a00;
+    --flame-3: #ff2b2b;
+}
+.meteor.neon { --flame-1: #ffffff; --flame-2: #00e5ff; --flame-3: #ff2bd6; --core: #8ff4ff; }
+.meteor.toxic { --flame-1: #eaffc2; --flame-2: #53fc18; --flame-3: #0fa36b; --core: #b6ff94; }
+.meteor i {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 4px;
+    box-shadow:
+        48px 0px 0 var(--flame-1),
+        52px 0px 0 var(--flame-1),
+        44px 4px 0 var(--flame-1),
+        48px 4px 0 var(--flame-2),
+        52px 4px 0 var(--flame-1),
+        40px 8px 0 var(--flame-1),
+        44px 8px 0 var(--flame-2),
+        48px 8px 0 var(--flame-2),
+        36px 12px 0 var(--flame-1),
+        40px 12px 0 var(--flame-2),
+        44px 12px 0 var(--flame-2),
+        48px 12px 0 var(--flame-3),
+        32px 16px 0 var(--flame-1),
+        36px 16px 0 var(--flame-2),
+        40px 16px 0 var(--flame-2),
+        44px 16px 0 var(--flame-3),
+        28px 20px 0 var(--flame-1),
+        32px 20px 0 var(--flame-2),
+        36px 20px 0 var(--flame-2),
+        40px 20px 0 var(--flame-3),
+        12px 24px 0 var(--flame-1),
+        16px 24px 0 var(--flame-1),
+        20px 24px 0 var(--flame-2),
+        24px 24px 0 var(--flame-2),
+        28px 24px 0 var(--flame-2),
+        32px 24px 0 var(--flame-2),
+        36px 24px 0 var(--flame-3),
+        8px 28px 0 var(--flame-1),
+        12px 28px 0 var(--rock-dark),
+        16px 28px 0 var(--rock-dark),
+        20px 28px 0 var(--rock-dark),
+        24px 28px 0 var(--rock),
+        28px 28px 0 var(--flame-3),
+        32px 28px 0 var(--flame-3),
+        4px 32px 0 var(--flame-1),
+        8px 32px 0 var(--rock-dark),
+        12px 32px 0 var(--rock),
+        16px 32px 0 var(--rock-hi),
+        20px 32px 0 var(--rock-hi),
+        24px 32px 0 var(--rock),
+        28px 32px 0 var(--rock-dark),
+        4px 36px 0 var(--rock-dark),
+        8px 36px 0 var(--rock),
+        12px 36px 0 var(--rock-hi),
+        16px 36px 0 var(--core),
+        20px 36px 0 var(--rock-hi),
+        24px 36px 0 var(--rock),
+        28px 36px 0 var(--rock-dark),
+        4px 40px 0 var(--rock-dark),
+        8px 40px 0 var(--rock),
+        12px 40px 0 var(--rock-hi),
+        16px 40px 0 var(--rock-hi),
+        20px 40px 0 var(--rock),
+        24px 40px 0 var(--rock),
+        28px 40px 0 var(--rock-dark),
+        4px 44px 0 var(--rock-dark),
+        8px 44px 0 var(--rock),
+        12px 44px 0 var(--rock),
+        16px 44px 0 var(--rock),
+        20px 44px 0 var(--rock),
+        24px 44px 0 var(--rock-dark),
+        28px 44px 0 var(--rock-dark),
+        8px 48px 0 var(--rock-dark),
+        12px 48px 0 var(--rock-dark),
+        16px 48px 0 var(--rock-dark),
+        20px 48px 0 var(--rock-dark),
+        24px 48px 0 var(--rock-dark);
+}
+/* La estela parpadea a saltos, como un sprite de dos fotogramas. */
+.meteor i { animation: meteor-flicker 160ms steps(1) infinite; }
+@keyframes meteor-fall {
+    0% { transform: translate(0, 0); opacity: 0; }
+    6% { opacity: 1; }
+    88% { opacity: 1; }
+    100% { transform: translate(calc(var(--dist) * -1), var(--dist)); opacity: 0; }
+}
+@keyframes meteor-flicker { 50% { filter: brightness(1.35); } }
+/* Destello al empezar una tormenta. */
+.meteor-flash {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 70% 10%, rgba(255, 210, 63, 0.55), rgba(255, 122, 0, 0.2) 40%, transparent 70%);
+    animation: meteor-flash 900ms ease-out forwards;
+}
+@keyframes meteor-flash { from { opacity: 1; } to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .meteor-shower { display: none; } }

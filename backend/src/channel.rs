@@ -31,6 +31,7 @@ pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) -> Result<(),
     let (tts_tx, tts_rx) = mpsc::channel(32);
     let ch = Arc::new(ChannelState {
         slug: slug.clone(),
+        platform: crate::platform::Platform::Kick,
         access_token: Arc::new(RwLock::new(row.access_token)),
         persisted_refresh_token: RwLock::new(row.refresh_token.clone()),
         refresh_token_val: Arc::new(RwLock::new(row.refresh_token)),

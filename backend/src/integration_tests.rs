@@ -1059,7 +1059,7 @@ async fn database_persistence_oauth_and_webhook_idempotency() {
 #[tokio::test]
 #[ignore = "requires TEST_DATABASE_URL"]
 async fn every_documented_chat_command_responds() {
-    use crate::commands::handle;
+    use crate::commands::handle_text as handle;
     let database = test_support::TestDatabase::new().await;
     db::upsert_channel(&database.pool, &test_support::row("alpha", 1))
         .await

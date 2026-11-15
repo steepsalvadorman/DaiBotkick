@@ -1,4 +1,7 @@
-use crate::{commands, server::ns_emit, state::AppState, tts};
+use crate::{
+    commands, kick::ingest::role as kick_role, platform::is_blocked, server::ns_emit,
+    state::AppState, tts,
+};
 use axum::{
     body::Bytes,
     extract::State,
@@ -187,45 +190,6 @@ pub async fn worker(app: Arc<AppState>) {
     }
 }
 
-/// Usuario de Kick que puede usar todos los comandos en cualquier canal, sin cooldowns.
-pub(crate) const FULL_ACCESS_USERNAME: &str = "seniordai";
-
-/// Moderadores de Kick a los que se les retiran los permisos de owner aunque tengan la insignia.
-const REVOKED_MODERATORS: &[&str] = &["theblastv2"];
-
-/// El streamer del canal, sus moderadores y `seniordai` tienen permisos de owner. El remitente
-/// viene de un webhook con firma verificada, así que ni el nombre ni las insignias se pueden
-/// suplantar. Las insignias llegan con cada mensaje: quitar el rol en Kick revoca el acceso.
-fn has_owner_access(sender: &serde_json::Value, broadcaster_id: u64) -> bool {
-    let name = sender["username"].as_str().map(str::trim);
-    sender["user_id"].as_u64() == Some(broadcaster_id)
-        || name.is_some_and(|name| name.eq_ignore_ascii_case(FULL_ACCESS_USERNAME))
-        || (!name.is_some_and(|name| {
-            REVOKED_MODERATORS
-                .iter()
-                .any(|revoked| name.eq_ignore_ascii_case(revoked))
-        }) && sender["identity"]["badges"]
-            .as_array()
-            .is_some_and(|badges| badges.iter().any(|b| b["type"] == "moderator")))
-}
-
-/// El streamer y la cuenta con acceso total nunca quedan bloqueados por un baneo.
-async fn sender_banned(
-    ch: &crate::state::ChannelState,
-    sender: &serde_json::Value,
-    broadcaster_id: u64,
-) -> bool {
-    let Some(name) = sender["username"]
-        .as_str()
-        .and_then(crate::state::normalize_username)
-    else {
-        return false;
-    };
-    sender["user_id"].as_u64() != Some(broadcaster_id)
-        && name != FULL_ACCESS_USERNAME
-        && ch.is_banned(&name).await
-}
-
 async fn process(app: &Arc<AppState>, kind: &str, json: &serde_json::Value) {
     let Some(id) = json["broadcaster"]["user_id"]
         .as_u64()
@@ -242,58 +206,45 @@ async fn process(app: &Arc<AppState>, kind: &str, json: &serde_json::Value) {
     };
     match kind {
         "chat.message.sent" => {
-            let Some(username) = json["sender"]["username"].as_str() else {
+            let Some(msg) = crate::kick::ingest::chat_message(json, id) else {
                 return;
             };
-            let Some(content) = json["content"]
-                .as_str()
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-            else {
-                return;
-            };
-            let owner = has_owner_access(&json["sender"], id);
             // El bot escribe como DaiBot: su eco no se muestra ni se procesa, venga de la app o del canal.
-            if crate::kick::sender::is_own_echo(&ch, content).await {
+            if crate::kick::sender::is_own_echo(&ch, &msg.text).await {
                 return;
             }
             // Un baneado (incluso si es moderador) solo aparece como texto en el chat del overlay.
-            let banned = sender_banned(&ch, &json["sender"], id).await;
+            let banned = is_blocked(&ch, &msg.username, msg.role).await;
             // El dock de chat de OBS ve todo, comandos incluidos, con color e insignias.
             ns_emit(
                 app,
                 &ch.slug,
                 "dockChat",
                 serde_json::json!({
-                    "user": username,
-                    "content": content,
+                    "user": msg.username,
+                    "content": msg.text,
                     "textOnly": banned,
-                    "color": json["sender"]["identity"]["username_color"].as_str().unwrap_or(""),
-                    "badges": json["sender"]["identity"]["badges"]
-                        .as_array()
-                        .map(|b| b.iter().filter_map(|x| x["type"].as_str()).collect::<Vec<_>>())
-                        .unwrap_or_default(),
+                    "color": msg.color,
+                    "badges": msg.badges,
                 }),
             );
             // Los comandos (!play, !s…) no se muestran en el chat del overlay.
-            if !content.starts_with('!') {
+            if !msg.text.starts_with('!') {
                 ns_emit(
                     app,
                     &ch.slug,
                     "chatMessage",
-                    serde_json::json!({"user":username,"content":content,"textOnly":banned}),
+                    serde_json::json!({"user":msg.username,"content":msg.text,"textOnly":banned}),
                 );
             }
             if !banned {
-                commands::handle(username, content, owner, &ch, app).await;
+                commands::handle(&msg, &ch, app).await;
             }
         }
         "channel.followed" => {
             let username = json["follower"]["username"].as_str().unwrap_or("alguien");
             // Evita que un baneado dispare voces y alertas siguiendo y dejando de seguir.
-            if crate::state::normalize_username(username).is_some()
-                && sender_banned(&ch, &json["follower"], id).await
-            {
+            if is_blocked(&ch, username, kick_role(&json["follower"], id)).await {
                 return;
             }
             let message = format!("¡Gracias por el follow, {username}!");
@@ -389,60 +340,6 @@ mod tests {
         assert!(verify(&key, &headers, body, now).is_err());
     }
 
-    #[test]
-    fn broadcaster_and_seniordai_have_owner_access_on_any_channel() {
-        let sender = |name: &str, id: u64| serde_json::json!({"username": name, "user_id": id});
-        assert!(has_owner_access(&sender("Frank_Arr", 7), 7));
-        for name in ["seniordai", "SeniorDai", "SENIORDAI"] {
-            assert!(has_owner_access(&sender(name, 99), 7));
-        }
-        assert!(!has_owner_access(&sender("viewer", 99), 7));
-        assert!(!has_owner_access(&sender("seniordai2", 99), 7));
-        assert!(!has_owner_access(&sender("senior-dai", 99), 7));
-        assert!(!has_owner_access(&serde_json::json!({}), 7));
-    }
-
-    #[test]
-    fn channel_moderators_have_owner_access() {
-        let sender = |badges: serde_json::Value| serde_json::json!({"username": "mod", "user_id": 99, "identity": {"badges": badges}});
-        assert!(has_owner_access(
-            &sender(serde_json::json!([
-                {"text": "Subscriber", "type": "subscriber", "count": 3},
-                {"text": "Moderator", "type": "moderator"}
-            ])),
-            7
-        ));
-        for badge in ["vip", "subscriber", "og", "founder", "sub_gifter"] {
-            assert!(!has_owner_access(
-                &sender(serde_json::json!([{"text": "Moderator", "type": badge}])),
-                7
-            ));
-        }
-        assert!(!has_owner_access(&sender(serde_json::json!([])), 7));
-        assert!(!has_owner_access(&sender(serde_json::json!(null)), 7));
-        assert!(!has_owner_access(
-            &serde_json::json!({"username": "mod", "user_id": 99, "identity": {}}),
-            7
-        ));
-    }
-
-    #[test]
-    fn revoked_moderators_lose_owner_access() {
-        let moderator = serde_json::json!([{"text": "Moderator", "type": "moderator"}]);
-        for name in ["TheBlastv2", "theblastv2", " THEBLASTV2 "] {
-            assert!(!has_owner_access(
-                &serde_json::json!({"username": name, "user_id": 99, "identity": {"badges": moderator}}),
-                7
-            ));
-        }
-        for name in ["theblastv22", "theblast", "otro_mod"] {
-            assert!(has_owner_access(
-                &serde_json::json!({"username": name, "user_id": 99, "identity": {"badges": moderator}}),
-                7
-            ));
-        }
-    }
-
     #[tokio::test]
     async fn banned_users_only_chat_as_text_while_streamer_keeps_access() {
         let pool = sqlx::postgres::PgPoolOptions::new()
@@ -476,23 +373,11 @@ mod tests {
         process(&app, "chat.message.sent", &message("Alpha", 7, "")).await;
         process(&app, "chat.message.sent", &message("viewer", 52, "")).await;
         assert_eq!(ch.sorteo.lock().await.participants, vec!["Alpha", "viewer"]);
-        assert!(
-            !sender_banned(
-                &ch,
-                &serde_json::json!({"username": "SeniorDai", "user_id": 1}),
-                7
-            )
-            .await
-        );
-        assert!(
-            sender_banned(
-                &ch,
-                &serde_json::json!({"username": "@TROLL", "user_id": 1}),
-                7
-            )
-            .await
-        );
-        assert!(!sender_banned(&ch, &serde_json::json!({"user_id": 1}), 7).await);
+        let user =
+            |name: &str, user_id: u64| serde_json::json!({"username": name, "user_id": user_id});
+        assert!(!is_blocked(&ch, "SeniorDai", kick_role(&user("SeniorDai", 1), 7)).await);
+        assert!(is_blocked(&ch, "@TROLL", kick_role(&user("@TROLL", 1), 7)).await);
+        assert!(!is_blocked(&ch, "", kick_role(&serde_json::json!({"user_id": 1}), 7)).await);
     }
 
     #[test]

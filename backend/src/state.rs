@@ -38,6 +38,8 @@ pub struct PlayerSlot {
 /// Estado de un canal específico (un streamer).
 pub struct ChannelState {
     pub slug: String,
+    /// Plataforma del canal: de ella salen sus eventos y a ella van sus respuestas.
+    pub platform: crate::platform::Platform,
     pub access_token: Arc<RwLock<String>>,
     pub refresh_token_val: Arc<RwLock<String>>,
     /// Last DB value, retained across failed writes to recover rotated tokens safely.

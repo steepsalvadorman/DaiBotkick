@@ -603,7 +603,7 @@ body.no-chat #chat-widget { display: none; }
 #youtube-player, #direct-video { width: 100%; height: 100%; display: block; }
 #youtube-player iframe { width: 100%; height: 100%; border: 0; }
 #direct-video { display: none; object-fit: contain; }
-/* Cabecera de la carcasa: LED de reproducción, nombre grabado en relieve y sello estéreo. */
+/* Cabecera de la carcasa: LED de reproducción y nombre grabado en relieve. */
 .deck-head {
     display: flex;
     align-items: center;
@@ -631,18 +631,6 @@ body.no-chat #chat-widget { display: none; }
     text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 .deck-head .window-jp { color: var(--ink-muted); }
-.deck-tag {
-    margin-left: auto;
-    padding: 0 8px;
-    border-radius: 4px;
-    background: var(--sheen), var(--violet-deep);
-    color: var(--white);
-    font-family: var(--mono);
-    font-size: 12px;
-    line-height: 16px;
-    font-weight: 600;
-    letter-spacing: 0.16em;
-}
 /* Pantalla de mascota virtual a color: LCD retroiluminada en noche violeta y azul que cambia de
    tono despacio, rejilla de píxeles, una línea de barrido, letra pixelada en neón y la mascota.
    Es una zona pequeña, así que se anima también en modo ligero. */
@@ -1417,14 +1405,6 @@ body.bingo-active #media-widget {
 }
 .deck-brand { color: var(--neon-cyan); text-shadow: 0 0 6px rgba(0, 229, 255, 0.7); }
 .deck-head .window-jp { color: var(--neon-magenta); text-shadow: 0 0 6px rgba(255, 43, 214, 0.6); }
-.deck-tag {
-    background: rgba(0, 0, 0, 0.35);
-    color: #ffd23f;
-    box-shadow: 0 0 0 1px rgba(255, 210, 63, 0.6);
-    font-family: var(--pixel);
-    font-size: 16px;
-    text-shadow: 0 0 6px rgba(255, 210, 63, 0.7);
-}
 /* Botones del reproductor: teclas de neón como las del notch, cada una con su color. */
 #music-prev, #music-next { --key: var(--neon-cyan); }
 #music-restart { --key: var(--led); }

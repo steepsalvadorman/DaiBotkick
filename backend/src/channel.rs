@@ -102,11 +102,14 @@ pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) -> Result<(),
             });
             stats::start_channel(global.io.clone(), ch, global.clone());
         }
-        // Suscripciones a eventos y estadísticas de Twitch llegan en las etapas 4 y 7.
         Platform::Twitch => {
             let (worker, app) = (ch.clone(), global.clone());
             tokio::spawn(async move {
                 tokio::select! { _ = worker.cancel.cancelled() => {}, _ = crate::twitch::run_channel(worker.clone(), app) => {} }
+            });
+            let (worker, app) = (ch.clone(), global.clone());
+            tokio::spawn(async move {
+                tokio::select! { _ = worker.cancel.cancelled() => {}, _ = crate::twitch::stats::run(worker.clone(), app) => {} }
             });
         }
     }

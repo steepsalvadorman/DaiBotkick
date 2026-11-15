@@ -6,6 +6,7 @@ pub mod bot;
 pub mod eventsub;
 pub mod ingest;
 pub mod sender;
+pub mod stats;
 
 use crate::state::{AppState, ChannelState};
 use std::sync::{atomic::Ordering, Arc};
@@ -102,6 +103,60 @@ pub fn valid_login(login: &str) -> bool {
         && login
             .bytes()
             .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+}
+
+/// Error de una llamada a Helix con el token del canal, ya con un mensaje para el streamer.
+#[derive(Debug)]
+pub struct HelixError {
+    pub status: reqwest::StatusCode,
+    pub message: &'static str,
+}
+
+/// Llamada a Helix con el token del streamer y el `Client-Id` de la app. Si Twitch responde
+/// 401, renueva el token una vez y repite.
+pub async fn helix(
+    ch: &Arc<ChannelState>,
+    app: &Arc<AppState>,
+    build: impl Fn(&reqwest::Client, &str) -> reqwest::RequestBuilder,
+) -> Result<reqwest::Response, HelixError> {
+    let fail = |status, message| HelixError { status, message };
+    let tw = app.config.twitch.as_ref().ok_or(fail(
+        reqwest::StatusCode::SERVICE_UNAVAILABLE,
+        "Twitch no está configurado",
+    ))?;
+    for attempt in 0..2 {
+        let token = ch.access_token.read().await.clone();
+        let response = build(&app.http, &app.twitch_endpoints.api)
+            .bearer_auth(&token)
+            .header("Client-Id", &tw.client_id)
+            .send()
+            .await
+            .map_err(|_| fail(reqwest::StatusCode::BAD_GATEWAY, "Twitch no responde"))?;
+        if response.status() == reqwest::StatusCode::UNAUTHORIZED
+            && attempt == 0
+            && crate::oauth::refresh_if_current(ch, app, &token).await
+        {
+            continue;
+        }
+        return match response.status() {
+            s if s.is_success() => Ok(response),
+            reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN => Err(fail(
+                reqwest::StatusCode::FORBIDDEN,
+                "Twitch rechazó el permiso. Vuelve a conectar el canal en /auth/twitch.",
+            )),
+            s => {
+                tracing::warn!("[Twitch][{}] Helix HTTP {s}", ch.slug);
+                Err(fail(
+                    reqwest::StatusCode::BAD_GATEWAY,
+                    "Twitch rechazó la solicitud",
+                ))
+            }
+        };
+    }
+    Err(fail(
+        reqwest::StatusCode::BAD_GATEWAY,
+        "Twitch rechazó la solicitud",
+    ))
 }
 
 /// Resultado de `GET /oauth2/validate`, que Twitch exige llamar cada hora por token.

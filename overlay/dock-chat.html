@@ -31,6 +31,8 @@
 <script>
 (function () {
     const { channel, $, notice, api, renderContent, ready } = window.Dock;
+    // En Twitch el dock escribe como la cuenta bot, no como el canal.
+    if (window.Dock.isTwitch) $('text').placeholder = 'Escribe en el chat como DaiBotsito…';
     const list = $('messages'), dot = $('dot'), jump = $('jump');
     const MAX = 300;
     const prefs = { commands: $('show-commands'), bot: $('show-bot'), time: $('show-time') };
@@ -77,7 +79,7 @@
         user.textContent = `${data.user || '?'}:`;
         if (typeof data.color === 'string' && /^#[0-9a-f]{3,8}$/i.test(data.color)) user.style.color = data.color;
         const text = document.createElement('span'); text.className = 'text';
-        if (data.textOnly === true) text.textContent = content; else renderContent(text, content);
+        if (data.textOnly === true) text.textContent = content; else renderContent(text, content, data.parts);
         item.append(user, text);
         list.append(item);
         while (list.children.length > MAX) list.firstChild.remove();
@@ -86,7 +88,7 @@
 
     if (!ready) { $('send-btn').disabled = true; return; }
 
-    const socket = io({ query: { ch: channel }, reconnectionDelayMax: 10000 });
+    const socket = io({ query: Dock.socketQuery, reconnectionDelayMax: 10000 });
     socket.on('connect', () => { dot.className = 'dot on'; dot.title = 'Conectado'; notice(''); });
     socket.on('disconnect', () => { dot.className = 'dot'; dot.title = 'Desconectado'; });
     socket.on('connect_error', () => { dot.className = 'dot err'; notice('Sin conexión con DaiBot. Reintentando…'); });

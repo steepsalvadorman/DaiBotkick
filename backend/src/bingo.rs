@@ -51,6 +51,14 @@ fn winning_line(card: &Card, drawn: &[u8]) -> Option<Vec<u8>> {
 }
 
 impl Bingo {
+    /// Abre una partida y registra el cartón de `user`; devuelve el token de su enlace.
+    #[cfg(test)]
+    pub(crate) fn open_with_card(&mut self, user: &str) -> String {
+        self.open().unwrap();
+        self.register(user).unwrap();
+        self.card_tokens[user].clone()
+    }
+
     pub fn snapshot(&self) -> serde_json::Value {
         serde_json::json!({
             "round": self.round, "phase": if self.phase.is_empty() { "idle" } else { self.phase },
@@ -221,7 +229,7 @@ pub async fn handle(
         if args == "carton" {
             (format!(
                 "{user}, abre tu cartón aquí: {} . Inicia sesión con tu cuenta de {} para verlo y marcarlo. Reclama con !bingo en este chat.",
-                game.card_link(user, &app.config.base_url, &ch.slug),
+                game.card_link(user, &app.config.base_url, &ch.key()),
                 ch.platform.name()
             ), round)
         } else {
@@ -284,10 +292,10 @@ pub async fn personal_card(
     headers: axum::http::HeaderMap,
 ) -> axum::response::Response {
     use axum::{http::StatusCode, response::IntoResponse};
-    let Some(username) = app.bingo_auth.username(&headers).await else {
+    let Some((platform, username)) = app.bingo_auth.identity(&headers).await else {
         return (
             StatusCode::UNAUTHORIZED,
-            "Inicia sesión con Kick para ver tu cartón.",
+            "Inicia sesión para ver tu cartón.",
         )
             .into_response();
     };
@@ -309,14 +317,15 @@ pub async fn personal_card(
             None
         } else {
             let game = channel.bingo.lock().await;
+            // La cuenta debe ser de la plataforma del canal: `ana` de Kick no es `ana` de Twitch.
             if game
                 .token_users
                 .get(token)
-                .is_some_and(|owner| owner != &username)
+                .is_some_and(|owner| owner != &username || platform != channel.platform)
             {
                 return (
                     StatusCode::FORBIDDEN,
-                    "Este cartón pertenece a otra cuenta de Kick.",
+                    "Este cartón pertenece a otra cuenta.",
                 )
                     .into_response();
             }

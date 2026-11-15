@@ -2,7 +2,10 @@
 //!
 //! Todas las rutas exigen `Authorization: Bearer <panel_token>` del canal. El token viaja en
 //! el fragmento de la URL del dock y nunca en la query, para que no quede en logs ni referers.
-use crate::state::{AppState, ChannelState};
+use crate::{
+    platform::Platform,
+    state::{AppState, ChannelState},
+};
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
@@ -75,6 +78,87 @@ async fn kick(
     Err((StatusCode::BAD_GATEWAY, "Kick rechazó la solicitud"))
 }
 
+/// Petición a Helix (Twitch) con el token del canal; renueva una vez si Twitch responde 401.
+async fn helix(
+    ch: &Arc<ChannelState>,
+    app: &Arc<AppState>,
+    build: impl Fn(&reqwest::Client, &str) -> reqwest::RequestBuilder,
+) -> Result<serde_json::Value, (StatusCode, &'static str)> {
+    let response = crate::twitch::helix(ch, app, build)
+        .await
+        .map_err(|e| (e.status, e.message))?;
+    if response.status() == StatusCode::NO_CONTENT {
+        return Ok(serde_json::Value::Null);
+    }
+    response
+        .json()
+        .await
+        .map_err(|_| (StatusCode::BAD_GATEWAY, "Respuesta de Twitch inválida"))
+}
+
+/// Carátula de una categoría de Twitch en el tamaño de las de Kick (52×72).
+fn box_art(url: &str) -> String {
+    url.replace("{width}x{height}", "52x72")
+}
+
+/// Título, categoría y estado del directo en Twitch, con la misma forma que `stream_summary`.
+async fn twitch_summary(
+    ch: &Arc<ChannelState>,
+    app: &Arc<AppState>,
+    id: u64,
+) -> Result<serde_json::Value, (StatusCode, &'static str)> {
+    let id = id.to_string();
+    let channel = helix(ch, app, |http, api| {
+        http.get(format!("{api}/channels"))
+            .query(&[("broadcaster_id", &id)])
+    })
+    .await?;
+    let stream = helix(ch, app, |http, api| {
+        http.get(format!("{api}/streams"))
+            .query(&[("user_id", &id)])
+    })
+    .await?;
+    let channel = &channel["data"][0];
+    let game_id = channel["game_id"]
+        .as_str()
+        .and_then(|g| g.parse::<u64>().ok());
+    let thumbnail = match game_id {
+        Some(game) => helix(ch, app, |http, api| {
+            http.get(format!("{api}/games"))
+                .query(&[("id", game.to_string())])
+        })
+        .await
+        .ok()
+        .and_then(|g| g["data"][0]["box_art_url"].as_str().map(box_art))
+        .unwrap_or_default(),
+        None => String::new(),
+    };
+    let stream = &stream["data"][0];
+    let live = stream["type"] == "live";
+    Ok(serde_json::json!({
+        "title": channel["title"].as_str().unwrap_or(""),
+        "category": game_id.map(|id| serde_json::json!({
+            "id": id,
+            "name": channel["game_name"].as_str().unwrap_or(""),
+            "thumbnail": thumbnail,
+        })),
+        "live": live,
+        "viewers": stream["viewer_count"].as_u64().filter(|_| live),
+    }))
+}
+
+/// Cuerpo de `PATCH /helix/channels`: Twitch usa `title` y `game_id` (texto).
+fn twitch_update_body(kick: &serde_json::Value) -> serde_json::Value {
+    let mut body = serde_json::Map::new();
+    if let Some(title) = kick["stream_title"].as_str() {
+        body.insert("title".into(), title.into());
+    }
+    if let Some(id) = kick["category_id"].as_u64() {
+        body.insert("game_id".into(), id.to_string().into());
+    }
+    body.into()
+}
+
 fn finish(result: Reply) -> Response {
     result.unwrap_or_else(|(status, msg)| {
         (status, Json(serde_json::json!({"error": msg}))).into_response()
@@ -96,6 +180,9 @@ pub async fn stream_info(
                     "Canal aún sin identificador",
                 ));
             };
+            if ch.platform == Platform::Twitch {
+                return Ok(Json(twitch_summary(&ch, &app, id).await?).into_response());
+            }
             let json: serde_json::Value = kick(&ch, &app, |http, api| {
                 http.get(format!("{api}/channels?broadcaster_user_id={id}"))
             })
@@ -162,10 +249,24 @@ pub async fn update_stream(
         async {
             let ch = channel(&app, &slug, &headers)?;
             let body = update_body(&update)?;
-            kick(&ch, &app, |http, api| {
-                http.patch(format!("{api}/channels")).json(&body)
-            })
-            .await?;
+            match ch.platform {
+                Platform::Kick => {
+                    kick(&ch, &app, |http, api| {
+                        http.patch(format!("{api}/channels")).json(&body)
+                    })
+                    .await?;
+                }
+                Platform::Twitch => {
+                    let id = ch.channel_id.read().await.unwrap_or(0).to_string();
+                    let body = twitch_update_body(&body);
+                    helix(&ch, &app, |http, api| {
+                        http.patch(format!("{api}/channels"))
+                            .query(&[("broadcaster_id", &id)])
+                            .json(&body)
+                    })
+                    .await?;
+                }
+            }
             tracing::info!("[Dock][{}] Stream actualizado", ch.slug);
             Ok(StatusCode::NO_CONTENT.into_response())
         }
@@ -190,6 +291,14 @@ pub async fn categories(
             let q: String = query.q.trim().chars().take(100).collect();
             if q.chars().count() < 2 {
                 return Ok(Json(serde_json::json!({"data": []})).into_response());
+            }
+            if ch.platform == Platform::Twitch {
+                let json = helix(&ch, &app, |http, api| {
+                    http.get(format!("{api}/search/categories"))
+                        .query(&[("query", q.as_str()), ("first", "20")])
+                })
+                .await?;
+                return Ok(Json(twitch_categories(&json)).into_response());
             }
             let json: serde_json::Value = kick(&ch, &app, |http, api| {
                 http.get(format!("{api}/categories"))
@@ -220,6 +329,24 @@ pub async fn categories(
     )
 }
 
+/// Resultados de `GET /helix/search/categories` con la forma que espera el dock.
+fn twitch_categories(json: &serde_json::Value) -> serde_json::Value {
+    let data: Vec<_> = json["data"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .take(20)
+        .filter_map(|c| {
+            Some(serde_json::json!({
+                "id": c["id"].as_str()?.parse::<u64>().ok()?,
+                "name": c["name"].as_str()?,
+                "thumbnail": c["box_art_url"].as_str().map(box_art).unwrap_or_default(),
+            }))
+        })
+        .collect();
+    serde_json::json!({ "data": data })
+}
+
 #[derive(serde::Deserialize)]
 pub struct ChatSend {
     content: String,
@@ -241,6 +368,11 @@ pub async fn send_chat(
                     StatusCode::BAD_REQUEST,
                     "El mensaje debe tener entre 1 y 500 caracteres",
                 ));
+            }
+            // En Twitch el dock escribe como DaiBotsito: el canal no autoriza escribir como él.
+            if ch.platform == Platform::Twitch {
+                crate::twitch::sender::send(content, &ch, &app).await;
+                return Ok(StatusCode::NO_CONTENT.into_response());
             }
             let Some(id) = *ch.channel_id.read().await else {
                 return Err((
@@ -299,6 +431,31 @@ mod tests {
         assert_eq!(
             stream_summary(&serde_json::Value::Null)["category"],
             serde_json::Value::Null
+        );
+    }
+
+    #[test]
+    fn twitch_categories_and_updates_use_twitch_field_names() {
+        let json = serde_json::json!({"data": [
+            {"id": "509658", "name": "Just Chatting", "box_art_url": "https://static-cdn.jtvnw.net/ttv-boxart/509658-{width}x{height}.jpg"},
+            {"id": "x", "name": "sin id numérico"},
+            {"id": "21779", "name": "League of Legends"}
+        ]});
+        let data = twitch_categories(&json);
+        assert_eq!(data["data"].as_array().unwrap().len(), 2);
+        assert_eq!(data["data"][0]["id"], 509658);
+        assert_eq!(
+            data["data"][0]["thumbnail"],
+            "https://static-cdn.jtvnw.net/ttv-boxart/509658-52x72.jpg"
+        );
+        let kick = update_body(&upd(Some(" Jugando "), Some(509658))).unwrap();
+        assert_eq!(
+            twitch_update_body(&kick),
+            serde_json::json!({"title": "Jugando", "game_id": "509658"})
+        );
+        assert_eq!(
+            twitch_update_body(&update_body(&upd(None, Some(5))).unwrap()),
+            serde_json::json!({"game_id": "5"})
         );
     }
 

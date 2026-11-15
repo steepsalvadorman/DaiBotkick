@@ -3,6 +3,11 @@
     const el = id => document.getElementById(id);
     const params = new URLSearchParams(location.hash.slice(1));
     const channel = params.get('ch') || '';
+    // `ch` es la clave del canal: el slug en Kick o `twitch:login` en Twitch.
+    const isTwitch = channel.startsWith('twitch:');
+    const channelName = isTwitch ? channel.slice('twitch:'.length) : channel;
+    const platformName = isTwitch ? 'Twitch' : 'Kick';
+    const platformHost = isTwitch ? 'twitch.tv' : 'kick.com';
     const token = params.get('token') || '';
     const letters = ['B', 'I', 'N', 'G', 'O'];
     const storageKey = `bingo-marks:${channel}:${token}`;
@@ -101,10 +106,10 @@
                 el('claim').textContent = 'Tu cartón solo se muestra a su dueño.';
                 el('claim').classList.toggle('ready', false);
                 el('login').hidden = false;
-                el('status').textContent = 'Acceso privado con Kick';
+                el('status').textContent = `Acceso privado con ${platformName}`;
                 throw new Error(response.status === 401
-                    ? 'Inicia sesión con la cuenta de Kick con la que solicitaste !carton.'
-                    : 'Este cartón pertenece a otra cuenta. Cambia de cuenta en Kick y vuelve a iniciar sesión.');
+                    ? `Inicia sesión con la cuenta de ${platformName} con la que solicitaste !carton.`
+                    : `Este cartón pertenece a otra cuenta. Cambia de cuenta en ${platformName} y vuelve a iniciar sesión.`);
             }
             if (response.status === 404) {
                 stopped = true;
@@ -122,7 +127,7 @@
         if (!stopped) setTimeout(refresh, 3000);
     }
 
-    if (!/^[a-z0-9_-]{1,100}$/i.test(channel) || !/^[a-f0-9]{32}$/i.test(token)) {
+    if (!/^[a-z0-9_-]{1,100}$/i.test(channelName) || !/^[a-f0-9]{32}$/i.test(token)) {
         el('status').textContent = 'Necesitas tu enlace personal';
         el('error').textContent = 'Escribe !carton en el chat del stream y abre el enlace que responde el bot.';
         return;
@@ -134,7 +139,9 @@
         }
         marks = new Set(saved);
     } catch { storageError(); }
-    el('chat').href = `https://kick.com/${encodeURIComponent(channel)}`;
+    el('chat').href = `https://${platformHost}/${encodeURIComponent(channelName)}`;
+    el('login').textContent = `Iniciar sesión con ${platformName}`;
+    el('login-footer').textContent = `Solo la cuenta de ${platformName} que registró este cartón puede verlo. Para cambiar de cuenta, cierra sesión en ${platformName} y vuelve a iniciar sesión aquí.`;
     el('chat').hidden = false;
     el('login').href = `/auth/bingo?${new URLSearchParams({ ch: channel, token })}`;
     refresh();

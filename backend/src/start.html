@@ -42,6 +42,7 @@
       background: var(--green); color: var(--green-ink); text-decoration: none;
       font-weight: 700; font-size: 16px;
     }
+    .btn.twitch { margin-top: 10px; background: #9146ff; color: #fff; }
     .btn:hover { filter: brightness(1.08); }
     .btn:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
     .note { margin: 14px 0 0; color: var(--muted); font-size: 13px; }
@@ -52,7 +53,7 @@
 <main>
   <img class="mascot" src="/daibot.svg" alt="DaiBot, ninja veloz electrónico y programador" width="176" height="176">
   <p class="brand">DAIBOT</p>
-  <h1>Tu bot para Kick</h1>
+  <h1>Tu bot para Kick y Twitch</h1>
   <p class="lead">Conecta tu canal y tu chat podrá pedir música, hablar con voces y jugar durante el stream.</p>
   <ul>
     <li><span aria-hidden="true">🎵</span><div><b>Videos y música</b><small>!play con links de YouTube o videos MP4 y cola en el overlay</small></div></li>
@@ -60,6 +61,7 @@
     <li><span aria-hidden="true">🎲</span><div><b>Juegos y sorteos</b><small>!dado, !8ball y !sorteo</small></div></li>
   </ul>
   <a class="btn" href="/auth/kick">Conectar con Kick</a>
+  <a class="btn twitch" href="/auth/twitch">Conectar con Twitch</a>
   <p class="note">Solo pedimos los permisos necesarios. <a href="/comandos.html" target="_blank" rel="noopener">Ver todos los comandos</a></p>
 </main>
 </body>

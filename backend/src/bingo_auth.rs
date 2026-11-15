@@ -1,4 +1,4 @@
-use crate::state::AppState;
+use crate::{platform::Platform, state::AppState};
 use axum::{
     extract::{Query, State},
     http::{header, HeaderMap, StatusCode},
@@ -18,6 +18,7 @@ const SESSION_SECONDS: u64 = 8 * 60 * 60;
 const MAX_ENTRIES: usize = 10_000;
 
 struct Pending {
+    platform: Platform,
     verifier: String,
     channel: String,
     token: String,
@@ -25,6 +26,7 @@ struct Pending {
 }
 
 struct Session {
+    platform: Platform,
     username: String,
     expires: Instant,
 }
@@ -46,15 +48,19 @@ fn cookie<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
 }
 
 impl ViewerAuth {
-    pub async fn username(&self, headers: &HeaderMap) -> Option<String> {
+    /// Plataforma y nombre (en minúsculas) de la cuenta con la que el espectador inició sesión.
+    pub async fn identity(&self, headers: &HeaderMap) -> Option<(Platform, String)> {
         let id = cookie(headers, "bingo_session")?;
         let mut sessions = self.sessions.lock().await;
         sessions.retain(|_, session| session.expires > Instant::now());
-        sessions.get(id).map(|session| session.username.clone())
+        sessions
+            .get(id)
+            .map(|session| (session.platform, session.username.clone()))
     }
 
     async fn create_session(
         &self,
+        platform: Platform,
         username: String,
         headers: &HeaderMap,
     ) -> Result<String, &'static str> {
@@ -70,6 +76,7 @@ impl ViewerAuth {
         sessions.insert(
             id.clone(),
             Session {
+                platform,
                 username,
                 expires: Instant::now() + Duration::from_secs(SESSION_SECONDS),
             },
@@ -93,10 +100,14 @@ fn secure(app: &AppState) -> &'static str {
 }
 
 pub async fn login(State(app): State<Arc<AppState>>, Query(query): Query<LoginQuery>) -> Response {
-    let valid = !query.ch.is_empty()
-        && query.ch.len() <= 100
-        && query
-            .ch
+    // `ch` es la clave del canal: el slug en Kick o `twitch:login` en Twitch.
+    let (platform, slug) = match query.ch.strip_prefix("twitch:") {
+        Some(login) => (Platform::Twitch, login),
+        None => (Platform::Kick, query.ch.as_str()),
+    };
+    let valid = !slug.is_empty()
+        && slug.len() <= 100
+        && slug
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
         && query.token.len() == 32
@@ -122,9 +133,17 @@ pub async fn login(State(app): State<Arc<AppState>>, Query(query): Query<LoginQu
         )
             .into_response();
     }
+    if platform == Platform::Twitch && app.config.twitch.is_none() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Twitch no está configurado.",
+        )
+            .into_response();
+    }
     pending.insert(
         state.clone(),
         Pending {
+            platform,
             verifier,
             channel: query.ch,
             token: query.token,
@@ -132,6 +151,35 @@ pub async fn login(State(app): State<Arc<AppState>>, Query(query): Query<LoginQu
         },
     );
     drop(pending);
+    let cookie = format!(
+        "bingo_oauth={state}; HttpOnly; SameSite=Lax; Path=/auth/bingo; Max-Age=600{}",
+        secure(&app)
+    );
+    if let (Platform::Twitch, Some(tw)) = (platform, &app.config.twitch) {
+        // Twitch no usa PKCE con apps confidenciales: el `state` ligado a la cookie basta.
+        // Sin permisos: solo hace falta saber quién es para `/helix/users`.
+        let params = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("client_id", &tw.client_id)
+            .append_pair(
+                "redirect_uri",
+                &format!(
+                    "{}/auth/bingo/twitch/callback",
+                    app.config.base_url.trim_end_matches('/')
+                ),
+            )
+            .append_pair("response_type", "code")
+            .append_pair("scope", "")
+            .append_pair("state", &state)
+            .finish();
+        return (
+            [(header::SET_COOKIE, cookie)],
+            Redirect::temporary(&format!(
+                "{}/authorize?{params}",
+                app.twitch_endpoints.oauth
+            )),
+        )
+            .into_response();
+    }
     let params = url::form_urlencoded::Serializer::new(String::new())
         .append_pair("client_id", &app.config.client_id)
         .append_pair(
@@ -147,10 +195,6 @@ pub async fn login(State(app): State<Arc<AppState>>, Query(query): Query<LoginQu
         .append_pair("code_challenge", &challenge)
         .append_pair("code_challenge_method", "S256")
         .finish();
-    let cookie = format!(
-        "bingo_oauth={state}; HttpOnly; SameSite=Lax; Path=/auth/bingo; Max-Age=600{}",
-        secure(&app)
-    );
     (
         [(header::SET_COOKIE, cookie)],
         Redirect::temporary(&format!("{}/authorize?{params}", app.kick_endpoints.oauth)),
@@ -222,14 +266,80 @@ async fn authenticate(app: &AppState, code: &str, verifier: &str) -> Result<Stri
         .ok_or("Cuenta de Kick sin nombre válido".into())
 }
 
+/// Twitch: cambia el código por un token, lee el login del espectador y revoca el token,
+/// que no se vuelve a usar.
+async fn authenticate_twitch(app: &AppState, code: &str) -> Result<String, String> {
+    let tw = app
+        .config
+        .twitch
+        .as_ref()
+        .ok_or("Twitch no está configurado")?;
+    let redirect_uri = format!(
+        "{}/auth/bingo/twitch/callback",
+        app.config.base_url.trim_end_matches('/')
+    );
+    let response = app
+        .http
+        .post(format!("{}/token", app.twitch_endpoints.oauth))
+        .form(&[
+            ("client_id", tw.client_id.as_str()),
+            ("client_secret", tw.client_secret.as_str()),
+            ("code", code),
+            ("grant_type", "authorization_code"),
+            ("redirect_uri", redirect_uri.as_str()),
+        ])
+        .send()
+        .await
+        .map_err(|_| "No se pudo conectar con Twitch".to_string())?;
+    if !response.status().is_success() {
+        return Err(format!(
+            "Twitch rechazó el inicio de sesión ({})",
+            response.status()
+        ));
+    }
+    let tokens: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|_| "Twitch devolvió una respuesta inválida".to_string())?;
+    let token = tokens["access_token"]
+        .as_str()
+        .filter(|token| !token.is_empty())
+        .ok_or("Twitch no devolvió un token válido")?;
+    let user = crate::twitch::current_user(app, token).await;
+    let _ = app
+        .http
+        .post(format!("{}/revoke", app.twitch_endpoints.oauth))
+        .form(&[("client_id", tw.client_id.as_str()), ("token", token)])
+        .send()
+        .await;
+    Ok(user?.login)
+}
+
 pub async fn callback(
     State(app): State<Arc<AppState>>,
     headers: HeaderMap,
     Query(params): Query<HashMap<String, String>>,
 ) -> Response {
+    complete(&app, &headers, &params, Platform::Kick).await
+}
+
+pub async fn twitch_callback(
+    State(app): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(params): Query<HashMap<String, String>>,
+) -> Response {
+    complete(&app, &headers, &params, Platform::Twitch).await
+}
+
+async fn complete(
+    app: &Arc<AppState>,
+    headers: &HeaderMap,
+    params: &HashMap<String, String>,
+    platform: Platform,
+) -> Response {
     let Some(state) = params
         .get("state")
-        .filter(|state| cookie(&headers, "bingo_oauth") == Some(state.as_str()))
+        .filter(|state| cookie(headers, "bingo_oauth") == Some(state.as_str()))
     else {
         return (
             StatusCode::BAD_REQUEST,
@@ -238,7 +348,9 @@ pub async fn callback(
             .into_response();
     };
     let pending = app.bingo_auth.pending.lock().await.remove(state);
-    let Some(pending) = pending.filter(|value| value.expires > Instant::now()) else {
+    let Some(pending) =
+        pending.filter(|value| value.expires > Instant::now() && value.platform == platform)
+    else {
         return (
             StatusCode::BAD_REQUEST,
             "Inicio de sesión expirado o ya utilizado. Vuelve al cartón.",
@@ -252,14 +364,22 @@ pub async fn callback(
         )
             .into_response();
     };
-    let username = match authenticate(&app, code, &pending.verifier).await {
+    let login = match platform {
+        Platform::Kick => authenticate(app, code, &pending.verifier).await,
+        Platform::Twitch => authenticate_twitch(app, code).await,
+    };
+    let username = match login {
         Ok(username) => username,
         Err(message) => {
             tracing::warn!("[Bingo OAuth] {message}");
             return (StatusCode::BAD_GATEWAY, message).into_response();
         }
     };
-    let session = match app.bingo_auth.create_session(username, &headers).await {
+    let session = match app
+        .bingo_auth
+        .create_session(platform, username, headers)
+        .await
+    {
         Ok(session) => session,
         Err(message) => return (StatusCode::SERVICE_UNAVAILABLE, message).into_response(),
     };
@@ -272,7 +392,7 @@ pub async fn callback(
         header::SET_COOKIE,
         format!(
             "bingo_session={session}; HttpOnly; SameSite=Lax; Path=/; Max-Age={SESSION_SECONDS}{}",
-            secure(&app)
+            secure(app)
         )
         .parse()
         .unwrap(),
@@ -281,7 +401,7 @@ pub async fn callback(
         header::SET_COOKIE,
         format!(
             "bingo_oauth=; HttpOnly; SameSite=Lax; Path=/auth/bingo; Max-Age=0{}",
-            secure(&app)
+            secure(app)
         )
         .parse()
         .unwrap(),
@@ -384,8 +504,8 @@ pub(crate) mod tests {
             session_cookie.split(';').next().unwrap().parse().unwrap(),
         );
         assert_eq!(
-            app.bingo_auth.username(&session_headers).await.as_deref(),
-            Some("seniordai")
+            app.bingo_auth.identity(&session_headers).await,
+            Some((Platform::Kick, "seniordai".into()))
         );
         let form = &forms.lock().await[0];
         assert_eq!(
@@ -404,23 +524,37 @@ pub(crate) mod tests {
     async fn sessions_require_the_random_cookie_and_expire() {
         let auth = ViewerAuth::default();
         let mut headers = HeaderMap::new();
-        assert!(auth.username(&headers).await.is_none());
+        assert!(auth.identity(&headers).await.is_none());
         let id = auth
-            .create_session("viewer".into(), &headers)
+            .create_session(Platform::Twitch, "viewer".into(), &headers)
             .await
             .unwrap();
         headers.insert(
             header::COOKIE,
             format!("bingo_session={id}").parse().unwrap(),
         );
-        assert_eq!(auth.username(&headers).await.as_deref(), Some("viewer"));
+        assert_eq!(
+            auth.identity(&headers).await,
+            Some((Platform::Twitch, "viewer".into()))
+        );
         auth.sessions.lock().await.get_mut(&id).unwrap().expires = Instant::now();
-        assert!(auth.username(&headers).await.is_none());
+        assert!(auth.identity(&headers).await.is_none());
     }
 
     pub(crate) async fn session_headers(auth: &ViewerAuth, user: &str) -> HeaderMap {
+        session_headers_on(auth, Platform::Kick, user).await
+    }
+
+    pub(crate) async fn session_headers_on(
+        auth: &ViewerAuth,
+        platform: Platform,
+        user: &str,
+    ) -> HeaderMap {
         let mut headers = HeaderMap::new();
-        let id = auth.create_session(user.into(), &headers).await.unwrap();
+        let id = auth
+            .create_session(platform, user.into(), &headers)
+            .await
+            .unwrap();
         headers.insert(
             header::COOKIE,
             format!("bingo_session={id}").parse().unwrap(),

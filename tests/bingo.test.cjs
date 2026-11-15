@@ -158,3 +158,17 @@ test('private cards require Kick login and hide previous data when a session exp
     assert.equal(expired.get('title').textContent, 'Tu cartón personal');
     assert.equal(expired.timers.length, 0);
 });
+
+test('Twitch cards log in with Twitch and link to the Twitch channel', async () => {
+    const twitch = await page([{ status: 401 }], `#ch=twitch%3Aana&token=${token}`);
+    assert.equal(twitch.get('login').href, `/auth/bingo?ch=twitch%3Aana&token=${token}`);
+    assert.equal(twitch.get('login').textContent, 'Iniciar sesión con Twitch');
+    assert.equal(twitch.get('chat').href, 'https://twitch.tv/ana');
+    assert.equal(twitch.get('status').textContent, 'Acceso privado con Twitch');
+    assert.match(twitch.get('error').textContent, /cuenta de Twitch/);
+    assert.match(twitch.get('login-footer').textContent, /cuenta de Twitch/);
+    assert.equal(twitch.requests[0].url, '/api/bingo/twitch%3Aana');
+    const kick = await page([{ status: 401 }]);
+    assert.equal(kick.get('login').textContent, 'Iniciar sesión con Kick');
+    assert.equal(kick.get('chat').href, 'https://kick.com/alpha');
+});

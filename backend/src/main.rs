@@ -274,6 +274,10 @@ fn build_router(
         .route("/auth/callback", get(auth::handle_callback))
         .route("/auth/bingo", get(bingo_auth::login))
         .route("/auth/bingo/callback", get(bingo_auth::callback))
+        .route(
+            "/auth/bingo/twitch/callback",
+            get(bingo_auth::twitch_callback),
+        )
         .route("/kick_webhook", post(webhook::receive))
         .route("/twitch_webhook", post(twitch::eventsub::receive))
         .route("/auth/twitch", get(twitch::auth::redirect_channel))

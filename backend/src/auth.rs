@@ -124,6 +124,14 @@ pub(crate) fn connected_page(
         .replace("{{themes_hidden}}", themes)
         .replace("{{accent}}", accent)
         .replace("{{accent_ink}}", accent_ink)
+        // En Twitch el dock escribe como la cuenta bot: el canal no autoriza escribir como él.
+        .replace(
+            "{{dock_chat_as}}",
+            match platform {
+                Platform::Kick => "tu canal",
+                Platform::Twitch => "DaiBotsito",
+            },
+        )
         .replace("{{slug}}", slug)
 }
 

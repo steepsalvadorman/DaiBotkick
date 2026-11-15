@@ -1391,6 +1391,9 @@ struct MockTwitch {
     chat: Mutex<Vec<(String, Value, std::time::Instant)>>,
     /// Respuestas 401 que devolverá el envío al chat antes de aceptar.
     chat_unauthorized: AtomicUsize,
+    /// Cambios de título y categoría (`PATCH /helix/channels`) con su query.
+    channel_patches: Mutex<Vec<(String, Value)>>,
+    revoked: AtomicUsize,
 }
 
 impl MockTwitch {
@@ -1453,8 +1456,61 @@ impl MockTwitch {
                 }),
             )
         }
+        async fn channel_info(
+            axum::extract::RawQuery(query): axum::extract::RawQuery,
+        ) -> axum::Json<Value> {
+            assert_eq!(query.as_deref(), Some("broadcaster_id=5"));
+            axum::Json(
+                json!({"data":[{"broadcaster_id":"5","title":"Jugando","game_id":"509658","game_name":"Just Chatting"}]}),
+            )
+        }
+        async fn patch_channel(
+            State(mock): State<Arc<MockTwitch>>,
+            axum::extract::RawQuery(query): axum::extract::RawQuery,
+            axum::Json(body): axum::Json<Value>,
+        ) -> StatusCode {
+            mock.channel_patches
+                .lock()
+                .await
+                .push((query.unwrap_or_default(), body));
+            StatusCode::NO_CONTENT
+        }
+        async fn streams() -> axum::Json<Value> {
+            axum::Json(
+                json!({"data":[{"type":"live","viewer_count":42,"started_at":"2026-11-15T18:00:00Z"}]}),
+            )
+        }
+        async fn games() -> axum::Json<Value> {
+            axum::Json(
+                json!({"data":[{"id":"509658","box_art_url":"https://static-cdn.jtvnw.net/ttv-boxart/509658-{width}x{height}.jpg"}]}),
+            )
+        }
+        async fn search(
+            axum::extract::RawQuery(query): axum::extract::RawQuery,
+        ) -> axum::Json<Value> {
+            assert_eq!(query.as_deref(), Some("query=just&first=20"));
+            axum::Json(
+                json!({"data":[{"id":"509658","name":"Just Chatting","box_art_url":"https://x/a-52x72.jpg"}]}),
+            )
+        }
+        async fn followers() -> axum::Json<Value> {
+            axum::Json(json!({"total": 1234, "data": []}))
+        }
+        async fn revoke(State(mock): State<Arc<MockTwitch>>) -> StatusCode {
+            mock.revoked.fetch_add(1, Ordering::Relaxed);
+            StatusCode::OK
+        }
         test_support::HttpServer::start(
             axum::Router::new()
+                .route("/oauth2/revoke", axum::routing::post(revoke))
+                .route(
+                    "/helix/channels",
+                    axum::routing::get(channel_info).patch(patch_channel),
+                )
+                .route("/helix/channels/followers", axum::routing::get(followers))
+                .route("/helix/streams", axum::routing::get(streams))
+                .route("/helix/games", axum::routing::get(games))
+                .route("/helix/search/categories", axum::routing::get(search))
                 .route("/helix/chat/messages", axum::routing::post(chat))
                 .route(
                     "/helix/eventsub/subscriptions",
@@ -1550,6 +1606,7 @@ async fn twitch_channels_and_the_bot_account_connect_and_renew_tokens() {
     assert!(page.contains("/dock-chat.html?tw=ana#token="));
     assert!(page.contains(r#"<fieldset class="themes" hidden>"#));
     assert!(page.contains("twitch.tv/ana"));
+    assert!(page.contains("escribir en el chat como DaiBotsito"));
     let form = mock.forms.lock().await.last().unwrap().clone();
     assert_eq!(form["grant_type"], "authorization_code");
     assert_eq!(form["client_secret"], "tw-secret");
@@ -1987,4 +2044,220 @@ async fn twitch_overlays_join_their_own_room_and_get_twitch_config() {
     server::ns_emit(&app, &kick, "testMarker", json!({}));
     on_kick.event("testMarker").await;
     assert!(!on_kick.events.iter().any(|e| e[0] == "chatMessage"));
+}
+
+/// App de prueba sin base de datos con Twitch apuntando al servicio simulado.
+fn twitch_app(service: &test_support::HttpServer) -> Arc<crate::state::AppState> {
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .connect_lazy("postgres://unused:unused@127.0.0.1/unused")
+        .unwrap();
+    let mut app = test_support::app(pool);
+    Arc::get_mut(&mut app).unwrap().twitch_endpoints = crate::twitch::Endpoints {
+        oauth: format!("{}/oauth2", service.url),
+        api: format!("{}/helix", service.url),
+    };
+    app
+}
+
+#[tokio::test]
+async fn twitch_docks_edit_the_stream_and_stats_follow_the_channel() {
+    use axum::{
+        extract::{Path, Query},
+        response::IntoResponse,
+    };
+    let mock = Arc::new(MockTwitch::default());
+    let service = mock.serve().await;
+    let app = twitch_app(&service);
+    let (ch, _rx) = test_support::channel_on(Platform::Twitch, "ana", 5);
+    app.channels.insert(ch.key(), ch.clone());
+    let mut headers = HeaderMap::new();
+    headers.insert("authorization", "Bearer panel-secret".parse().unwrap());
+    let key = || Path("twitch:ana".to_string());
+    let body = |r: axum::response::Response| async move {
+        serde_json::from_slice::<Value>(
+            &axum::body::to_bytes(r.into_body(), 1 << 16).await.unwrap(),
+        )
+        .unwrap()
+    };
+
+    // Estado del directo con la misma forma que en Kick.
+    let info = crate::dock::stream_info(State(app.clone()), key(), headers.clone()).await;
+    assert_eq!(
+        body(info).await,
+        json!({"title":"Jugando","live":true,"viewers":42,"category":{
+            "id":509658,"name":"Just Chatting",
+            "thumbnail":"https://static-cdn.jtvnw.net/ttv-boxart/509658-52x72.jpg"}})
+    );
+    // Sin el token del panel no hay acceso, aunque el canal exista.
+    let denied = crate::dock::stream_info(State(app.clone()), key(), HeaderMap::new()).await;
+    assert_eq!(denied.status(), StatusCode::UNAUTHORIZED);
+
+    // Búsqueda y cambio de título y categoría con los nombres de campo de Twitch.
+    let found = crate::dock::categories(
+        State(app.clone()),
+        key(),
+        headers.clone(),
+        Query(serde_json::from_value(json!({"q":"just"})).unwrap()),
+    )
+    .await;
+    assert_eq!(body(found).await["data"][0]["id"], 509658);
+    let saved = crate::dock::update_stream(
+        State(app.clone()),
+        key(),
+        headers.clone(),
+        axum::Json(
+            serde_json::from_value(json!({"title":" Nuevo título ","category_id":21779})).unwrap(),
+        ),
+    )
+    .await
+    .into_response();
+    assert_eq!(saved.status(), StatusCode::NO_CONTENT);
+    assert_eq!(
+        mock.channel_patches.lock().await.clone(),
+        [(
+            "broadcaster_id=5".to_string(),
+            json!({"title":"Nuevo título","game_id":"21779"})
+        )]
+    );
+
+    // El dock de chat escribe como DaiBotsito.
+    *app.twitch_bot.write().await = Some(crate::twitch::bot::BotAccount {
+        user_id: crate::twitch::bot::BOT_USER_ID.into(),
+        login: "daibotsito".into(),
+        access_token: "bot".into(),
+        refresh_token: "bot".into(),
+        token_expires: i64::MAX,
+    });
+    let sent = crate::dock::send_chat(
+        State(app.clone()),
+        key(),
+        headers.clone(),
+        axum::Json(serde_json::from_value(json!({"content":"hola desde OBS"})).unwrap()),
+    )
+    .await;
+    assert_eq!(sent.status(), StatusCode::NO_CONTENT);
+    let message = mock.chat.lock().await.last().unwrap().1.clone();
+    assert_eq!(message["message"], "hola desde OBS");
+    assert_eq!(message["sender_id"], crate::twitch::bot::BOT_USER_ID);
+
+    // Estadísticas: seguidores, espectadores e inicio del directo.
+    crate::twitch::stats::refresh(&ch, &app, 5).await;
+    assert_eq!(ch.followers.load(Ordering::Relaxed), 1234);
+    assert!(ch.followers_known.load(Ordering::Relaxed));
+    assert_eq!(
+        ch.live_since.read().await.unwrap().to_rfc3339(),
+        "2026-11-15T18:00:00+00:00"
+    );
+}
+
+#[tokio::test]
+async fn twitch_viewers_open_their_bingo_card_with_a_twitch_login_only() {
+    use axum::{extract::Query, http::header, response::IntoResponse};
+    let mock = Arc::new(MockTwitch::default());
+    let service = mock.serve().await;
+    let app = twitch_app(&service);
+    let (ch, _rx) = test_support::channel_on(Platform::Twitch, "ana", 5);
+    app.channels.insert(ch.key(), ch.clone());
+    let card_token = { ch.bingo.lock().await.open_with_card("viewer_7") };
+
+    // El enlace del cartón lleva la clave del canal y el login va a Twitch.
+    let login = crate::bingo_auth::login(
+        State(app.clone()),
+        Query(serde_json::from_value(json!({"ch":"twitch:ana","token":card_token})).unwrap()),
+    )
+    .await
+    .into_response();
+    let location = url::Url::parse(login.headers()[header::LOCATION].to_str().unwrap()).unwrap();
+    assert!(location
+        .as_str()
+        .starts_with(&format!("{}/oauth2/authorize?", service.url)));
+    let query: HashMap<_, _> = location.query_pairs().into_owned().collect();
+    assert_eq!(query["client_id"], "tw-client");
+    assert_eq!(
+        query["redirect_uri"],
+        "https://test.example/auth/bingo/twitch/callback"
+    );
+    assert_eq!(query["scope"], "");
+    assert!(!query.contains_key("code_challenge"));
+    let cookie = login.headers()[header::SET_COOKIE].to_str().unwrap();
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::COOKIE,
+        cookie.split(';').next().unwrap().parse().unwrap(),
+    );
+    let params = HashMap::from([
+        ("code".to_string(), "c".to_string()),
+        ("state".to_string(), query["state"].clone()),
+    ]);
+    // Un `state` de Twitch no sirve en el retorno de Kick.
+    let crossed =
+        crate::bingo_auth::callback(State(app.clone()), headers.clone(), Query(params.clone()))
+            .await;
+    assert_eq!(crossed.status(), StatusCode::BAD_REQUEST);
+
+    let login = crate::bingo_auth::login(
+        State(app.clone()),
+        Query(serde_json::from_value(json!({"ch":"twitch:ana","token":card_token})).unwrap()),
+    )
+    .await
+    .into_response();
+    let location = url::Url::parse(login.headers()[header::LOCATION].to_str().unwrap()).unwrap();
+    let state = location
+        .query_pairs()
+        .find(|(k, _)| k == "state")
+        .unwrap()
+        .1
+        .into_owned();
+    let cookie = login.headers()[header::SET_COOKIE].to_str().unwrap();
+    headers.insert(
+        header::COOKIE,
+        cookie.split(';').next().unwrap().parse().unwrap(),
+    );
+    mock.set_user("77", "viewer_7").await;
+    let done = crate::bingo_auth::twitch_callback(
+        State(app.clone()),
+        headers,
+        Query(HashMap::from([
+            ("code".to_string(), "c".to_string()),
+            ("state".to_string(), state),
+        ])),
+    )
+    .await;
+    assert_eq!(done.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        done.headers()[header::LOCATION].to_str().unwrap(),
+        format!("/bingo.html#ch=twitch%3Aana&token={card_token}")
+    );
+    assert_eq!(mock.revoked.load(Ordering::Relaxed), 1);
+    let session = done
+        .headers()
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .map(|v| v.to_str().unwrap().to_owned())
+        .find(|v| v.starts_with("bingo_session="))
+        .unwrap();
+    let mut viewer = HeaderMap::new();
+    viewer.insert(
+        header::COOKIE,
+        session.split(';').next().unwrap().parse().unwrap(),
+    );
+    viewer.insert("x-bingo-token", card_token.parse().unwrap());
+    let card = crate::bingo::personal_card(
+        State(app.clone()),
+        axum::extract::Path("twitch:ana".into()),
+        viewer,
+    )
+    .await;
+    assert_eq!(card.status(), StatusCode::OK);
+
+    // La misma cuenta, pero de Kick, no abre el cartón de Twitch.
+    let mut kick = crate::bingo_auth::tests::session_headers(&app.bingo_auth, "viewer_7").await;
+    kick.insert("x-bingo-token", card_token.parse().unwrap());
+    let forbidden = crate::bingo::personal_card(
+        State(app.clone()),
+        axum::extract::Path("twitch:ana".into()),
+        kick,
+    )
+    .await;
+    assert_eq!(forbidden.status(), StatusCode::FORBIDDEN);
 }

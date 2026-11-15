@@ -73,7 +73,7 @@
     let active = false, queue = [], version = 0, playingId = null, pending = false, visible = true;
     let myEpoch = null, pongTimer = null;
     let player = null, retry, generation = 0, apiPromise;
-    let musicShown = true, musicVolume = 60, ttsVolume = 100;
+    let musicShown = true, musicVolume = 85, ttsVolume = 100;
     let mediaReady = false, paused = false, actuallyPlaying = false, canGoBack = false;
     // Posición del video actual, para retomarlo si OBS recarga la fuente.
     const resumeKey = `daibot:resume:${channel}`;

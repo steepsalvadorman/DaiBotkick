@@ -135,7 +135,7 @@ test('YouTube transport uses player methods and public transport remains disable
     await new Promise(resolve => setImmediate(resolve));
     const player = app.players[0];
     player.options.events.onReady({ target: player });
-    assert.equal(player.volume, 60);
+    assert.equal(player.volume, 85);
     player.options.events.onStateChange({ data: 1 });
     app.get('music-pause').listeners.click();
     assert.equal(player.paused, true);
@@ -270,9 +270,9 @@ test('overlay starts with useful defaults and an empty chat until messages arriv
     const html = fs.readFileSync(__dirname + '/../overlay/pixel.html', 'utf8');
     assert.match(html, /id="topbar-requester" class="topbar-requester" hidden>/);
     assert.doesNotMatch(html, /desktop-date|chat-empty|El chat está listo/);
-    assert.match(html, /id="music-volume" type="range" min="0" max="100" value="60"/);
-    assert.match(html, /id="volume-value" for="music-volume">60%</);
-    assert.match(fs.readFileSync(__dirname + '/../overlay/app.js', 'utf8'), /musicVolume = 60, ttsVolume = 100;/);
+    assert.match(html, /id="music-volume" type="range" min="0" max="100" value="85"/);
+    assert.match(html, /id="volume-value" for="music-volume">85%</);
+    assert.match(fs.readFileSync(__dirname + '/../overlay/app.js', 'utf8'), /musicVolume = 85, ttsVolume = 100;/);
 
     app.handlers.chatMessage({ user: 'viewer', content: '¡Hola!' });
     assert.equal(app.get('chat-messages').children[0].children[1].textContent, '¡Hola!');

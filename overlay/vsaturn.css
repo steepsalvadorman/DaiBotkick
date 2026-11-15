@@ -35,6 +35,11 @@
     --bingo-w: 1200px;
     --font: 'Manrope', 'Segoe UI', system-ui, sans-serif;
     --mono: 'Geist Mono', ui-monospace, 'Cascadia Mono', monospace;
+    /* Mascota virtual de los 90: LCD de matriz de puntos verde oliva y tinta casi negra. */
+    --pixel: 'VT323', 'Geist Mono', ui-monospace, monospace;
+    --pet-lcd: #a8b58c;
+    --pet-lcd-hi: #bfcaa2;
+    --pet-ink: #26301c;
     --jp: 'Yu Gothic UI', 'Yu Gothic', 'Meiryo', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
     --emoji: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
     --mass: cubic-bezier(0.32, 0.72, 0, 1);
@@ -616,10 +621,11 @@ body.no-chat #chat-widget { display: none; }
 }
 .deck-brand {
     color: var(--slate-deep);
-    font-size: 14px;
+    font-family: var(--pixel);
+    font-size: 20px;
     line-height: 20px;
-    font-weight: 700;
-    letter-spacing: 0.24em;
+    font-weight: 400;
+    letter-spacing: 0.12em;
     text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 .deck-head .window-jp { color: var(--ink-muted); }
@@ -635,58 +641,156 @@ body.no-chat #chat-widget { display: none; }
     font-weight: 600;
     letter-spacing: 0.16em;
 }
-/* Pantalla LCD: título y cola en tinta marino sobre el verde azulado de la consola. */
+/* Pantalla de mascota virtual: LCD verde oliva con rejilla de píxeles, bisel grueso de
+   pizarra, letra pixelada y la mascota a la izquierda. */
 .media-info.deck-lcd {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    column-gap: 12px;
+    align-items: center;
     margin: 0;
     padding: 8px 12px;
-    border-radius: 8px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 50%), var(--lcd);
-    color: var(--lcd-ink);
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.32), inset 0 1px 3px rgba(22, 29, 54, 0.3), 0 1px 0 rgba(255, 255, 255, 0.9);
+    border-radius: 12px;
+    background:
+        repeating-linear-gradient(0deg, rgba(38, 48, 28, 0.07) 0 1px, transparent 1px 3px),
+        repeating-linear-gradient(90deg, rgba(38, 48, 28, 0.07) 0 1px, transparent 1px 3px),
+        radial-gradient(120% 90% at 30% 20%, var(--pet-lcd-hi), var(--pet-lcd) 70%);
+    color: var(--pet-ink);
+    box-shadow: 0 0 0 4px var(--slate-deep), 0 0 0 5px rgba(22, 29, 54, 0.5), inset 0 2px 6px rgba(38, 48, 28, 0.45);
+    font-family: var(--pixel);
 }
-.deck-lcd .media-label { background: transparent; box-shadow: none; padding: 0; color: var(--lcd-ink); }
-.deck-lcd #video-title { align-self: stretch; margin-top: 4px; font-family: var(--mono); font-size: 18px; line-height: 24px; font-weight: 600; }
-.deck-lcd #queue-indicator { margin-top: 6px; }
-/* Teclas del casete: barras de pizarra con su símbolo; la activa queda hundida. */
+.deck-pet {
+    grid-column: 1;
+    grid-row: 1 / span 3;
+    position: relative;
+    width: 33px;
+    height: 30px;
+}
+.deck-pet i {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 3px;
+    box-shadow:
+        6px 0px 0 var(--pet-ink),
+        24px 0px 0 var(--pet-ink),
+        6px 3px 0 var(--pet-ink),
+        9px 3px 0 var(--pet-ink),
+        21px 3px 0 var(--pet-ink),
+        24px 3px 0 var(--pet-ink),
+        6px 6px 0 var(--pet-ink),
+        9px 6px 0 var(--pet-ink),
+        12px 6px 0 var(--pet-ink),
+        15px 6px 0 var(--pet-ink),
+        18px 6px 0 var(--pet-ink),
+        21px 6px 0 var(--pet-ink),
+        24px 6px 0 var(--pet-ink),
+        3px 9px 0 var(--pet-ink),
+        6px 9px 0 var(--pet-ink),
+        9px 9px 0 var(--pet-ink),
+        12px 9px 0 var(--pet-ink),
+        15px 9px 0 var(--pet-ink),
+        18px 9px 0 var(--pet-ink),
+        21px 9px 0 var(--pet-ink),
+        24px 9px 0 var(--pet-ink),
+        27px 9px 0 var(--pet-ink),
+        3px 12px 0 var(--pet-ink),
+        6px 12px 0 var(--pet-ink),
+        12px 12px 0 var(--pet-ink),
+        15px 12px 0 var(--pet-ink),
+        18px 12px 0 var(--pet-ink),
+        24px 12px 0 var(--pet-ink),
+        27px 12px 0 var(--pet-ink),
+        3px 15px 0 var(--pet-ink),
+        6px 15px 0 var(--pet-ink),
+        9px 15px 0 var(--pet-ink),
+        12px 15px 0 var(--pet-ink),
+        15px 15px 0 var(--pet-ink),
+        18px 15px 0 var(--pet-ink),
+        21px 15px 0 var(--pet-ink),
+        24px 15px 0 var(--pet-ink),
+        27px 15px 0 var(--pet-ink),
+        0px 18px 0 var(--pet-ink),
+        3px 18px 0 var(--pet-ink),
+        6px 18px 0 var(--pet-ink),
+        9px 18px 0 var(--pet-ink),
+        21px 18px 0 var(--pet-ink),
+        24px 18px 0 var(--pet-ink),
+        27px 18px 0 var(--pet-ink),
+        30px 18px 0 var(--pet-ink),
+        3px 21px 0 var(--pet-ink),
+        6px 21px 0 var(--pet-ink),
+        9px 21px 0 var(--pet-ink),
+        12px 21px 0 var(--pet-ink),
+        15px 21px 0 var(--pet-ink),
+        18px 21px 0 var(--pet-ink),
+        21px 21px 0 var(--pet-ink),
+        24px 21px 0 var(--pet-ink),
+        27px 21px 0 var(--pet-ink),
+        6px 24px 0 var(--pet-ink),
+        9px 24px 0 var(--pet-ink),
+        12px 24px 0 var(--pet-ink),
+        15px 24px 0 var(--pet-ink),
+        18px 24px 0 var(--pet-ink),
+        21px 24px 0 var(--pet-ink),
+        24px 24px 0 var(--pet-ink),
+        6px 27px 0 var(--pet-ink),
+        9px 27px 0 var(--pet-ink),
+        21px 27px 0 var(--pet-ink),
+        24px 27px 0 var(--pet-ink);
+}
+#media-widget[data-state="playing"] .deck-pet i { animation: pet-hop 700ms steps(1) infinite; }
+#media-widget[data-state="idle"] .deck-pet { opacity: .45; }
+.deck-lcd .media-label {
+    grid-column: 2;
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+    color: var(--pet-ink);
+    font-family: var(--pixel);
+    font-size: 18px;
+    line-height: 16px;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.deck-lcd .equalizer i { width: 3px; border-radius: 0; background: var(--pet-ink); }
+.deck-lcd #video-title {
+    grid-column: 2;
+    margin-top: 2px;
+    font-family: var(--pixel);
+    font-size: 24px;
+    line-height: 24px;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+}
+.deck-lcd #queue-indicator {
+    grid-column: 2;
+    justify-self: start;
+    margin-top: 4px;
+    border-radius: 2px;
+    background: var(--pet-ink);
+    color: var(--pet-lcd-hi);
+    font-family: var(--pixel);
+    font-size: 16px;
+    line-height: 16px;
+    font-weight: 400;
+}
+/* Controles de la música en el reproductor: los mismos orbes del mando, algo más pequeños.
+   Pausa se queda hundida mientras la música está en pausa. */
 .deck-keys {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
+    display: flex;
+    justify-content: center;
+    gap: 12px;
     margin: 0 0 4px;
 }
-.deck-key {
-    position: relative;
-    height: 28px;
-    border-radius: 6px 6px 8px 8px;
-    background: var(--sheen), linear-gradient(180deg, var(--slate-light), var(--slate));
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.45), 0 4px 0 var(--slate-deep), 0 6px 8px rgba(22, 29, 54, 0.3);
-    transition: transform 160ms var(--mass), box-shadow 160ms var(--mass);
-}
-.deck-key::before {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    color: var(--ink);
-    font-family: var(--mono);
-    font-size: 12px;
-    line-height: 16px;
-    font-style: normal;
-    letter-spacing: -0.1em;
-}
-.key-rew::before { content: "◀◀"; }
-.key-play::before { content: "▶"; }
-.key-pause::before { content: "❚❚"; }
-.key-ff::before { content: "▶▶"; }
-.key-play { background: var(--sheen), linear-gradient(180deg, #6f9ff5, var(--power)); }
-.key-play::before { color: var(--white); }
-#media-widget[data-state="playing"] .key-play,
-#media-widget[data-state="paused"] .key-pause {
+.deck-keys .face-button { width: 48px; height: 48px; }
+.deck-keys .face-button svg { width: 20px; height: 20px; }
+#media-widget[data-state="paused"] #music-pause:not(:disabled) {
     transform: translateY(3px);
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.45), 0 1px 0 var(--slate-deep), inset 0 2px 4px rgba(22, 29, 54, 0.35);
+    box-shadow: 0 0 0 2px rgba(22, 29, 54, 0.55), inset 0 3px 6px rgba(22, 29, 54, 0.45), 0 1px 0 rgba(22, 29, 54, 0.22);
 }
 
 .media-label {
@@ -1138,6 +1242,7 @@ body.bingo-active #media-widget {
     from { opacity: 0; transform: translateY(-100%); }
     to { opacity: 1; transform: none; }
 }
+@keyframes pet-hop { 50% { transform: translateY(-3px); } }
 @keyframes disc-spin { to { transform: rotate(360deg); } }
 @keyframes music-bars { to { transform: scaleY(.3); } }
 @keyframes title-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
@@ -1151,7 +1256,7 @@ body.bingo-active #media-widget {
    para que la página quede quieta entre eventos. app.js rota los consejos cada 9 s. */
 body.lite .brand-live::before, body.lite .disc-lid, body.lite .disc-lid::before, body.lite .vinyl-record,
 body.lite .music-bars i, body.lite .equalizer i,
-body.lite .bingo-drum i, body.lite .title-inner.marquee,
+body.lite .bingo-drum i, body.lite .deck-pet i, body.lite .title-inner.marquee,
 body.lite #video-title.scrolling { text-overflow: ellipsis; }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }

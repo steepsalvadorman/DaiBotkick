@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>DaiBot · Stream</title>
+<link rel="icon" href="/daibot.svg">
+<link rel="stylesheet" href="dock.css">
+</head>
+<body>
+<header>
+  <img src="/daibot.svg" alt="">
+  <h1>Stream · <span id="channel"></span></h1>
+  <span id="dot" class="dot" title="Estado"></span>
+</header>
+<div id="notice" class="notice" role="status"></div>
+<main class="form">
+  <div class="live" id="live"><span>Cargando…</span></div>
+
+  <div class="field">
+    <label for="title">Título <small id="count">0/140</small></label>
+    <textarea id="title" maxlength="140" rows="2"></textarea>
+  </div>
+
+  <div class="field">
+    <label for="search">Categoría</label>
+    <div class="current" id="current"><span class="none">Sin categoría</span></div>
+    <input id="search" type="search" autocomplete="off" placeholder="Buscar categoría (p. ej. Just Chatting)" style="margin-top:6px">
+    <ul class="results" id="results"></ul>
+  </div>
+
+  <div class="actions">
+    <button id="reload" type="button">Recargar</button>
+    <button id="save" class="primary" type="button" disabled>Guardar en Kick</button>
+  </div>
+</main>
+<script src="dock.js"></script>
+<script>
+(function () {
+    const { $, notice, api, ready } = window.Dock;
+    const title = $('title'), count = $('count'), save = $('save'), search = $('search'), results = $('results');
+    let original = { title: '', categoryId: null };
+    let category = null;
+
+    function renderCategory() {
+        const box = $('current'); box.replaceChildren();
+        if (!category) { const s = document.createElement('span'); s.className = 'none'; s.textContent = 'Sin categoría'; box.append(s); return; }
+        if (category.thumbnail) { const img = document.createElement('img'); img.src = category.thumbnail; img.alt = ''; img.referrerPolicy = 'no-referrer'; box.append(img); }
+        const name = document.createElement('span'); name.textContent = category.name; box.append(name);
+    }
+    function dirty() {
+        const t = title.value.trim();
+        count.textContent = `${title.value.length}/140`;
+        const changed = (t && t !== original.title) || (category && category.id !== original.categoryId);
+        save.disabled = !changed;
+        return changed;
+    }
+    title.addEventListener('input', dirty);
+
+    async function load() {
+        notice('');
+        try {
+            const info = await api('stream');
+            original = { title: info.title || '', categoryId: info.category?.id ?? null };
+            title.value = original.title; category = info.category; renderCategory(); dirty();
+            const live = $('live'); live.replaceChildren();
+            const state = document.createElement('span');
+            state.innerHTML = info.live ? '<b style="color:var(--green)">● EN VIVO</b>' : 'Desconectado';
+            live.append(state);
+            if (info.live && info.viewers != null) { const v = document.createElement('span'); v.append('Espectadores: '); const b = document.createElement('b'); b.textContent = info.viewers; v.append(b); live.append(v); }
+            $('dot').className = info.live ? 'dot on' : 'dot';
+        } catch (error) {
+            notice(error.message, true); $('dot').className = 'dot err';
+        }
+    }
+
+    let timer, seq = 0;
+    search.addEventListener('input', () => {
+        clearTimeout(timer);
+        const q = search.value.trim();
+        if (q.length < 2) { results.replaceChildren(); return; }
+        timer = setTimeout(async () => {
+            const mine = ++seq;
+            try {
+                const { data } = await api(`categories?q=${encodeURIComponent(q)}`);
+                if (mine !== seq) return;
+                results.replaceChildren(...data.map(c => {
+                    const li = document.createElement('li'), b = document.createElement('button');
+                    b.type = 'button';
+                    const img = document.createElement('img'); img.alt = ''; img.referrerPolicy = 'no-referrer'; img.loading = 'lazy';
+                    if (c.thumbnail) img.src = c.thumbnail;
+                    const name = document.createElement('span'); name.textContent = c.name;
+                    b.append(img, name);
+                    b.addEventListener('click', () => { category = c; renderCategory(); results.replaceChildren(); search.value = ''; dirty(); });
+                    li.append(b); return li;
+                }));
+                if (!data.length) notice('No se encontraron categorías.'); else notice('');
+            } catch (error) { notice(error.message, true); }
+        }, 350);
+    });
+
+    save.addEventListener('click', async () => {
+        if (!dirty()) return;
+        const body = {};
+        const t = title.value.trim();
+        if (t && t !== original.title) body.title = t;
+        if (category && category.id !== original.categoryId) body.category_id = category.id;
+        save.disabled = true; save.textContent = 'Guardando…';
+        try {
+            await api('stream', { method: 'PATCH', body: JSON.stringify(body) });
+            original = { title: t || original.title, categoryId: category?.id ?? original.categoryId };
+            notice('✓ Guardado en Kick');
+            setTimeout(() => { if ($('notice').textContent.startsWith('✓')) notice(''); }, 3000);
+        } catch (error) {
+            notice(error.message, true);
+        } finally {
+            save.textContent = 'Guardar en Kick'; dirty();
+        }
+    });
+    $('reload').addEventListener('click', load);
+
+    if (!ready) { save.disabled = true; $('reload').disabled = true; return; }
+    load();
+    setInterval(() => { if (!dirty()) load(); }, 60000);
+})();
+</script>
+</body>
+</html>

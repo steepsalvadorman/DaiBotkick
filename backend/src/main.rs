@@ -7,6 +7,7 @@ mod commands;
 mod config;
 mod cooldown;
 mod db;
+mod dock;
 #[cfg(test)]
 mod integration_tests;
 mod kick;
@@ -263,6 +264,12 @@ fn build_router(
         .route("/readyz", get(ready))
         .route("/metrics", get(metrics))
         .route("/api/bingo/:slug", get(bingo::personal_card))
+        .route(
+            "/api/dock/:slug/stream",
+            get(dock::stream_info).patch(dock::update_stream),
+        )
+        .route("/api/dock/:slug/categories", get(dock::categories))
+        .route("/api/dock/:slug/chat", post(dock::send_chat))
         .layer(axum::extract::DefaultBodyLimit::max(256 * 1024))
         .with_state(state)
         .fallback_service(ServeDir::new(overlay_dir))
@@ -276,6 +283,8 @@ async fn response_headers(
 ) -> axum::response::Response {
     let private = request.uri().path().starts_with("/auth")
         || request.uri().path().starts_with("/api/bingo/")
+        || request.uri().path().starts_with("/api/dock/")
+        || request.uri().path().starts_with("/dock-")
         || request.uri().path() == "/bingo.html";
     let mut response = next.run(request).await;
     response

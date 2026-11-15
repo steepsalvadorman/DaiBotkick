@@ -12,10 +12,16 @@ pub struct VideoItem {
     pub user: String,
 }
 
+/// Canciones ya reproducidas que se recuerdan para volver atrás.
+const HISTORY_LIMIT: usize = 20;
+
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct VideoQueue {
     pub items: Vec<VideoItem>,
     pub version: u64,
+    /// Reproducidas, la más reciente al final. `default` lee colas guardadas antes de existir.
+    #[serde(default)]
+    pub history: Vec<VideoItem>,
 }
 
 impl VideoQueue {
@@ -31,9 +37,35 @@ impl VideoQueue {
 
     pub fn advance(&mut self) {
         if !self.items.is_empty() {
-            self.items.remove(0);
+            let played = self.items.remove(0);
+            self.history.push(played);
+            if self.history.len() > HISTORY_LIMIT {
+                self.history.remove(0);
+            }
             self.version += 1;
         }
+    }
+
+    /// Devuelve al frente la última canción reproducida; la actual pasa a ser la siguiente.
+    pub fn previous_if(&mut self, version: u64) -> bool {
+        if self.version != version {
+            return false;
+        }
+        let Some(item) = self.history.pop() else {
+            return false;
+        };
+        self.items.insert(0, item);
+        self.version += 1;
+        true
+    }
+
+    /// Estado que reciben los overlays: cola, versión y si se puede volver atrás.
+    pub fn sync_payload(&self) -> serde_json::Value {
+        serde_json::json!({
+            "items": self.items,
+            "version": self.version,
+            "previous": !self.history.is_empty(),
+        })
     }
 
     pub fn remove(&mut self, index: usize) {
@@ -104,23 +136,13 @@ where
                 .await?;
         *current =
             serde_json::from_str(&persisted).map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
-        crate::server::ns_emit(
-            global,
-            &ch.slug,
-            "syncQueue",
-            serde_json::json!({"items": current.items, "version": current.version}),
-        );
+        crate::server::ns_emit(global, &ch.slug, "syncQueue", current.sync_payload());
         return Err(sqlx::Error::Protocol(
             "La cola cambio; vuelve a intentar".into(),
         ));
     }
     *current = next;
-    crate::server::ns_emit(
-        global,
-        &ch.slug,
-        "syncQueue",
-        serde_json::json!({"items": current.items, "version": current.version}),
-    );
+    crate::server::ns_emit(global, &ch.slug, "syncQueue", current.sync_payload());
     Ok(true)
 }
 
@@ -191,6 +213,50 @@ mod tests {
         assert_eq!(q.version, version + 1);
         assert!(!q.remove_user("troll"));
         assert_eq!(q.version, version + 1);
+    }
+
+    #[test]
+    fn previous_returns_last_played_to_front() {
+        let mut q = make_queue();
+        q.push(item("A", "u"));
+        q.push(item("B", "u"));
+        q.advance();
+        assert_eq!(q.items[0].title, "B");
+        assert!(q.previous_if(q.version));
+        let titles: Vec<&str> = q.items.iter().map(|v| v.title.as_str()).collect();
+        assert_eq!(titles, ["A", "B"]);
+        assert!(q.history.is_empty());
+    }
+
+    #[test]
+    fn previous_rejects_stale_version_and_empty_history() {
+        let mut q = make_queue();
+        q.push(item("A", "u"));
+        assert!(!q.previous_if(q.version));
+        q.advance();
+        assert!(!q.previous_if(q.version - 1));
+        assert!(q.items.is_empty());
+    }
+
+    #[test]
+    fn history_is_capped() {
+        let mut q = make_queue();
+        for n in 0..(HISTORY_LIMIT + 5) {
+            q.push(item(&n.to_string(), "u"));
+            q.advance();
+        }
+        assert_eq!(q.history.len(), HISTORY_LIMIT);
+        assert_eq!(
+            q.history.last().unwrap().title,
+            (HISTORY_LIMIT + 4).to_string()
+        );
+    }
+
+    #[test]
+    fn queue_saved_without_history_still_loads() {
+        let q: VideoQueue = serde_json::from_str(r#"{"items":[],"version":3}"#).unwrap();
+        assert_eq!(q.version, 3);
+        assert!(q.history.is_empty());
     }
 
     #[test]

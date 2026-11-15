@@ -17,6 +17,8 @@ login/
 data/queue.json
 data/tts_cache/
 *.mp3
+# Sintonía de alertas del overlay (la aporta el streamer).
+!overlay/sounds/*.mp3
 
 # OS
 .DS_Store

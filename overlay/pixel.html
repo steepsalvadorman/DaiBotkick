@@ -39,7 +39,8 @@
             <div class="transport-row">
             <span class="vinyl-record" aria-hidden="true"></span>
             <span class="music-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-            <button id="music-restart" class="topbar-button aero-icon-button" type="button" disabled aria-label="Reiniciar canción" title="Reiniciar canción"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h2v14H5Zm14 0v14L8 12Z"/></svg></button>
+            <button id="music-prev" class="topbar-button aero-icon-button" type="button" disabled aria-label="Canción anterior" title="Canción anterior"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h2v14H4Zm16 0v14l-7-7Zm-7 0v14l-7-7Z"/></svg></button>
+            <button id="music-restart" class="topbar-button aero-icon-button" type="button" disabled aria-label="Reiniciar canción" title="Reiniciar canción"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7Z"/></svg></button>
             <button id="music-pause" class="topbar-button aero-icon-button" type="button" disabled aria-label="Pausar" title="Pausar"><svg viewBox="0 0 24 24" aria-hidden="true"><path id="music-pause-icon" d="M6 5h4v14H6Zm8 0h4v14h-4Z"/></svg></button>
             <button id="music-stop" class="topbar-button aero-icon-button" type="button" disabled aria-label="Detener" title="Detener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6Z"/></svg></button>
             <button id="music-next" class="topbar-button aero-icon-button" type="button" disabled aria-label="Siguiente canción" title="Siguiente canción"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 5h2v14h-2ZM5 5l11 7-11 7Z"/></svg></button>
@@ -83,7 +84,7 @@
     <!-- Alertas de la comunidad -->
     <section id="alert-box" aria-label="Alerta del stream" aria-live="polite">
         <img class="alert-art channel-avatar-sync" src="/daibot.svg" alt="" aria-hidden="true">
-        <div class="alert-header"><span class="alert-spark" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2L15 9L22 12L15 15L12 22L9 15L2 12L9 9Z"/></svg></span> Nueva alerta</div>
+        <div class="alert-header"><span class="alert-spark" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2L15 9L22 12L15 15L12 22L9 15L2 12L9 9Z"/></svg></span> <span id="alert-title">Nueva alerta</span></div>
         <div class="alert-body" id="alert-text"></div>
     </section>
 

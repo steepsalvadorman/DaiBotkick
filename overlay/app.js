@@ -50,13 +50,31 @@
         document.body.style.marginTop = `${Math.max(0, (innerHeight - 1080 * scale) / 2) / marginScale}px`;
     }
     fit(); addEventListener('resize', fit);
-    if (!channel) { notify('Falta el canal. Copia la URL que aparece al conectar con Kick.'); return; }
-    const socket = io({ query: { ch: channel }, auth: { token }, reconnectionDelayMax: 10000 });
+    // ?demo=1: sin servidor ni canal. Un socket falso simula música, chat, alertas, bingo y luces
+    // para diseñar el overlay en local.
+    const demo = new URLSearchParams(location.search).has('demo');
+    if (!channel && !demo) { notify('Falta el canal. Copia la URL que aparece al conectar con Kick.'); return; }
+    const socket = demo ? demoSocket() : io({ query: { ch: channel }, auth: { token }, reconnectionDelayMax: 10000 });
+    function demoSocket() {
+        const handlers = {};
+        const fake = {
+            connected: true,
+            on(name, fn) { (handlers[name] ||= []).push(fn); return fake; },
+            fire(name, data) { (handlers[name] || []).forEach(fn => fn(data)); },
+            emit(name, data) {
+                if (name === 'playerPing') setTimeout(() => fake.fire('playerPong', { active: true, epoch: data.epoch }), 50);
+                if (name === 'advanceQueue') setTimeout(() => fake.onAdvance?.(data.id), 300);
+                if (name === 'previousQueue') setTimeout(() => fake.onPrevious?.(), 300);
+            },
+            connect() {}, disconnect() {},
+        };
+        return fake;
+    }
     let active = false, queue = [], version = 0, playingId = null, pending = false, visible = true;
     let myEpoch = null, pongTimer = null;
     let player = null, retry, generation = 0, apiPromise;
     let musicShown = true, musicVolume = 60, ttsVolume = 100;
-    let mediaReady = false, paused = false, actuallyPlaying = false;
+    let mediaReady = false, paused = false, actuallyPlaying = false, canGoBack = false;
     // Posición del video actual, para retomarlo si OBS recarga la fuente.
     const resumeKey = `daibot:resume:${channel}`;
     let resumeAt = 0;
@@ -86,6 +104,7 @@
         el('music-pause').disabled = !usable || pending;
         el('music-stop').disabled = !usable || pending;
         el('music-next').disabled = !active || !queue.length || pending;
+        el('music-prev').disabled = !active || !canGoBack || pending;
         const state = usable && actuallyPlaying && !paused ? 'playing' : usable ? 'paused' : 'idle';
         el('music-transport').setAttribute('data-state', state);
         media.setAttribute('data-state', state);
@@ -107,8 +126,29 @@
         if (islandHover || islandPinned || panelsOpen) mode = 'open';
         else if (bingo) mode = 'bingo';
         else if (musicLive) mode = 'music';
-        if (hud.dataset.island !== mode) hud.dataset.island = mode;
+        if (hud.dataset.island !== mode) { hud.dataset.island = mode; wakeIsland(); }
+        if (mode === 'open') wakeIsland();
     }
+    // Notch ocultable: tras unos segundos sin interacción se recoge hacia arriba y deja asomar el
+    // borde. Vuelve al acercar el ratón a la parte superior, al abrirse o al cambiar lo que muestra.
+    const ISLAND_IDLE_MS = 8000;
+    let islandTimer;
+    function wakeIsland() {
+        const hud = el('hud');
+        if (!hud?.classList.contains('dynamic-island')) return;
+        hud.classList.remove('tucked');
+        clearTimeout(islandTimer);
+        islandTimer = setTimeout(() => {
+            const panelsOpen = ['queue', 'volume'].some(name => el(`${name}-panel`) && !el(`${name}-panel`).hidden);
+            if (islandHover || islandPinned || panelsOpen) wakeIsland();
+            else hud.classList.add('tucked');
+        }, ISLAND_IDLE_MS);
+    }
+    addEventListener('pointermove', event => {
+        const hud = el('hud');
+        if (!hud?.getBoundingClientRect) return;
+        if (event.clientY <= hud.getBoundingClientRect().bottom + 48) wakeIsland();
+    });
     async function resumeMedia() {
         paused = false;
         updateTransport();
@@ -145,6 +185,13 @@
     });
     el('music-next').addEventListener('click', () => {
         if (!el('music-next').disabled) finish(playingId);
+    });
+    // Vuelve a la última canción reproducida; el servidor la devuelve al frente de la cola.
+    el('music-prev').addEventListener('click', () => {
+        if (el('music-prev').disabled || !socket.connected) return;
+        saveResume();
+        pending = true; updateTransport(); socket.emit('previousQueue', { version });
+        clearTimeout(retry); retry = setTimeout(() => { pending = false; updateTransport(); }, 5000);
     });
     direct.onplaying = () => { if (active && playingId) { actuallyPlaying = true; paused = false; updateTransport(); } };
     direct.onpause = () => { actuallyPlaying = false; updateTransport(); };
@@ -374,6 +421,7 @@
     socket.on('syncQueue', data => {
         if (!Array.isArray(data?.items) || !Number.isSafeInteger(data.version) || data.version < version) return;
         queue = data.items; version = data.version; clearTimeout(retry); pending = false;
+        canGoBack = data.previous === true;
         renderQueue();
         if (playingId !== queue[0]?.id) stop(); display(); playHead();
     });
@@ -401,7 +449,7 @@
         bingoState = null; el('bingo-widget').hidden = true; resumeAfterBingo = false;
         document.body.classList.remove('bingo-active');
         active = false; myEpoch = null; clearTimeout(pongTimer); pongTimer = null;
-        stop(); stopSpeech(); queue = []; display(); notify('Sin conexión. Reintentando...');
+        stop(); stopSpeech(); queue = []; canGoBack = false; display(); notify('Sin conexión. Reintentando...');
         renderQueue(); closePanels();
         if (reason === 'io server disconnect') socket.connect();
     });
@@ -437,12 +485,64 @@
         while (body.children.length > 4) body.firstChild.remove();
     });
     let alertTimer;
+    // El backend marca cada alerta con su tipo; el tema le da título y color propios.
+    const alertTitles = { follow: 'Nuevo seguidor', sub: 'Nuevo suscriptor', giftsub: 'Suscripciones regaladas' };
     const showAlert = data => {
+        const type = Object.hasOwn(alertTitles, data?.type) ? data.type : 'other';
+        el('alert-box').setAttribute('data-type', type);
+        if (el('alert-title')) el('alert-title').textContent = alertTitles[type] || 'Nueva alerta';
         el('alert-text').textContent = data.message || data.text || '¡Nueva alerta!';
         el('alert-box').classList.add('show'); clearTimeout(alertTimer);
         alertTimer = setTimeout(() => el('alert-box').classList.remove('show'), 6000);
+        if (type === 'follow' || type === 'sub') playJingle();
     };
     socket.on('kickAlert', showAlert); socket.on('alert', showAlert);
+    // Sintonía de follow y suscripción. Suena solo en el reproductor activo (OBS) para no duplicar
+    // audio, con el volumen de "Voces". Usa /sounds/alert.mp3 si existe; si no, un chime sintetizado.
+    // Mientras suena, el TTS de la alerta espera su turno.
+    let jingle = null, jingleFile = true, audioContext = null;
+    function jingleDone(token) {
+        if (jingle !== token) return;
+        jingle = null; playSpeech();
+    }
+    function playJingle() {
+        if (!active || jingle) return;
+        if (!jingleFile) { synthJingle(); return; }
+        const audio = new Audio('/sounds/alert.mp3'); jingle = audio; audio.volume = ttsVolume / 100;
+        const fallback = () => { if (jingle !== audio) return; jingleFile = false; jingle = null; synthJingle(); };
+        audio.onended = () => jingleDone(audio);
+        audio.onerror = fallback;
+        audio.play().catch(error => {
+            if (error?.name === 'NotAllowedError') { notify('Sonido bloqueado. Interactúa con la fuente de OBS.'); jingleDone(audio); }
+            else fallback();
+        });
+        setTimeout(() => jingleDone(audio), 15000);
+    }
+    /** Arpegio ascendente con brillo de cristal, propio de este overlay. */
+    function synthJingle() {
+        const Context = window.AudioContext || window.webkitAudioContext;
+        if (!Context) return;
+        audioContext ||= new Context();
+        audioContext.resume?.();
+        const token = {}; jingle = token;
+        const now = audioContext.currentTime + 0.05;
+        const master = audioContext.createGain();
+        master.gain.value = 0.35 * (ttsVolume / 100);
+        master.connect(audioContext.destination);
+        [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((freq, index) => {
+            const start = now + index * 0.11;
+            for (const [type, detune, level] of [['triangle', 0, 1], ['sine', 1200, 0.25]]) {
+                const osc = audioContext.createOscillator(), gain = audioContext.createGain();
+                osc.type = type; osc.frequency.value = freq; osc.detune.value = detune;
+                gain.gain.setValueAtTime(0, start);
+                gain.gain.linearRampToValueAtTime(level, start + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.001, start + 0.9);
+                osc.connect(gain).connect(master);
+                osc.start(start); osc.stop(start + 1);
+            }
+        });
+        setTimeout(() => jingleDone(token), 1500);
+    }
     let bingoState = null, bingoShown = true, resumeAfterBingo = false;
     function bingoLive() { return document.body.classList.contains('bingo-active'); }
     function syncBingoStage() {
@@ -532,9 +632,11 @@
         clearTimeout(speechTimer);
         if (speech) { speech.onended = speech.onerror = null; speech.pause(); speech.src = ''; }
         speech = null; speeches.length = 0;
+        if (jingle?.pause) { jingle.onended = jingle.onerror = null; jingle.pause(); }
+        jingle = null;
     }
     function playSpeech() {
-        if (speech || !active || !speeches.length) return;
+        if (speech || jingle || !active || !speeches.length) return;
         const audio = new Audio(`data:audio/mp3;base64,${speeches.shift()}`); speech = audio; audio.volume = ttsVolume / 100;
         const complete = () => {
             if (speech !== audio) return;
@@ -553,4 +655,77 @@
         if (active) { if (mediaReady && !paused) resumeMedia(); playSpeech(); }
     });
     updateTransport();
+    if (demo) startDemo();
+    // Guion del modo demo. Teclas: 1 alerta · 2 chat · 3 bingo (avanza fase) · 4 luces · 5 añade canción.
+    function startDemo() {
+        const songs = [
+            { title: 'lofi hip hop radio — beats to relax/study to', videoId: 'jfKfPfyJRdk' },
+            { title: 'synthwave radio — beats to chill/game to', videoId: '4xDzrJKXOOY' },
+        ];
+        const users = ['Frank_Arr', 'dalia', 'jorge', 'alex', 'ninja_volt', 'saturnita'];
+        const lines = ['¡Buenas, chat!', 'qué temazo 🔥', '!play daft punk', 'ese overlay está brutal',
+            'GG', 'saludos desde Lima', '[emote:39261:KEKW] jajaja', 'sube el volumen porfa'];
+        const pick = list => list[Math.floor(Math.random() * list.length)];
+        let version = 1, nextId = 1, items = [], history = [];
+        const addSong = () => { const song = songs[(nextId - 1) % songs.length]; items.push({ id: `demo-${nextId++}`, user: pick(users), ...song }); };
+        const sync = () => socket.fire('syncQueue', { items: [...items], version: version++, previous: history.length > 0 });
+        socket.onAdvance = id => {
+            const played = items.find(item => item.id === id);
+            if (played) history.push(played);
+            items = items.filter(item => item.id !== id);
+            if (!items.length) addSong();
+            sync();
+        };
+        socket.onPrevious = () => {
+            if (history.length) items.unshift(history.pop());
+            sync();
+        };
+        const chat = () => socket.fire('chatMessage', { user: pick(users), content: pick(lines), textOnly: Math.random() < 0.1 });
+        // Mismos datos que envía webhook.rs para follow, sub y giftsub.
+        const alertKinds = [
+            user => ({ type: 'follow', username: user, message: `¡Gracias por el follow, ${user}!` }),
+            user => ({ type: 'sub', username: user, months: 3, message: `¡${user} se suscribió por 3 meses!` }),
+            user => ({ type: 'giftsub', message: `¡${user} regaló 5 suscripciones!` }),
+        ];
+        let alertIndex = 0;
+        const alert = () => socket.fire('kickAlert', alertKinds[alertIndex++ % alertKinds.length](pick(users)));
+        let lights = false;
+        const toggleLights = () => { lights = !lights; socket.fire('stageLights', { on: lights }); };
+        // Bingo: idle → open → running (bola cada 2 s) → won → idle.
+        const card = Array.from({ length: 25 }, (_, i) => (i === 12 ? 0 : (i % 5) * 15 + Math.floor(i / 5) * 3 + 1));
+        const line = card.slice(0, 5);
+        let bingo = { round: 0, phase: 'idle', drawn: [], participants: 0 }, drawTimer;
+        const sendBingo = () => socket.fire('bingoState', { ...bingo, drawn: [...bingo.drawn] });
+        const draw = () => {
+            const left = Array.from({ length: 75 }, (_, i) => i + 1).filter(n => !bingo.drawn.includes(n) && !line.includes(n));
+            if (left.length) bingo.drawn.push(pick(left));
+            sendBingo();
+        };
+        const nextBingo = () => {
+            clearInterval(drawTimer);
+            const phase = { idle: 'open', open: 'running', running: 'won', won: 'idle' }[bingo.phase] || 'idle';
+            if (phase === 'open') bingo = { round: bingo.round + 1, phase, drawn: [], participants: 12 };
+            else if (phase === 'running') { bingo.phase = phase; drawTimer = setInterval(draw, 2000); }
+            else if (phase === 'won') {
+                for (const n of line) if (n && !bingo.drawn.includes(n)) bingo.drawn.push(n);
+                bingo = { ...bingo, phase, winner: pick(users), card, line };
+            } else bingo = { round: bingo.round, phase, drawn: [], participants: 0 };
+            sendBingo();
+        };
+        socket.fire('config', { channel_name: channel || 'seniordai', kick_url: `kick.com/${channel || 'seniordai'}` });
+        socket.fire('playbackRole', { active: true, epoch: 1 });
+        addSong(); addSong(); sync();
+        socket.fire('bingoState', bingo);
+        chat(); chat();
+        setInterval(chat, 4000);
+        setInterval(alert, 25000);
+        setTimeout(alert, 3000);
+        addEventListener('keydown', event => {
+            if (event.target?.closest?.('input')) return;
+            const action = { 1: alert, 2: chat, 3: nextBingo, 4: toggleLights, 5: () => { addSong(); sync(); } }[event.key];
+            if (action) { event.preventDefault(); action(); }
+        });
+        notify('Modo demo · 1 alerta · 2 chat · 3 bingo · 4 luces · 5 canción');
+        setTimeout(() => notify(''), 8000);
+    }
 })();

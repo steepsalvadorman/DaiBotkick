@@ -7,6 +7,8 @@ backend/target
 node_modules
 data
 *.mp3
+# Sintonía de alertas del overlay (la aporta el streamer).
+!overlay/sounds/*.mp3
 .claude
 .vscode
 PLAN_PRUEBAS_DESPLIEGUE.md

@@ -24,7 +24,7 @@
     --white: #ffffff;
     --safe: 24px;
     /* Zonas del lienzo OBS 1920×1080. El centro del juego queda libre salvo cuando el bingo está activo. */
-    --rail-top: 16px;
+    --rail-top: 0px;
     --rail-h: 128px;
     --avatar: 88px;
     --yt-w: 384px;
@@ -81,7 +81,7 @@ button:focus-visible, input:focus-visible {
 }
 /* En ventanas altas el corte del ecuador cruzaría el contenido: el reflejo se desvanece arriba
    y el papel es opaco para que el chat no se transparente detrás del bingo. */
-.topbar-panel, #media-widget, #bingo-widget {
+.topbar-panel, #bingo-widget {
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0, rgba(255, 255, 255, 0) 120px), var(--grain), var(--paper);
 }
 
@@ -100,11 +100,42 @@ button:focus-visible, input:focus-visible {
     align-items: center;
     gap: 16px;
     padding: 16px 24px 16px 16px;
-    border-radius: 9999px;
+    /* Notch: sale del borde superior, recto arriba y redondeado abajo. */
+    border-radius: 0 0 56px 56px;
     background: var(--sheen), var(--grain), rgba(236, 241, 248, 0.96);
     box-shadow: var(--glass-edge), var(--lift);
     z-index: 50;
-    animation: rise 900ms var(--mass) both;
+    animation: notch-drop 900ms var(--mass) both;
+    transition: translate 600ms var(--mass);
+}
+/* Recogido tras unos segundos sin interacción: solo asoma el borde inferior del notch.
+   Se usa translate (no transform) para no chocar con la animación de entrada. */
+#hud.system-topbar.tucked {
+    translate: -50% calc(-100% + 12px);
+    transition: translate 700ms var(--spring);
+}
+/* Curvas cóncavas a cada lado: el notch se funde con el borde del lienzo. Llevan el mismo
+   cristal esmerilado que la barra (reflejo a la altura del notch, grano y fondo) recortado
+   con una máscara, así el tono coincide exactamente. */
+#hud.system-topbar::before, #hud.system-topbar::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    width: 24px;
+    height: 24px;
+    pointer-events: none;
+    background: var(--sheen), var(--grain), rgba(236, 241, 248, 0.96);
+    background-size: 100% var(--rail-h), auto, auto;
+}
+#hud.system-topbar::before {
+    right: 100%;
+    -webkit-mask: radial-gradient(circle at 0 100%, transparent 23.5px, #000 24px);
+    mask: radial-gradient(circle at 0 100%, transparent 23.5px, #000 24px);
+}
+#hud.system-topbar::after {
+    left: 100%;
+    -webkit-mask: radial-gradient(circle at 100% 100%, transparent 23.5px, #000 24px);
+    mask: radial-gradient(circle at 100% 100%, transparent 23.5px, #000 24px);
 }
 .topbar-start {
     --avatar-size: var(--avatar);
@@ -187,9 +218,10 @@ button:focus-visible, input:focus-visible {
     gap: 8px;
     padding: 2px 12px 2px 8px;
     border-radius: 9999px;
-    background: var(--sheen), var(--ink);
-    color: var(--paper-hi);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+    /* Pantallita LCD del frontal: hundida en el chasis, tinta marino y el LED verde encima. */
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 50%), var(--lcd);
+    color: var(--lcd-ink);
+    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.32), inset 0 1px 2px rgba(22, 29, 54, 0.28), 0 1px 0 rgba(255, 255, 255, 0.9);
     font-size: 12px;
     line-height: 16px;
     font-weight: 700;
@@ -515,7 +547,9 @@ body.no-chat #chat-widget { display: none; }
 }
 .chat-emote { display: inline-block; width: 1.25em; height: 1.25em; object-fit: contain; vertical-align: -.25em; }
 
-/* Reproductor: ventana Aero con el video dentro de un bisel de televisor. */
+/* Reproductor portátil: carcasa de cristal esmerilado (deja ver el juego como el resto del
+   tema), pantalla del video en un bisel pizarra, LCD y teclas. Una columna con 12 px entre
+   piezas y 16 px de margen en la carcasa. */
 #media-widget, #bingo-widget {
     position: absolute;
     overflow: hidden;
@@ -526,6 +560,13 @@ body.no-chat #chat-widget { display: none; }
     right: var(--safe);
     width: var(--yt-w);
     z-index: 45;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px 16px 16px;
+    border-radius: 24px 24px 24px 40px;
+    background: var(--sheen), var(--grain), var(--paper-glass);
+    box-shadow: var(--glass-edge), inset 0 0 0 4px rgba(255, 255, 255, 0.35), var(--lift);
     opacity: 0;
     visibility: hidden;
     filter: blur(8px);
@@ -542,8 +583,8 @@ body.no-chat #chat-widget { display: none; }
 /* Radio anidado: ventana de 24 px con 16 px de margen deja el bisel en 8 px. */
 #video-container {
     position: relative;
-    width: calc(100% - 32px);
-    margin: 16px;
+    width: 100%;
+    margin: 0;
     aspect-ratio: 16 / 9;
     overflow: hidden;
     border-radius: 8px;
@@ -555,7 +596,99 @@ body.no-chat #chat-widget { display: none; }
 #youtube-player, #direct-video { width: 100%; height: 100%; display: block; }
 #youtube-player iframe { width: 100%; height: 100%; border: 0; }
 #direct-video { display: none; object-fit: contain; }
-.media-info { padding: 0 16px 16px; }
+/* Cabecera de la carcasa: LED de reproducción, nombre grabado en relieve y sello estéreo. */
+.deck-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 4px;
+}
+.deck-led {
+    width: 8px;
+    height: 8px;
+    border-radius: 9999px;
+    background: radial-gradient(circle at 50% 30%, var(--white) 0 18%, var(--slate-light) 46%, var(--slate) 100%);
+    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.4);
+}
+#media-widget[data-state="playing"] .deck-led {
+    background: radial-gradient(circle at 50% 30%, var(--white) 0 18%, var(--led) 46%, #1f8f00 100%);
+    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.4), 0 0 8px var(--led);
+}
+.deck-brand {
+    color: var(--slate-deep);
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 700;
+    letter-spacing: 0.24em;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+.deck-head .window-jp { color: var(--ink-muted); }
+.deck-tag {
+    margin-left: auto;
+    padding: 0 8px;
+    border-radius: 4px;
+    background: var(--sheen), var(--violet-deep);
+    color: var(--white);
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+}
+/* Pantalla LCD: título y cola en tinta marino sobre el verde azulado de la consola. */
+.media-info.deck-lcd {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    margin: 0;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 50%), var(--lcd);
+    color: var(--lcd-ink);
+    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.32), inset 0 1px 3px rgba(22, 29, 54, 0.3), 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+.deck-lcd .media-label { background: transparent; box-shadow: none; padding: 0; color: var(--lcd-ink); }
+.deck-lcd #video-title { align-self: stretch; margin-top: 4px; font-family: var(--mono); font-size: 18px; line-height: 24px; font-weight: 600; }
+.deck-lcd #queue-indicator { margin-top: 6px; }
+/* Teclas del casete: barras de pizarra con su símbolo; la activa queda hundida. */
+.deck-keys {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin: 0 0 4px;
+}
+.deck-key {
+    position: relative;
+    height: 28px;
+    border-radius: 6px 6px 8px 8px;
+    background: var(--sheen), linear-gradient(180deg, var(--slate-light), var(--slate));
+    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.45), 0 4px 0 var(--slate-deep), 0 6px 8px rgba(22, 29, 54, 0.3);
+    transition: transform 160ms var(--mass), box-shadow 160ms var(--mass);
+}
+.deck-key::before {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 16px;
+    font-style: normal;
+    letter-spacing: -0.1em;
+}
+.key-rew::before { content: "◀◀"; }
+.key-play::before { content: "▶"; }
+.key-pause::before { content: "❚❚"; }
+.key-ff::before { content: "▶▶"; }
+.key-play { background: var(--sheen), linear-gradient(180deg, #6f9ff5, var(--power)); }
+.key-play::before { color: var(--white); }
+#media-widget[data-state="playing"] .key-play,
+#media-widget[data-state="paused"] .key-pause {
+    transform: translateY(3px);
+    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.45), 0 1px 0 var(--slate-deep), inset 0 2px 4px rgba(22, 29, 54, 0.35);
+}
+
 .media-label {
     display: inline-flex;
     align-items: center;
@@ -761,14 +894,19 @@ body.bingo-active #media-widget {
 #bingo-winning-card span { padding: 4px 2px; border-radius: 4px; background: var(--paper-hi); font-family: var(--mono); font-weight: 600; }
 #bingo-winning-card .winning { background: var(--orb-light), var(--violet); color: var(--white); }
 
-/* Alerta: tarjeta de catálogo con el avatar dentro de un disco iridiscente. */
+/* Alerta: tarjeta de catálogo con el avatar dentro de un disco iridiscente. El disco ocupa
+   su propia columna y queda centrado en vertical, siempre dentro de los márgenes. */
 #alert-box {
     position: absolute;
     top: calc(var(--rail-top) + var(--rail-h) + 28px);
     left: 50%;
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    column-gap: 24px;
     min-width: 560px;
     max-width: 820px;
-    padding: 24px 40px 24px 160px;
+    padding: 24px 40px 24px 24px;
     border-radius: 24px;
     opacity: 0;
     filter: blur(8px);
@@ -784,22 +922,23 @@ body.bingo-active #media-widget {
     transition: opacity 400ms var(--mass), transform 800ms var(--spring), filter 400ms var(--mass);
 }
 .alert-disc {
-    position: absolute;
-    left: -24px;
-    top: 50%;
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    align-self: center;
     display: grid;
     place-items: center;
-    width: 160px;
-    height: 160px;
-    padding: 12px;
+    width: 112px;
+    height: 112px;
+    padding: 8px;
     border-radius: 9999px;
     background: var(--orb-light), conic-gradient(from 0deg, #f3f6fb, #b9e6ff, #e6d8ff, #fff3c9, #c8ffe0, #f3f6fb, #c9d3ff, #f3f6fb);
     box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.45), var(--lift);
-    transform: translateY(-50%) rotate(-120deg) scale(.6);
+    transform: rotate(-120deg) scale(.6);
     transition: transform 1000ms var(--spring) 120ms;
 }
-#alert-box.show .alert-disc { transform: translateY(-50%) rotate(0) scale(1); }
+#alert-box.show .alert-disc { transform: rotate(0) scale(1); }
 .alert-art {
+    display: block;
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -808,6 +947,9 @@ body.bingo-active #media-widget {
     box-shadow: 0 0 0 2px var(--white), 0 0 0 4px rgba(22, 29, 54, 0.4);
 }
 .alert-header {
+    grid-column: 2;
+    justify-self: start;
+    align-self: end;
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -823,6 +965,14 @@ body.bingo-active #media-widget {
     letter-spacing: 0.16em;
     text-transform: lowercase;
 }
+/* Cada tipo de alerta con su color: seguidor en azul de encendido, suscriptor en violeta del
+   logo y suscripciones regaladas en dorado de trofeo. El aro del disco acompaña al color. */
+#alert-box[data-type="follow"] .alert-header { background: var(--sheen), var(--power); }
+#alert-box[data-type="sub"] .alert-header { background: var(--sheen), var(--violet-deep); }
+#alert-box[data-type="giftsub"] .alert-header { background: var(--sheen), linear-gradient(90deg, #c98a14, #e8b23a); }
+#alert-box[data-type="follow"] .alert-disc { box-shadow: 0 0 0 2px var(--power), var(--lift); }
+#alert-box[data-type="sub"] .alert-disc { box-shadow: 0 0 0 2px var(--violet), 0 0 16px 2px rgba(139, 111, 226, 0.55), var(--lift); }
+#alert-box[data-type="giftsub"] .alert-disc { box-shadow: 0 0 0 2px #fff4cc, 0 0 18px 4px rgba(255, 198, 64, 0.75), var(--lift); }
 .alert-spark { display: inline-grid; place-items: center; width: 16px; height: 16px; }
 .alert-spark svg { width: 16px; height: 16px; fill: currentColor; }
 .alert-jp {
@@ -837,6 +987,8 @@ body.bingo-active #media-widget {
     color: var(--ink-muted);
 }
 .alert-body {
+    grid-column: 2;
+    align-self: start;
     padding-top: 12px;
     font-size: 36px;
     line-height: 40px;
@@ -916,23 +1068,7 @@ body.bingo-active #media-widget {
     z-index: 1;
     animation: rise 1000ms var(--mass) 240ms both;
 }
-.pad-corner-left { left: var(--safe); }
 .pad-corner-right { right: var(--safe); }
-/* Botones de cara del mando en dos filas: X Y Z arriba, A B C abajo. */
-.pad-buttons { display: grid; grid-template-columns: repeat(3, 16px); gap: 4px 8px; }
-.pad-buttons i {
-    width: 16px;
-    height: 16px;
-    border-radius: 9999px;
-    background: var(--orb-light), var(--slate);
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.45), 0 2px 4px rgba(22, 29, 54, 0.3);
-}
-.pad-buttons i:nth-child(1) { background: var(--orb-light), var(--slate-light); }
-.pad-buttons i:nth-child(2) { background: var(--orb-light), var(--violet); }
-.pad-buttons i:nth-child(3) { background: var(--orb-light), var(--slate-light); }
-.pad-buttons i:nth-child(4) { background: var(--orb-light), var(--power); }
-.pad-buttons i:nth-child(5) { background: var(--orb-light), var(--slate-deep); }
-.pad-buttons i:nth-child(6) { background: var(--orb-light), var(--violet-deep); }
 .pad-tagline {
     padding: 4px 16px;
     border-radius: 9999px;
@@ -945,14 +1081,28 @@ body.bingo-active #media-widget {
 }
 .pad-corner-right .pad-tagline { font-family: var(--jp); letter-spacing: 0.16em; }
 
-/* Adornos pequeños de Halloween, fuera del centro del juego. */
-.halloween { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
-.halloween img { position: absolute; display: block; }
-.halloween-bat { width: 88px; height: auto; }
-.halloween-bat-left { top: 8px; left: var(--safe); }
-.halloween-bat-right { top: 8px; right: var(--safe); transform: scaleX(-1); }
-.halloween-pumpkin { width: 56px; height: auto; bottom: 16px; left: calc(50% - 380px); }
-.halloween-ghost { width: 64px; height: auto; bottom: 16px; right: 248px; }
+/* Detalle de catálogo: estrella de precio.
+   Solo en las esquinas y la franja inferior, fuera del centro del juego. */
+.catalog-deco { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.catalog-deco > * { position: absolute; animation: rise 1000ms var(--mass) 320ms both; }
+/* Estrella de precio del catálogo de 1994, en azul de encendido. */
+.deco-burst {
+    bottom: 12px;
+    left: calc(50% - 432px);
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 64px;
+    background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.5), transparent 60%), var(--power);
+    clip-path: polygon(50% 0, 61% 14%, 79% 9%, 80% 27%, 97% 33%, 88% 50%, 97% 67%, 80% 73%, 79% 91%, 61% 86%, 50% 100%, 39% 86%, 21% 91%, 20% 73%, 3% 67%, 12% 50%, 3% 33%, 20% 27%, 21% 9%, 39% 14%);
+    color: var(--white);
+    font-family: var(--jp);
+    font-size: 13px;
+    line-height: 16px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    rotate: -12deg;
+}
 
 @keyframes rise {
     from { opacity: 0; transform: translateY(16px); filter: blur(8px); }
@@ -984,6 +1134,10 @@ body.bingo-active #media-widget {
             inset 0 -6px 8px rgba(90, 52, 8, 0.28);
     }
 }
+@keyframes notch-drop {
+    from { opacity: 0; transform: translateY(-100%); }
+    to { opacity: 1; transform: none; }
+}
 @keyframes disc-spin { to { transform: rotate(360deg); } }
 @keyframes music-bars { to { transform: scaleY(.3); } }
 @keyframes title-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
@@ -998,7 +1152,6 @@ body.bingo-active #media-widget {
 body.lite .brand-live::before, body.lite .disc-lid, body.lite .disc-lid::before, body.lite .vinyl-record,
 body.lite .music-bars i, body.lite .equalizer i,
 body.lite .bingo-drum i, body.lite .title-inner.marquee,
-body.lite .halloween img { animation: none !important; }
 body.lite #video-title.scrolling { text-overflow: ellipsis; }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }

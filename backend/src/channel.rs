@@ -2,6 +2,7 @@ use crate::{
     cooldown::CooldownManager,
     db::ChannelRow,
     kick,
+    platform::Platform,
     queue::VideoQueue,
     state::{AppState, ChannelCommands, ChannelState, SorteoState},
     stats, tts,
@@ -15,13 +16,16 @@ use tokio::sync::{mpsc, Mutex, RwLock};
 pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) -> Result<(), String> {
     let queue: VideoQueue =
         serde_json::from_str(&row.queue_state).map_err(|_| "Cola persistida invalida")?;
+    let platform = Platform::from_db(&row.platform)
+        .ok_or_else(|| format!("Plataforma desconocida: {}", row.platform))?;
     let slug = row.slug.clone();
+    let key = platform.channel_key(&slug);
     let _guard = global.channel_lock.lock().await;
-    if let Some((_, old)) = global.channels.remove(&slug) {
+    if let Some((_, old)) = global.channels.remove(&key) {
         old.cancel.cancel();
-        global.user_id_to_slug.retain(|_, v| v != &slug);
+        global.user_id_to_key.retain(|_, v| v != &key);
     }
-    let bans = match crate::db::load_bans(&global.db, &slug).await {
+    let bans = match crate::db::load_bans(&global.db, platform, &slug).await {
         Ok(list) => list.into_iter().collect(),
         Err(e) => {
             tracing::error!("[Channel][{slug}] No se pudieron cargar los baneos: {e}");
@@ -31,7 +35,7 @@ pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) -> Result<(),
     let (tts_tx, tts_rx) = mpsc::channel(32);
     let ch = Arc::new(ChannelState {
         slug: slug.clone(),
-        platform: crate::platform::Platform::Kick,
+        platform,
         access_token: Arc::new(RwLock::new(row.access_token)),
         persisted_refresh_token: RwLock::new(row.refresh_token.clone()),
         refresh_token_val: Arc::new(RwLock::new(row.refresh_token)),
@@ -69,11 +73,13 @@ pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) -> Result<(),
         stage_lights: AtomicBool::new(false),
     });
     if let Some(id) = row.broadcaster_user_id {
-        global.user_id_to_slug.insert(id as u64, slug.clone());
+        global
+            .user_id_to_key
+            .insert((platform, id as u64), key.clone());
     }
-    global.channels.insert(slug.clone(), ch.clone());
+    global.channels.insert(key.clone(), ch.clone());
     // Reconnect existing sockets so they acquire the new state and authorization.
-    global.io.to(slug.clone()).disconnect().ok();
+    global.io.to(key).disconnect().ok();
     let service = Arc::new(tts::TtsService::new(
         &global.config.tts_cache_dir,
         &global.config.fish_audio_api_key,
@@ -87,11 +93,17 @@ pub async fn start_channel(row: ChannelRow, global: Arc<AppState>) -> Result<(),
     tokio::spawn(async move {
         tokio::select! { _ = cancel.cancelled() => {}, _ = tts::spawn_processor(service, tts_rx, io, tts_channel, slots) => {} }
     });
-    let (worker, app) = (ch.clone(), global.clone());
-    tokio::spawn(async move {
-        tokio::select! { _ = worker.cancel.cancelled() => {}, _ = kick::run_channel(worker.clone(), app) => {} }
-    });
-    stats::start_channel(global.io.clone(), ch, global.clone());
-    tracing::info!("[Channel] Iniciado: {slug}");
+    match platform {
+        Platform::Kick => {
+            let (worker, app) = (ch.clone(), global.clone());
+            tokio::spawn(async move {
+                tokio::select! { _ = worker.cancel.cancelled() => {}, _ = kick::run_channel(worker.clone(), app) => {} }
+            });
+            stats::start_channel(global.io.clone(), ch, global.clone());
+        }
+        // Suscripciones, tokens y estadísticas de Twitch llegan en las etapas 3, 4 y 7.
+        Platform::Twitch => {}
+    }
+    tracing::info!("[Channel] Iniciado: {}", platform.channel_key(&slug));
     Ok(())
 }

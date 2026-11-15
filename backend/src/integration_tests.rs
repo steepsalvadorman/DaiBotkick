@@ -1,5 +1,5 @@
 //! Runs only against an explicitly provided test database, in an isolated schema.
-use crate::{auth, channel, db, kick, queue, server, test_support, webhook};
+use crate::{auth, channel, db, kick, platform::Platform, queue, server, test_support, webhook};
 use axum::{
     body::Bytes,
     extract::State,
@@ -164,7 +164,9 @@ async fn refresh_serializes_rotation_honors_expiry_and_chat_retries_401() {
     );
     assert!(a && b);
     assert_eq!(mock.token_requests.load(Ordering::Relaxed), 1);
-    let saved = db::load_channel(&database.pool, "alpha").await.unwrap();
+    let saved = db::load_channel(&database.pool, Platform::Kick, "alpha")
+        .await
+        .unwrap();
     assert_eq!(saved.access_token, "access-1");
     assert_eq!(saved.refresh_token, "refresh-1");
     assert!((before + 90..=chrono::Utc::now().timestamp() as u64 + 90)
@@ -354,7 +356,8 @@ async fn durable_inbox_retries_after_interrupted_external_effect() {
     use_mock(&mut app, &service);
     let (ch, _receiver) = test_support::channel("alpha", 1);
     app.channels.insert("alpha".into(), ch);
-    app.user_id_to_slug.insert(1, "alpha".into());
+    app.user_id_to_key
+        .insert((Platform::Kick, 1), "alpha".into());
     let payload = json!({"broadcaster":{"user_id":1},"sender":{"user_id":1,"username":"alpha"},"content":"!comandos"});
     sqlx::query("INSERT INTO webhook_events (message_id,received_at,payload,event_type) VALUES ('interrupted',$1,$2,'chat.message.sent')")
         .bind(chrono::Utc::now().timestamp()).bind(payload.to_string()).execute(&database.pool).await.unwrap();
@@ -380,7 +383,9 @@ async fn durable_inbox_retries_after_interrupted_external_effect() {
     use_mock(&mut restarted, &service);
     let (ch, _receiver) = test_support::channel("alpha", 1);
     restarted.channels.insert("alpha".into(), ch);
-    restarted.user_id_to_slug.insert(1, "alpha".into());
+    restarted
+        .user_id_to_key
+        .insert((Platform::Kick, 1), "alpha".into());
     let worker = tokio::spawn(webhook::worker(restarted.clone()));
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
         while !sqlx::query_scalar::<_, bool>("SELECT processed FROM webhook_events")
@@ -650,7 +655,8 @@ async fn socket_authorization_player_takeover_and_channel_isolation() {
         let (ch, receiver) = test_support::channel(slug, id as u64);
         receivers.push(receiver);
         app.channels.insert(slug.into(), ch);
-        app.user_id_to_slug.insert(id as u64, slug.into());
+        app.user_id_to_key
+            .insert((Platform::Kick, id as u64), slug.into());
     }
     let alpha = app.channels.get("alpha").unwrap().clone();
     queue::change(&alpha, &app, |q| {
@@ -784,7 +790,12 @@ async fn socket_authorization_player_takeover_and_channel_isolation() {
         .items
         .is_empty());
     assert_eq!(public.event("chatMessage").await["content"], "hola chat");
-    server::ns_emit(&app, "beta", "testMarker", json!({}));
+    server::ns_emit(
+        &app,
+        &app.channels.get("beta").unwrap(),
+        "testMarker",
+        json!({}),
+    );
     beta.event("testMarker").await;
     assert!(!beta
         .events
@@ -795,7 +806,9 @@ async fn socket_authorization_player_takeover_and_channel_isolation() {
     standby.event("playerAvailable").await;
     let mut replacement = SocketClient::connect(&http.url, "alpha", Some("play-secret")).await;
     assert_eq!(replacement.event("playbackRole").await["active"], true);
-    let row = db::load_channel(&database.pool, "alpha").await.unwrap();
+    let row = db::load_channel(&database.pool, Platform::Kick, "alpha")
+        .await
+        .unwrap();
     channel::start_channel(row, app.clone()).await.unwrap();
     assert!(alpha.cancel.is_cancelled());
     let mut reconnected = SocketClient::connect(&http.url, "alpha", Some("play-secret")).await;
@@ -828,7 +841,7 @@ async fn rotated_tokens_recover_after_temporary_database_write_failure() {
     assert!(!kick::refresh_access_token(&ch, &app).await);
     assert_eq!(*ch.refresh_token_val.read().await, "refresh-1");
     assert_eq!(
-        db::load_channel(&database.pool, "alpha")
+        db::load_channel(&database.pool, Platform::Kick, "alpha")
             .await
             .unwrap()
             .refresh_token,
@@ -840,7 +853,7 @@ async fn rotated_tokens_recover_after_temporary_database_write_failure() {
         .unwrap();
     assert!(kick::refresh_access_token(&ch, &app).await);
     assert_eq!(
-        db::load_channel(&database.pool, "alpha")
+        db::load_channel(&database.pool, Platform::Kick, "alpha")
             .await
             .unwrap()
             .refresh_token,
@@ -877,6 +890,7 @@ async fn database_persistence_oauth_and_webhook_idempotency() {
     let mut receivers = HashMap::new();
     for (slug, id) in [("alpha", 1), ("beta", 2)] {
         let row = db::ChannelRow {
+            platform: "kick".into(),
             slug: slug.into(),
             broadcaster_user_id: Some(id),
             chatroom_id: Some(id),
@@ -897,7 +911,8 @@ async fn database_persistence_oauth_and_webhook_idempotency() {
         let (ch, rx) = test_support::channel(slug, id as u64);
         receivers.insert(slug, rx);
         app.channels.insert(slug.into(), ch);
-        app.user_id_to_slug.insert(id as u64, slug.into());
+        app.user_id_to_key
+            .insert((Platform::Kick, id as u64), slug.into());
     }
     let alpha = app.channels.get("alpha").unwrap().clone();
     let beta = app.channels.get("beta").unwrap().clone();
@@ -919,7 +934,9 @@ async fn database_persistence_oauth_and_webhook_idempotency() {
     .await
     .unwrap();
     assert!(beta.video_queue.read().await.items.is_empty());
-    let loaded = db::load_channel(&pool, "alpha").await.unwrap();
+    let loaded = db::load_channel(&pool, Platform::Kick, "alpha")
+        .await
+        .unwrap();
     let restored: queue::VideoQueue = serde_json::from_str(&loaded.queue_state).unwrap();
     assert_eq!(restored.items.len(), 2);
     assert_eq!(restored.version, 2);
@@ -939,7 +956,9 @@ async fn database_persistence_oauth_and_webhook_idempotency() {
     login.follow_goal = 100;
     login.playback_token = "replacement".into();
     db::upsert_channel(&pool, &login).await.unwrap();
-    let reloaded = db::load_channel(&pool, "alpha").await.unwrap();
+    let reloaded = db::load_channel(&pool, Platform::Kick, "alpha")
+        .await
+        .unwrap();
     assert_eq!(reloaded.cmd_discord, "saved-setting");
     assert_eq!(reloaded.follow_goal, 200);
     assert_eq!(reloaded.playback_token, "play-secret");
@@ -1131,7 +1150,9 @@ async fn every_documented_chat_command_responds() {
     says!("dai", "!horario", true, "Horario → Lun-Vie 8pm");
     says!("dai", "!set meta 50", true, "Meta de seguidores: 50");
     says!("dai", "!set nada", true, "Uso: !set");
-    let saved = db::load_channel(&database.pool, "alpha").await.unwrap();
+    let saved = db::load_channel(&database.pool, Platform::Kick, "alpha")
+        .await
+        .unwrap();
     assert_eq!(saved.cmd_discord, "https://discord.gg/abc");
     assert_eq!(saved.cmd_pc, "Ryzen 7 · RTX 4070");
     assert_eq!(saved.follow_goal, 50);
@@ -1229,5 +1250,124 @@ async fn every_documented_chat_command_responds() {
     assert!(crate::tts::DEFAULT_CHAT_VOICES.contains(&item.voice.as_str()));
 
     drop(server);
+    database.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL"]
+async fn kick_and_twitch_channels_with_the_same_name_stay_separate() {
+    let database = test_support::TestDatabase::new().await;
+    let pool = &database.pool;
+    let kick_row = test_support::row("pepe", 1);
+    let twitch_row = db::ChannelRow {
+        platform: "twitch".into(),
+        cmd_discord: "discord de twitch".into(),
+        ..test_support::row("pepe", 1)
+    };
+    db::upsert_channel(pool, &kick_row).await.unwrap();
+    db::upsert_channel(pool, &twitch_row).await.unwrap();
+    assert_eq!(db::load_all_channels(pool).await.unwrap().len(), 2);
+    assert_eq!(
+        db::load_channel(pool, Platform::Kick, "pepe")
+            .await
+            .unwrap()
+            .cmd_discord,
+        "saved-setting"
+    );
+    assert_eq!(
+        db::load_channel(pool, Platform::Twitch, "pepe")
+            .await
+            .unwrap()
+            .cmd_discord,
+        "discord de twitch"
+    );
+
+    // Comandos, metas, tokens y baneos solo cambian la fila de su plataforma.
+    db::update_command_text(pool, Platform::Twitch, "pepe", "pc", "pc twitch")
+        .await
+        .unwrap();
+    db::update_follow_goal(pool, Platform::Twitch, "pepe", 500)
+        .await
+        .unwrap();
+    assert!(db::update_tokens(
+        pool,
+        Platform::Twitch,
+        "pepe",
+        "tw-access",
+        "tw-refresh",
+        9,
+        "refresh"
+    )
+    .await
+    .unwrap());
+    let kick = db::load_channel(pool, Platform::Kick, "pepe")
+        .await
+        .unwrap();
+    let twitch = db::load_channel(pool, Platform::Twitch, "pepe")
+        .await
+        .unwrap();
+    assert_eq!((kick.cmd_pc.as_str(), kick.follow_goal), ("", 200));
+    assert_eq!(kick.access_token, "access");
+    assert_eq!(
+        (twitch.cmd_pc.as_str(), twitch.follow_goal),
+        ("pc twitch", 500)
+    );
+    assert_eq!(twitch.access_token, "tw-access");
+    assert!(db::add_ban(pool, Platform::Twitch, "pepe", "troll")
+        .await
+        .unwrap());
+    assert!(db::load_bans(pool, Platform::Kick, "pepe")
+        .await
+        .unwrap()
+        .is_empty());
+    assert_eq!(
+        db::load_bans(pool, Platform::Twitch, "pepe").await.unwrap(),
+        ["troll"]
+    );
+    assert!(!db::remove_ban(pool, Platform::Kick, "pepe", "troll")
+        .await
+        .unwrap());
+
+    // Cada canal tiene su propia clave en memoria y su propia sala de overlays.
+    let app = test_support::app(pool.clone());
+    channel::start_channel(kick, app.clone()).await.unwrap();
+    channel::start_channel(twitch, app.clone()).await.unwrap();
+    assert_eq!(app.channels.get("pepe").unwrap().platform, Platform::Kick);
+    assert_eq!(
+        app.channels.get("twitch:pepe").unwrap().platform,
+        Platform::Twitch
+    );
+    assert_eq!(
+        app.user_id_to_key
+            .get(&(Platform::Twitch, 1))
+            .unwrap()
+            .value(),
+        "twitch:pepe"
+    );
+    assert_eq!(
+        app.user_id_to_key
+            .get(&(Platform::Kick, 1))
+            .unwrap()
+            .value(),
+        "pepe"
+    );
+
+    // El inbox acepta el mismo ID de entrega en las dos plataformas.
+    for platform in ["kick", "twitch"] {
+        sqlx::query(
+            "INSERT INTO webhook_events (platform,message_id,received_at,payload,event_type) VALUES ($1,'same-id',0,'{}','x')",
+        )
+        .bind(platform)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+    assert!(sqlx::query(
+        "INSERT INTO channels (platform, slug, access_token) VALUES ('youtube','x','t')"
+    )
+    .execute(pool)
+    .await
+    .is_err());
+    app.shutdown.cancel();
     database.cleanup().await;
 }

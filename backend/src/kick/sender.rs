@@ -21,7 +21,7 @@ pub async fn send(text: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
                 // Su eco no llega al overlay; el dock de chat sí muestra las respuestas del bot.
                 crate::server::ns_emit(
                     global,
-                    &ch.slug,
+                    ch,
                     "dockChat",
                     serde_json::json!({"user":"DaiBot","content":text,"bot":true}),
                 );

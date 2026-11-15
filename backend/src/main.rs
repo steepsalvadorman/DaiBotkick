@@ -145,7 +145,7 @@ async fn main() {
         io: io_inner,
         db,
         channels: Arc::new(DashMap::new()),
-        user_id_to_slug: Arc::new(DashMap::new()),
+        user_id_to_key: Arc::new(DashMap::new()),
         channel_lock: Mutex::new(()),
         shutdown: CancellationToken::new(),
         tts_slots: Arc::new(Semaphore::new(2)),

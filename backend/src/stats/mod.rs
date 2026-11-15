@@ -56,7 +56,7 @@ async fn display_name(global: &AppState, ch: &ChannelState, io: &socketioxide::S
         *ch.avatar_url.write().await = avatar.to_owned();
     }
     *ch.display_name.write().await = name.to_owned();
-    io.to(ch.slug.clone())
+    io.to(ch.key())
         .emit("config", ch.overlay_config().await)
         .ok();
 }
@@ -92,7 +92,7 @@ async fn fetch(global: &AppState, ch: &ChannelState, io: &socketioxide::SocketIo
     let viewers = stream["viewer_count"]
         .as_u64()
         .or_else(|| channel["viewer_count"].as_u64());
-    io.to(ch.slug.clone())
+    io.to(ch.key())
         .emit("viewerCount", json!({"count":viewers}))
         .ok();
     let started = if live {
@@ -105,7 +105,7 @@ async fn fetch(global: &AppState, ch: &ChannelState, io: &socketioxide::SocketIo
         None
     };
     *ch.live_since.write().await = started;
-    io.to(ch.slug.clone())
+    io.to(ch.key())
         .emit(
             "streamStatus",
             json!({"live":live,"startedAt":started.map(|t| t.to_rfc3339())}),
@@ -123,7 +123,7 @@ async fn fetch(global: &AppState, ch: &ChannelState, io: &socketioxide::SocketIo
     }
     ch.followers_known
         .store(followers.is_some(), Ordering::Relaxed);
-    io.to(ch.slug.clone())
+    io.to(ch.key())
         .emit("followersUpdate", json!({"count":followers}))
         .ok();
 }

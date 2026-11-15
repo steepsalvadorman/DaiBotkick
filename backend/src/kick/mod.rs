@@ -84,6 +84,7 @@ pub async fn refresh_if_current(
     ch.token_expires.store(expires, Ordering::Relaxed);
     match db::update_tokens(
         &global.db,
+        ch.platform,
         &ch.slug,
         access,
         next_refresh,
@@ -96,7 +97,7 @@ pub async fn refresh_if_current(
             *ch.persisted_refresh_token.write().await = next_refresh.to_owned();
         }
         Ok(false) => {
-            if let Ok(row) = db::load_channel(&global.db, &ch.slug).await {
+            if let Ok(row) = db::load_channel(&global.db, ch.platform, &ch.slug).await {
                 *ch.access_token.write().await = row.access_token;
                 *ch.persisted_refresh_token.write().await = row.refresh_token.clone();
                 *ch.refresh_token_val.write().await = row.refresh_token;

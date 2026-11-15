@@ -1,9 +1,12 @@
+use crate::platform::Platform;
 use sqlx::PgPool;
 
-const COLUMNS: &str = "slug, broadcaster_user_id, chatroom_id, access_token, refresh_token, token_expires, panel_token, cmd_discord, cmd_redes, cmd_pc, cmd_horario, follow_goal, queue_state, show_video, playback_token";
+const COLUMNS: &str = "platform, slug, broadcaster_user_id, chatroom_id, access_token, refresh_token, token_expires, panel_token, cmd_discord, cmd_redes, cmd_pc, cmd_horario, follow_goal, queue_state, show_video, playback_token";
 
 #[derive(sqlx::FromRow, Clone)]
 pub struct ChannelRow {
+    /// `Platform::as_str`; la base solo admite valores válidos.
+    pub platform: String,
     pub slug: String,
     pub broadcaster_user_id: Option<i64>,
     pub chatroom_id: Option<i64>,
@@ -31,20 +34,27 @@ pub async fn load_all_channels(pool: &PgPool) -> Result<Vec<ChannelRow>, sqlx::E
         .await
 }
 
-pub async fn load_channel(pool: &PgPool, slug: &str) -> Result<ChannelRow, sqlx::Error> {
-    sqlx::query_as::<_, ChannelRow>(&format!("SELECT {COLUMNS} FROM channels WHERE slug=$1"))
-        .bind(slug)
-        .fetch_one(pool)
-        .await
+pub async fn load_channel(
+    pool: &PgPool,
+    platform: Platform,
+    slug: &str,
+) -> Result<ChannelRow, sqlx::Error> {
+    sqlx::query_as::<_, ChannelRow>(&format!(
+        "SELECT {COLUMNS} FROM channels WHERE platform=$1 AND slug=$2"
+    ))
+    .bind(platform.as_str())
+    .bind(slug)
+    .fetch_one(pool)
+    .await
 }
 
 pub async fn upsert_channel(pool: &PgPool, row: &ChannelRow) -> Result<(), sqlx::Error> {
     sqlx::query(
         "INSERT INTO channels
             (slug, broadcaster_user_id, chatroom_id, access_token, refresh_token,
-             token_expires, panel_token, cmd_discord, cmd_redes, cmd_pc, cmd_horario, follow_goal, playback_token)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-         ON CONFLICT (slug) DO UPDATE SET
+             token_expires, panel_token, cmd_discord, cmd_redes, cmd_pc, cmd_horario, follow_goal, playback_token, platform)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+         ON CONFLICT (platform, slug) DO UPDATE SET
            broadcaster_user_id = COALESCE(EXCLUDED.broadcaster_user_id, channels.broadcaster_user_id),
            chatroom_id         = COALESCE(EXCLUDED.chatroom_id, channels.chatroom_id),
            access_token        = EXCLUDED.access_token,
@@ -71,6 +81,7 @@ pub async fn upsert_channel(pool: &PgPool, row: &ChannelRow) -> Result<(), sqlx:
     .bind(&row.cmd_horario)
     .bind(row.follow_goal)
     .bind(&row.playback_token)
+    .bind(&row.platform)
     .execute(pool)
     .await?;
     Ok(())
@@ -79,6 +90,7 @@ pub async fn upsert_channel(pool: &PgPool, row: &ChannelRow) -> Result<(), sqlx:
 /// Guarda un texto de comando configurable (!discord, !redes, !pc, !horario).
 pub async fn update_command_text(
     pool: &PgPool,
+    platform: Platform,
     slug: &str,
     command: &str,
     value: &str,
@@ -90,17 +102,26 @@ pub async fn update_command_text(
         "horario" => "cmd_horario",
         _ => return Err(sqlx::Error::ColumnNotFound(command.to_string())),
     };
-    sqlx::query(&format!("UPDATE channels SET {column}=$1 WHERE slug=$2"))
-        .bind(value)
-        .bind(slug)
-        .execute(pool)
-        .await?;
+    sqlx::query(&format!(
+        "UPDATE channels SET {column}=$1 WHERE platform=$2 AND slug=$3"
+    ))
+    .bind(value)
+    .bind(platform.as_str())
+    .bind(slug)
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
-pub async fn update_follow_goal(pool: &PgPool, slug: &str, goal: i64) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE channels SET follow_goal=$1 WHERE slug=$2")
+pub async fn update_follow_goal(
+    pool: &PgPool,
+    platform: Platform,
+    slug: &str,
+    goal: i64,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE channels SET follow_goal=$1 WHERE platform=$2 AND slug=$3")
         .bind(goal)
+        .bind(platform.as_str())
         .bind(slug)
         .execute(pool)
         .await?;
@@ -108,18 +129,31 @@ pub async fn update_follow_goal(pool: &PgPool, slug: &str, goal: i64) -> Result<
 }
 
 /// Usernames banned on a channel, already normalized to lowercase.
-pub async fn load_bans(pool: &PgPool, slug: &str) -> Result<Vec<String>, sqlx::Error> {
-    sqlx::query_scalar("SELECT username FROM chat_bans WHERE slug=$1 ORDER BY created_at")
-        .bind(slug)
-        .fetch_all(pool)
-        .await
+pub async fn load_bans(
+    pool: &PgPool,
+    platform: Platform,
+    slug: &str,
+) -> Result<Vec<String>, sqlx::Error> {
+    sqlx::query_scalar(
+        "SELECT username FROM chat_bans WHERE platform=$1 AND slug=$2 ORDER BY created_at",
+    )
+    .bind(platform.as_str())
+    .bind(slug)
+    .fetch_all(pool)
+    .await
 }
 
 /// Stores a ban; returns `false` when the user was already banned.
-pub async fn add_ban(pool: &PgPool, slug: &str, username: &str) -> Result<bool, sqlx::Error> {
+pub async fn add_ban(
+    pool: &PgPool,
+    platform: Platform,
+    slug: &str,
+    username: &str,
+) -> Result<bool, sqlx::Error> {
     let inserted = sqlx::query(
-        "INSERT INTO chat_bans (slug, username, created_at) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING",
+        "INSERT INTO chat_bans (platform, slug, username, created_at) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING",
     )
+    .bind(platform.as_str())
     .bind(slug)
     .bind(username)
     .bind(unix_now() as i64)
@@ -129,17 +163,25 @@ pub async fn add_ban(pool: &PgPool, slug: &str, username: &str) -> Result<bool, 
 }
 
 /// Removes a ban; returns `false` when the user was not banned.
-pub async fn remove_ban(pool: &PgPool, slug: &str, username: &str) -> Result<bool, sqlx::Error> {
-    let deleted = sqlx::query("DELETE FROM chat_bans WHERE slug=$1 AND username=$2")
-        .bind(slug)
-        .bind(username)
-        .execute(pool)
-        .await?;
+pub async fn remove_ban(
+    pool: &PgPool,
+    platform: Platform,
+    slug: &str,
+    username: &str,
+) -> Result<bool, sqlx::Error> {
+    let deleted =
+        sqlx::query("DELETE FROM chat_bans WHERE platform=$1 AND slug=$2 AND username=$3")
+            .bind(platform.as_str())
+            .bind(slug)
+            .bind(username)
+            .execute(pool)
+            .await?;
     Ok(deleted.rows_affected() == 1)
 }
 
 pub async fn update_tokens(
     pool: &PgPool,
+    platform: Platform,
     slug: &str,
     access: &str,
     refresh: &str,
@@ -147,11 +189,12 @@ pub async fn update_tokens(
     previous_refresh: &str,
 ) -> Result<bool, sqlx::Error> {
     let updated = sqlx::query(
-        "UPDATE channels SET access_token=$1, refresh_token=$2, token_expires=$3 WHERE slug=$4 AND refresh_token=$5",
+        "UPDATE channels SET access_token=$1, refresh_token=$2, token_expires=$3 WHERE platform=$4 AND slug=$5 AND refresh_token=$6",
     )
     .bind(access)
     .bind(refresh)
     .bind(expires)
+    .bind(platform.as_str())
     .bind(slug)
     .bind(previous_refresh)
     .execute(pool)

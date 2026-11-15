@@ -1,3 +1,4 @@
+use crate::platform::Platform;
 use axum::{
     extract::{Query, State},
     http::{header, HeaderMap, StatusCode},
@@ -189,6 +190,7 @@ pub async fn handle_callback(
     };
 
     let row = db::ChannelRow {
+        platform: Platform::Kick.as_str().into(),
         slug: slug.clone(),
         broadcaster_user_id: Some(broadcaster_id),
         chatroom_id: Some(chatroom_id),
@@ -210,7 +212,7 @@ pub async fn handle_callback(
         warn!("[DB] Registro fallo: {e}");
         return err_page("No se pudo guardar el canal");
     }
-    let row = match db::load_channel(&st.db, &slug).await {
+    let row = match db::load_channel(&st.db, Platform::Kick, &slug).await {
         Ok(row) => row,
         Err(_) => return err_page("No se pudo cargar el canal"),
     };

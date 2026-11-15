@@ -79,6 +79,11 @@ pub struct ChannelState {
 }
 
 impl ChannelState {
+    /// Clave del canal en `AppState::channels` y sala de Socket.IO de sus overlays.
+    pub fn key(&self) -> String {
+        self.platform.channel_key(&self.slug)
+    }
+
     /// `username` debe venir ya normalizado con `normalize_username`.
     pub async fn is_banned(&self, username: &str) -> bool {
         self.banned.read().await.contains(username)
@@ -188,10 +193,10 @@ pub struct AppState {
     pub kick_endpoints: crate::kick::Endpoints,
     pub io: socketioxide::SocketIo,
     pub db: sqlx::PgPool,
-    /// slug → ChannelState
+    /// Clave del canal (`Platform::channel_key`) → ChannelState
     pub channels: Arc<DashMap<String, Arc<ChannelState>>>,
-    /// broadcaster_user_id → slug (para rutear webhooks)
-    pub user_id_to_slug: Arc<DashMap<u64, String>>,
+    /// (plataforma, ID del broadcaster) → clave del canal (para rutear webhooks)
+    pub user_id_to_key: Arc<DashMap<(crate::platform::Platform, u64), String>>,
     pub channel_lock: Mutex<()>,
     pub shutdown: CancellationToken,
     pub tts_slots: Arc<Semaphore>,

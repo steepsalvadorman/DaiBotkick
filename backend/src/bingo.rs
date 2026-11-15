@@ -229,7 +229,7 @@ pub async fn handle(
     });
     let start = result.as_ref().ok().and_then(|(_, round)| *round);
     if result.is_ok() {
-        ns_emit(app, &ch.slug, "bingoState", game.snapshot());
+        ns_emit(app, ch, "bingoState", game.snapshot());
     }
     drop(game);
     if let Some(round) = start {
@@ -247,7 +247,7 @@ pub async fn handle(
                 let Some(number) = game.draw(round) else {
                     break;
                 };
-                ns_emit(&app, &ch.slug, "bingoState", game.snapshot());
+                ns_emit(&app, &ch, "bingoState", game.snapshot());
                 let exhausted = game.phase == "exhausted";
                 drop(game);
                 let letter = ["B", "I", "N", "G", "O"][usize::from((number - 1) / 15)];

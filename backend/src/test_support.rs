@@ -36,7 +36,7 @@ pub fn app_with_io(db: sqlx::PgPool, io: socketioxide::SocketIo) -> Arc<AppState
         io,
         db,
         channels: Arc::new(DashMap::new()),
-        user_id_to_slug: Arc::new(DashMap::new()),
+        user_id_to_key: Arc::new(DashMap::new()),
         channel_lock: Mutex::new(()),
         shutdown: CancellationToken::new(),
         tts_slots: Arc::new(Semaphore::new(2)),
@@ -92,6 +92,7 @@ impl TestDatabase {
 
 pub fn row(slug: &str, id: i64) -> crate::db::ChannelRow {
     crate::db::ChannelRow {
+        platform: "kick".into(),
         slug: slug.into(),
         broadcaster_user_id: Some(id),
         chatroom_id: Some(id),

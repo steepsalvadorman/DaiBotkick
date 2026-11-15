@@ -20,7 +20,9 @@ pub struct VideoQueue {
     pub items: Vec<VideoItem>,
     pub version: u64,
     /// Reproducidas, la más reciente al final. `default` lee colas guardadas antes de existir.
-    #[serde(default)]
+    /// Vacío no se serializa: así la cola coincide con las filas guardadas sin `history`, que
+    /// `change` compara como JSON antes de escribir; si no, ninguna de esas colas se podría cambiar.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub history: Vec<VideoItem>,
 }
 
@@ -151,6 +153,20 @@ mod tests {
     use super::*;
     fn make_queue() -> VideoQueue {
         VideoQueue::new()
+    }
+
+    /// `change` compara la cola en memoria con la fila guardada: una cola sin historial debe
+    /// serializarse igual que las filas anteriores a `history` (y que el valor por defecto de la columna).
+    #[test]
+    fn empty_history_serializes_like_queues_saved_before_history() {
+        let stored = r#"{"items":[],"version":0}"#;
+        let loaded: VideoQueue = serde_json::from_str(stored).unwrap();
+        assert_eq!(serde_json::to_string(&loaded).unwrap(), stored);
+        let mut played = make_queue();
+        played.history.push(item("a", "ana"));
+        assert!(serde_json::to_string(&played)
+            .unwrap()
+            .contains("\"history\""));
     }
 
     fn item(title: &str, user: &str) -> VideoItem {

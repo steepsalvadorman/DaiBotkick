@@ -396,7 +396,7 @@ pub(crate) mod tests {
         assert_eq!(replay.status(), StatusCode::BAD_REQUEST);
         assert_eq!(exchanges.load(Ordering::Relaxed), 1);
         assert!(app.channels.is_empty());
-        assert!(app.user_id_to_slug.is_empty());
+        assert!(app.user_id_to_key.is_empty());
         server.abort();
     }
 

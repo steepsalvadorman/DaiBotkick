@@ -1,5 +1,7 @@
 use crate::{
-    commands, queue,
+    commands,
+    platform::Platform,
+    queue,
     state::{AppState, ChannelState, PlayerSlot},
     tts,
 };
@@ -54,12 +56,13 @@ pub fn setup(io: &socketioxide::SocketIo, global: Arc<AppState>) {
                             .map(|(_, v)| v.into_owned())
                     })
                     .unwrap_or_default();
-                let ch = global.channels.get(&slug).map(|c| c.clone());
+                let key = Platform::Kick.channel_key(&slug);
+                let ch = global.channels.get(&key).map(|c| c.clone());
                 let Some(ch) = ch else {
                     socket.emit("channelError", "Canal no disponible").ok();
                     return;
                 };
-                socket.join(slug.clone()).ok();
+                socket.join(key).ok();
                 let token = auth.ok().and_then(|a| a.token);
                 let player_ok = authorized(&ch.playback_token, token.as_deref());
                 let socket_id = socket.id.to_string();
@@ -124,7 +127,7 @@ pub fn setup(io: &socketioxide::SocketIo, global: Arc<AppState>) {
                             {
                                 *player = None;
                                 drop(player);
-                                ns_emit(&app, &ch.slug, "playerAvailable", serde_json::json!({}));
+                                ns_emit(&app, &ch, "playerAvailable", serde_json::json!({}));
                             }
                         }
                     },
@@ -291,23 +294,25 @@ pub async fn set_visibility(
     app: &AppState,
     visible: bool,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE channels SET show_video=$1 WHERE slug=$2")
+    sqlx::query("UPDATE channels SET show_video=$1 WHERE platform=$2 AND slug=$3")
         .bind(visible)
+        .bind(ch.platform.as_str())
         .bind(&ch.slug)
         .execute(&app.db)
         .await?;
     ch.show_video.store(visible, Ordering::Relaxed);
     ns_emit(
         app,
-        &ch.slug,
+        ch,
         "toggleVideo",
         serde_json::json!({"showVideo":visible}),
     );
     Ok(())
 }
 
-pub fn ns_emit(global: &AppState, slug: &str, event: &'static str, data: serde_json::Value) {
-    global.io.to(slug.to_owned()).emit(event, data).ok();
+/// Envía un evento a todos los overlays y docks conectados al canal.
+pub fn ns_emit(global: &AppState, ch: &ChannelState, event: &'static str, data: serde_json::Value) {
+    global.io.to(ch.key()).emit(event, data).ok();
 }
 
 #[cfg(test)]

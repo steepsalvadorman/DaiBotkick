@@ -123,28 +123,30 @@ where
     }
     let previous = serde_json::to_string(&*current).expect("serializable queue");
     let updated = sqlx::query(
-        "UPDATE channels SET queue_state=$1 WHERE slug=$2 AND queue_state::jsonb=$3::text::jsonb",
+        "UPDATE channels SET queue_state=$1 WHERE platform=$2 AND slug=$3 AND queue_state::jsonb=$4::text::jsonb",
     )
     .bind(json)
+    .bind(ch.platform.as_str())
     .bind(&ch.slug)
     .bind(previous)
     .execute(&global.db)
     .await?;
     if updated.rows_affected() != 1 {
         let persisted: String =
-            sqlx::query_scalar("SELECT queue_state FROM channels WHERE slug=$1")
+            sqlx::query_scalar("SELECT queue_state FROM channels WHERE platform=$1 AND slug=$2")
+                .bind(ch.platform.as_str())
                 .bind(&ch.slug)
                 .fetch_one(&global.db)
                 .await?;
         *current =
             serde_json::from_str(&persisted).map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
-        crate::server::ns_emit(global, &ch.slug, "syncQueue", current.sync_payload());
+        crate::server::ns_emit(global, ch, "syncQueue", current.sync_payload());
         return Err(sqlx::Error::Protocol(
             "La cola cambio; vuelve a intentar".into(),
         ));
     }
     *current = next;
-    crate::server::ns_emit(global, &ch.slug, "syncQueue", current.sync_payload());
+    crate::server::ns_emit(global, ch, "syncQueue", current.sync_payload());
     Ok(true)
 }
 

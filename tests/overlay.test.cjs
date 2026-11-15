@@ -657,11 +657,14 @@ test('every overlay theme page provides the elements app.js drives', () => {
         assert.match(html, /class="[^"]*\bkick-channel-url\b/);
         assert.match(html, /class="[^"]*\bchannel-avatar-sync\b/);
         assert.equal(html.match(/class="tip"/g)?.length, 3);
-        assert.match(html, /<script src="\/app\.js"><\/script>/);
+        // El tema puede añadir ?v=… para que OBS no use una versión vieja en caché.
+        assert.match(html, /<script src="\/app\.js(\?v=[\w-]+)?"><\/script>/);
     }
     const css = fs.readFileSync(__dirname + '/../overlay/vsaturn.css', 'utf8');
     assert.match(css, /body \{[^}]*position: relative;/);
-    assert.match(css, /body\.lite \.tip\.current \{ display: flex; \}/);
+    // Un solo consejo visible en todos los modos (ligero incluido): el actual.
+    assert.match(css, /\n\.tip \{[^}]*display: none;/);
+    assert.match(css, /\n\.tip\.current \{ display: flex; \}/);
     assert.doesNotMatch(css, /^\s*backdrop-filter\s*:/m);
 });
 

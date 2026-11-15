@@ -601,7 +601,9 @@ async fn configure(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
             chat::send(SET_USAGE, ch, global).await;
             return;
         };
-        if let Err(e) = crate::db::update_follow_goal(&global.db, &ch.slug, goal as i64).await {
+        if let Err(e) =
+            crate::db::update_follow_goal(&global.db, ch.platform, &ch.slug, goal as i64).await
+        {
             tracing::error!("[Set][{}] {e}", ch.slug);
             chat::send("No se pudo guardar. Intenta más tarde.", ch, global).await;
             return;
@@ -612,7 +614,9 @@ async fn configure(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
         return;
     }
     let value = trunc(value, 400);
-    if let Err(e) = crate::db::update_command_text(&global.db, &ch.slug, field, value).await {
+    if let Err(e) =
+        crate::db::update_command_text(&global.db, ch.platform, &ch.slug, field, value).await
+    {
         tracing::error!("[Set][{}] {e}", ch.slug);
         chat::send("No se pudo guardar. Intenta más tarde.", ch, global).await;
         return;
@@ -655,7 +659,7 @@ async fn ban(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
         chat::send("No se puede banear al streamer.", ch, global).await;
         return;
     }
-    if let Err(e) = crate::db::add_ban(&global.db, &ch.slug, &name).await {
+    if let Err(e) = crate::db::add_ban(&global.db, ch.platform, &ch.slug, &name).await {
         tracing::error!("[Ban][{}] {e}", ch.slug);
         chat::send(
             "No se pudo guardar el baneo. Intenta más tarde.",
@@ -690,7 +694,7 @@ async fn unban(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
         chat::send(BAN_USAGE, ch, global).await;
         return;
     };
-    if let Err(e) = crate::db::remove_ban(&global.db, &ch.slug, &name).await {
+    if let Err(e) = crate::db::remove_ban(&global.db, ch.platform, &ch.slug, &name).await {
         tracing::error!("[Ban][{}] {e}", ch.slug);
         chat::send("No se pudo quitar el baneo. Intenta más tarde.", ch, global).await;
         return;
@@ -721,12 +725,7 @@ async fn stage_lights(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>
         return;
     };
     ch.stage_lights.store(on, Ordering::Relaxed);
-    crate::server::ns_emit(
-        global,
-        &ch.slug,
-        "stageLights",
-        serde_json::json!({"on": on}),
-    );
+    crate::server::ns_emit(global, ch, "stageLights", serde_json::json!({"on": on}));
 }
 
 /// Interpreta la intensidad de `!meteoros`; `None` si el argumento no es válido.
@@ -752,7 +751,7 @@ async fn meteor_shower(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState
     };
     crate::server::ns_emit(
         global,
-        &ch.slug,
+        ch,
         "meteorShower",
         serde_json::json!({"level": level}),
     );

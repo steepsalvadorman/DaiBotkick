@@ -1,6 +1,10 @@
 use crate::{
-    commands, kick::ingest::role as kick_role, platform::is_blocked, server::ns_emit,
-    state::AppState, tts,
+    commands,
+    kick::ingest::role as kick_role,
+    platform::{is_blocked, Platform},
+    server::ns_emit,
+    state::AppState,
+    tts,
 };
 use axum::{
     body::Bytes,
@@ -123,7 +127,7 @@ pub async fn receive(
     match
         sqlx
             ::query(
-                "INSERT INTO webhook_events (message_id,received_at,payload,event_type) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING"
+                "INSERT INTO webhook_events (platform,message_id,received_at,payload,event_type) VALUES ('kick',$1,$2,$3,$4) ON CONFLICT DO NOTHING"
             )
             .bind(id)
             .bind(now)
@@ -151,20 +155,27 @@ pub async fn worker(app: Arc<AppState>) {
         let work = async {
             for _ in 0..50 {
                 let mut transaction = app.db.begin().await?;
-                let row = sqlx::query_as::<_, (String, String, String)>(
-                "SELECT message_id,payload,event_type FROM webhook_events WHERE NOT processed ORDER BY received_at,message_id LIMIT 1 FOR UPDATE SKIP LOCKED"
+                let row = sqlx::query_as::<_, (String, String, String, String)>(
+                "SELECT platform,message_id,payload,event_type FROM webhook_events WHERE NOT processed ORDER BY received_at,message_id LIMIT 1 FOR UPDATE SKIP LOCKED"
             ).fetch_optional(&mut *transaction).await?;
-                let Some((id, payload, kind)) = row else {
+                let Some((platform, id, payload, kind)) = row else {
                     transaction.commit().await?;
                     break;
                 };
                 let json: serde_json::Value =
                     serde_json::from_str(&payload).expect("validated inbox JSON");
-                process(&app, &kind, &json).await;
-                sqlx::query("UPDATE webhook_events SET processed=TRUE WHERE message_id=$1")
-                    .bind(id)
-                    .execute(&mut *transaction)
-                    .await?;
+                match Platform::from_db(&platform) {
+                    Some(Platform::Kick) => process(&app, &kind, &json).await,
+                    // Los eventos de Twitch se procesan a partir de la etapa 4 del plan.
+                    _ => tracing::warn!("[Webhook] Evento de {platform} sin procesador: {kind}"),
+                }
+                sqlx::query(
+                    "UPDATE webhook_events SET processed=TRUE WHERE platform=$1 AND message_id=$2",
+                )
+                .bind(&platform)
+                .bind(id)
+                .execute(&mut *transaction)
+                .await?;
                 transaction.commit().await?;
                 app.metrics
                     .webhook_processed
@@ -198,9 +209,9 @@ async fn process(app: &Arc<AppState>, kind: &str, json: &serde_json::Value) {
         return;
     };
     let channel = app
-        .user_id_to_slug
-        .get(&id)
-        .and_then(|slug| app.channels.get(slug.value()).map(|c| c.clone()));
+        .user_id_to_key
+        .get(&(Platform::Kick, id))
+        .and_then(|key| app.channels.get(key.value()).map(|c| c.clone()));
     let Some(ch) = channel else {
         return;
     };
@@ -218,7 +229,7 @@ async fn process(app: &Arc<AppState>, kind: &str, json: &serde_json::Value) {
             // El dock de chat de OBS ve todo, comandos incluidos, con color e insignias.
             ns_emit(
                 app,
-                &ch.slug,
+                &ch,
                 "dockChat",
                 serde_json::json!({
                     "user": msg.username,
@@ -232,7 +243,7 @@ async fn process(app: &Arc<AppState>, kind: &str, json: &serde_json::Value) {
             if !msg.text.starts_with('!') {
                 ns_emit(
                     app,
-                    &ch.slug,
+                    &ch,
                     "chatMessage",
                     serde_json::json!({"user":msg.username,"content":msg.text,"textOnly":banned}),
                 );
@@ -251,7 +262,7 @@ async fn process(app: &Arc<AppState>, kind: &str, json: &serde_json::Value) {
             tts::enqueue(&ch, &message, "dalia");
             ns_emit(
                 app,
-                &ch.slug,
+                &ch,
                 "kickAlert",
                 serde_json::json!({"type":"follow","username":username,"message":message}),
             );
@@ -266,7 +277,7 @@ async fn process(app: &Arc<AppState>, kind: &str, json: &serde_json::Value) {
             tts::enqueue(&ch, &message, "dalia");
             ns_emit(
                 app,
-                &ch.slug,
+                &ch,
                 "kickAlert",
                 serde_json::json!({"type":"sub","username":username,"months":months,"message":message}),
             );
@@ -278,7 +289,7 @@ async fn process(app: &Arc<AppState>, kind: &str, json: &serde_json::Value) {
             tts::enqueue(&ch, &message, "dalia");
             ns_emit(
                 app,
-                &ch.slug,
+                &ch,
                 "kickAlert",
                 serde_json::json!({"type":"giftsub","message":message}),
             );
@@ -295,7 +306,7 @@ async fn process(app: &Arc<AppState>, kind: &str, json: &serde_json::Value) {
             };
             ns_emit(
                 app,
-                &ch.slug,
+                &ch,
                 "streamStatus",
                 serde_json::json!({"live":live,"startedAt":ch.live_since.read().await.map(|t| t.to_rfc3339())}),
             );
@@ -348,7 +359,8 @@ mod tests {
         let app = crate::test_support::app(pool);
         let (ch, _rx) = crate::test_support::channel("alpha", 7);
         app.channels.insert("alpha".into(), ch.clone());
-        app.user_id_to_slug.insert(7, "alpha".into());
+        app.user_id_to_key
+            .insert((Platform::Kick, 7), "alpha".into());
         ch.banned.write().await.extend([
             "troll".to_string(),
             "badmod".to_string(),

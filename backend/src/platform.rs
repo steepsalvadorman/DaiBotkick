@@ -7,12 +7,35 @@
 pub enum Platform {
     #[default]
     Kick,
-    /// Se construye cuando los canales de Twitch se cargan de la base (etapa 2 del plan).
-    #[allow(dead_code)]
     Twitch,
 }
 
 impl Platform {
+    /// Nombre guardado en la columna `platform` de la base.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Platform::Kick => "kick",
+            Platform::Twitch => "twitch",
+        }
+    }
+
+    pub fn from_db(value: &str) -> Option<Self> {
+        match value {
+            "kick" => Some(Platform::Kick),
+            "twitch" => Some(Platform::Twitch),
+            _ => None,
+        }
+    }
+
+    /// Clave del canal en memoria y sala de Socket.IO. En Kick es el slug tal cual, así las
+    /// URLs y salas existentes no cambian; `:` no aparece en slugs, así que no hay choques.
+    pub fn channel_key(self, slug: &str) -> String {
+        match self {
+            Platform::Kick => slug.to_owned(),
+            Platform::Twitch => format!("twitch:{slug}"),
+        }
+    }
+
     /// Cuenta con acceso total a todos los canales de esa plataforma (sin cooldowns ni baneos).
     pub fn full_access_login(self) -> &'static str {
         match self {
@@ -98,6 +121,16 @@ mod tests {
         assert!(!Role::Viewer.has_owner_access());
         assert!(Role::Broadcaster.ban_exempt() && Role::FullAccess.ban_exempt());
         assert!(!Role::Moderator.ban_exempt() && !Role::Viewer.ban_exempt());
+    }
+
+    #[test]
+    fn platforms_round_trip_through_the_database_and_keep_separate_keys() {
+        for platform in [Platform::Kick, Platform::Twitch] {
+            assert_eq!(Platform::from_db(platform.as_str()), Some(platform));
+        }
+        assert_eq!(Platform::from_db("youtube"), None);
+        assert_eq!(Platform::Kick.channel_key("pepe"), "pepe");
+        assert_eq!(Platform::Twitch.channel_key("pepe"), "twitch:pepe");
     }
 
     #[test]

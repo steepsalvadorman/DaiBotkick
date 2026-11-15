@@ -18,6 +18,13 @@ pub async fn send(text: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
         match response {
             Ok(r) if r.status().is_success() => {
                 tracing::debug!("[Chat][{}] Mensaje enviado", ch.slug);
+                // Su eco no llega al overlay; el dock de chat sí muestra las respuestas del bot.
+                crate::server::ns_emit(
+                    global,
+                    &ch.slug,
+                    "dockChat",
+                    serde_json::json!({"user":"DaiBot","content":text,"bot":true}),
+                );
                 return;
             }
             Ok(r) if r.status() == reqwest::StatusCode::UNAUTHORIZED && attempt == 0 => {

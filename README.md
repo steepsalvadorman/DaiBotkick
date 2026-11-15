@@ -58,6 +58,15 @@ Para usar el mouse, haz clic derecho en la fuente de navegador de OBS y seleccio
 
 La fuente autorizada también puede reiniciar la canción actual, pausar/reanudar y pasar a la siguiente mediante el avance validado por ID y versión. El vinilo y las barras de la topbar se animan durante la reproducción (son decorativos, no un analizador de audio). Reiniciar conserva la pausa. Una vista pública no puede usar estos controles.
 
+### Paneles de OBS: chat y configuración del stream
+
+La pantalla de conexión muestra dos URLs privadas más, pensadas para **Docks → Docks de navegador personalizados** de OBS:
+
+- `dock-chat.html?ch=tu_canal#token=PANEL`: chat completo en vivo (comandos, respuestas de DaiBot, insignias, colores y emotes), con filtros locales y un campo para escribir en el chat **como el canal**.
+- `dock-stream.html?ch=tu_canal#token=PANEL`: estado del directo y espectadores, edición del título (1–140 caracteres) y búsqueda/cambio de categoría. Los cambios se guardan en Kick con `PATCH /public/v1/channels`.
+
+Ambas usan el `panel_token` del canal, que viaja en el fragmento y se envía como `Authorization: Bearer` a `/api/dock/:slug/{stream,categories,chat}`. Son respuestas `no-store` y `no-referrer`. Cambiar el stream requiere el scope `channel:write`: **los canales conectados antes de esta versión deben volver a conectarse** con Kick. El token de panel se conserva al reconectar, así que las URLs de los docks no cambian.
+
 ## Comandos
 
 | Comando | Función |

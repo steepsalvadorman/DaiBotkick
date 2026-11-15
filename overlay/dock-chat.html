@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>DaiBot · Chat</title>
+<link rel="icon" href="/daibot.svg">
+<link rel="stylesheet" href="dock.css">
+</head>
+<body>
+<header>
+  <img src="/daibot.svg" alt="">
+  <h1>Chat · <span id="channel"></span></h1>
+  <span id="dot" class="dot" title="Conexión"></span>
+</header>
+<div id="notice" class="notice" role="status"></div>
+<div class="filters">
+  <label><input type="checkbox" id="show-commands" checked> Comandos</label>
+  <label><input type="checkbox" id="show-bot" checked> DaiBot</label>
+  <label><input type="checkbox" id="show-time"> Hora</label>
+</div>
+<div id="messages" aria-live="polite"><p class="empty">Esperando mensajes del chat…</p></div>
+<button id="jump" type="button">↓ Mensajes nuevos</button>
+<form class="send" id="send">
+  <input id="text" maxlength="500" autocomplete="off" placeholder="Escribe en el chat como el canal…" aria-label="Mensaje">
+  <button class="primary" id="send-btn" type="submit">Enviar</button>
+</form>
+<script src="/sio.js"></script>
+<script src="dock.js"></script>
+<script>
+(function () {
+    const { channel, $, notice, api, renderContent, ready } = window.Dock;
+    const list = $('messages'), dot = $('dot'), jump = $('jump');
+    const MAX = 300;
+    const prefs = { commands: $('show-commands'), bot: $('show-bot'), time: $('show-time') };
+    try {
+        const saved = JSON.parse(localStorage.getItem('daibot-dock-chat') || '{}');
+        for (const k in prefs) if (typeof saved[k] === 'boolean') prefs[k].checked = saved[k];
+    } catch { /* almacenamiento no disponible */ }
+    function applyPrefs() {
+        document.body.classList.toggle('hide-commands', !prefs.commands.checked);
+        document.body.classList.toggle('hide-bot', !prefs.bot.checked);
+        document.body.classList.toggle('hide-time', !prefs.time.checked);
+        try { localStorage.setItem('daibot-dock-chat', JSON.stringify(Object.fromEntries(Object.entries(prefs).map(([k, v]) => [k, v.checked])))); } catch { /* ignorado */ }
+    }
+    const style = document.createElement('style');
+    style.textContent = '.hide-commands .msg.command, .hide-bot .msg.bot, .hide-time .msg time { display: none; }';
+    document.head.append(style);
+    for (const k in prefs) prefs[k].addEventListener('change', applyPrefs);
+    applyPrefs();
+
+    const atBottom = () => list.scrollHeight - list.scrollTop - list.clientHeight < 40;
+    list.addEventListener('scroll', () => { if (atBottom()) jump.classList.remove('show'); });
+    jump.addEventListener('click', () => { list.scrollTop = list.scrollHeight; jump.classList.remove('show'); });
+
+    function add(data) {
+        const content = typeof data.content === 'string' ? data.content : '';
+        if (!content) return;
+        const stick = atBottom();
+        list.querySelector('.empty')?.remove();
+        const item = document.createElement('div');
+        item.className = 'msg';
+        if (data.bot) item.classList.add('bot');
+        if (content.startsWith('!')) item.classList.add('command');
+        if (data.textOnly === true) item.classList.add('text-only');
+        const time = document.createElement('time');
+        time.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        item.append(time);
+        for (const badge of Array.isArray(data.badges) ? data.badges.slice(0, 4) : []) {
+            if (typeof badge !== 'string') continue;
+            const b = document.createElement('span'); b.className = `badge ${badge.replace(/[^a-z_-]/gi, '')}`;
+            b.textContent = badge === 'broadcaster' ? 'host' : badge === 'moderator' ? 'mod' : badge.slice(0, 8);
+            item.append(b);
+        }
+        const user = document.createElement('span'); user.className = 'user';
+        user.textContent = `${data.user || '?'}:`;
+        if (typeof data.color === 'string' && /^#[0-9a-f]{3,8}$/i.test(data.color)) user.style.color = data.color;
+        const text = document.createElement('span'); text.className = 'text';
+        if (data.textOnly === true) text.textContent = content; else renderContent(text, content);
+        item.append(user, text);
+        list.append(item);
+        while (list.children.length > MAX) list.firstChild.remove();
+        if (stick) list.scrollTop = list.scrollHeight; else jump.classList.add('show');
+    }
+
+    if (!ready) { $('send-btn').disabled = true; return; }
+
+    const socket = io({ query: { ch: channel }, reconnectionDelayMax: 10000 });
+    socket.on('connect', () => { dot.className = 'dot on'; dot.title = 'Conectado'; notice(''); });
+    socket.on('disconnect', () => { dot.className = 'dot'; dot.title = 'Desconectado'; });
+    socket.on('connect_error', () => { dot.className = 'dot err'; notice('Sin conexión con DaiBot. Reintentando…'); });
+    socket.on('channelError', message => notice(String(message), true));
+    socket.on('dockChat', add);
+
+    const input = $('text'), button = $('send-btn');
+    $('send').addEventListener('submit', async event => {
+        event.preventDefault();
+        const content = input.value.trim();
+        if (!content) return;
+        button.disabled = true;
+        try {
+            await api('chat', { method: 'POST', body: JSON.stringify({ content }) });
+            input.value = ''; notice('');
+        } catch (error) {
+            notice(error.message, true);
+        } finally {
+            button.disabled = false; input.focus();
+        }
+    });
+})();
+</script>
+</body>
+</html>

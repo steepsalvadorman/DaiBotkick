@@ -39,7 +39,7 @@ pub async fn redirect_to_kick(State(state): State<Arc<AppState>>) -> Response {
     }
 
     let redirect_uri = format!("{}/auth/callback", state.config.base_url);
-    let scopes = "user:read channel:read chat:write events:subscribe";
+    let scopes = "user:read channel:read channel:write chat:write events:subscribe";
 
     let url = format!(
         "{oauth}/authorize\
@@ -215,6 +215,7 @@ pub async fn handle_callback(
         Err(_) => return err_page("No se pudo cargar el canal"),
     };
     let playback_token = row.playback_token.clone();
+    let panel_token = row.panel_token.clone();
     if channel::start_channel(row, st.clone()).await.is_err() {
         return err_page("No se pudo iniciar el canal");
     }
@@ -223,9 +224,13 @@ pub async fn handle_callback(
 
     let base = escape_html(&st.config.base_url);
     let overlay_url = format!("{base}/pixel.html?ch={slug}#token={playback_token}");
+    let chat_dock_url = format!("{base}/dock-chat.html?ch={slug}#token={panel_token}");
+    let stream_dock_url = format!("{base}/dock-stream.html?ch={slug}#token={panel_token}");
     Html(
         CONNECTED_PAGE
             .replace("{{overlay_url}}", &overlay_url)
+            .replace("{{chat_dock_url}}", &chat_dock_url)
+            .replace("{{stream_dock_url}}", &stream_dock_url)
             .replace("{{slug}}", &slug),
     )
 }

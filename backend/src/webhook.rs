@@ -259,6 +259,22 @@ async fn process(app: &Arc<AppState>, kind: &str, json: &serde_json::Value) {
             }
             // Un baneado (incluso si es moderador) solo aparece como texto en el chat del overlay.
             let banned = sender_banned(&ch, &json["sender"], id).await;
+            // El dock de chat de OBS ve todo, comandos incluidos, con color e insignias.
+            ns_emit(
+                app,
+                &ch.slug,
+                "dockChat",
+                serde_json::json!({
+                    "user": username,
+                    "content": content,
+                    "textOnly": banned,
+                    "color": json["sender"]["identity"]["username_color"].as_str().unwrap_or(""),
+                    "badges": json["sender"]["identity"]["badges"]
+                        .as_array()
+                        .map(|b| b.iter().filter_map(|x| x["type"].as_str()).collect::<Vec<_>>())
+                        .unwrap_or_default(),
+                }),
+            );
             // Los comandos (!play, !s…) no se muestran en el chat del overlay.
             if !content.starts_with('!') {
                 ns_emit(

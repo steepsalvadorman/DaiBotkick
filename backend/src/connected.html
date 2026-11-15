@@ -139,6 +139,28 @@
   </section>
 
   <section class="card">
+    <h2>Paneles para OBS: chat y stream</h2>
+    <p>Añádelos como docks para leer y escribir en el chat y cambiar el título y la categoría sin salir de OBS.</p>
+    <div class="field">
+      <div class="url masked" data-url="{{chat_dock_url}}">Chat · ••••••••••••••••••••••••</div>
+      <button class="primary dock-copy" type="button">Copiar URL</button>
+    </div>
+    <div class="field">
+      <div class="url masked" data-url="{{stream_dock_url}}">Stream · ••••••••••••••••••••••••</div>
+      <button class="primary dock-copy" type="button">Copiar URL</button>
+    </div>
+    <ol>
+      <li><b>Docks → Docks de navegador personalizados…</b> <span>(en inglés: Docks → Custom Browser Docks).</span></li>
+      <li><b>Nombre "Chat"</b> <span>y pega la URL del chat. Añade otra fila "Stream" con la segunda URL.</span></li>
+      <li><b>Aplicar</b> <span>y arrastra los paneles donde quieras dentro de OBS.</span></li>
+    </ol>
+    <div class="warn" role="note">
+      <span aria-hidden="true">⚠</span>
+      <span>Estas URLs permiten escribir en el chat como tu canal y cambiar el título y la categoría. No las compartas. Si conectaste el canal antes de esta versión, vuelve a conectarlo para dar a DaiBot el permiso de editar el stream.</span>
+    </div>
+  </section>
+
+  <section class="card">
     <h2>Cómo añadirla en OBS</h2>
     <p>Solo tienes que hacerlo una vez.</p>
     <ol>
@@ -226,6 +248,14 @@
     }
 
     copyButton(document.getElementById("copy"), function () { return url; }, function () { if (!shown) toggle.click(); });
+    var docks = document.querySelectorAll(".dock-copy");
+    for (var j = 0; j < docks.length; j++) (function (button) {
+      var box = button.previousElementSibling;
+      copyButton(button, function () { return box.getAttribute("data-url"); }, function () {
+        box.textContent = box.getAttribute("data-url");
+        box.classList.remove("masked");
+      });
+    })(docks[j]);
   })();
 </script>
 </body>

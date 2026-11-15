@@ -12,8 +12,7 @@ use tracing::{info, warn};
 
 use crate::{channel, db, state::AppState};
 
-/// Página tras conectar el canal; `slug` y `overlay_url` ya son seguros para HTML/JS
-/// (slug validado por `valid_slug`, base escapada y token UUID).
+/// Plantilla de `connected_page`.
 const CONNECTED_PAGE: &str = include_str!("connected.html");
 
 const START_PAGE: &str = include_str!("start.html");
@@ -58,15 +57,74 @@ pub async fn redirect_to_kick(State(state): State<Arc<AppState>>) -> Response {
         challenge = code_challenge,
         oauth = state.kick_endpoints.oauth,
     );
-    let secure = if state.config.base_url.starts_with("https://") {
+    (
+        [(header::SET_COOKIE, oauth_cookie(&state, &state_token))],
+        Redirect::temporary(&url),
+    )
+        .into_response()
+}
+
+/// Cookie que liga el `state` de OAuth al navegador que empezó la conexión (10 minutos).
+pub(crate) fn oauth_cookie(app: &AppState, state: &str) -> String {
+    let secure = if app.config.base_url.starts_with("https://") {
         "; Secure"
     } else {
         ""
     };
-    let cookie = format!(
-        "daibot_oauth={state_token}; HttpOnly; SameSite=Lax; Path=/auth; Max-Age=600{secure}"
-    );
-    ([(header::SET_COOKIE, cookie)], Redirect::temporary(&url)).into_response()
+    format!("daibot_oauth={state}; HttpOnly; SameSite=Lax; Path=/auth; Max-Age=600{secure}")
+}
+
+/// Página de error de las conexiones OAuth. `msg` es texto propio, nunca datos externos.
+pub(crate) fn error_page(msg: &str) -> Html<String> {
+    Html(format!(
+        r#"<html><body style="font-family:monospace;background:#060010;color:#f55;padding:40px">
+           <h1>Error</h1><p>{}</p><a href="/" style="color:#53FC18">← Volver</a></body></html>"#,
+        escape_html(msg)
+    ))
+}
+
+/// Página tras conectar un canal. `slug` está validado y las URLs llevan la base escapada
+/// y tokens UUID, así que son seguras para HTML y JS.
+pub(crate) fn connected_page(
+    platform: Platform,
+    slug: &str,
+    overlay_url: &str,
+    chat_dock_url: &str,
+    stream_dock_url: &str,
+) -> String {
+    let (name, host, connect, param, themes, accent, accent_ink) = match platform {
+        Platform::Kick => (
+            "Kick",
+            "kick.com",
+            "/auth/kick",
+            "ch",
+            "",
+            "#53fc18",
+            "#062200",
+        ),
+        // Twitch solo usa V-Saturn: no hay selector de tema.
+        Platform::Twitch => (
+            "Twitch",
+            "twitch.tv",
+            "/auth/twitch",
+            "tw",
+            "hidden",
+            "#a970ff",
+            "#12002e",
+        ),
+    };
+    CONNECTED_PAGE
+        .replace("{{overlay_url}}", overlay_url)
+        .replace("{{chat_dock_url}}", chat_dock_url)
+        .replace("{{stream_dock_url}}", stream_dock_url)
+        .replace("{{platform_name}}", name)
+        .replace("{{channel_host}}", host)
+        .replace("{{connect_path}}", connect)
+        .replace("{{channel_param}}", param)
+        .replace("{{themes_hidden}}", themes)
+        .replace("{{accent}}", accent)
+        .replace("{{accent_ink}}", accent_ink)
+        .replace("{{slug}}", slug)
 }
 
 pub async fn handle_callback(
@@ -74,12 +132,7 @@ pub async fn handle_callback(
     headers: HeaderMap,
     Query(params): Query<HashMap<String, String>>,
 ) -> Html<String> {
-    let err_page = |msg: &str| {
-        Html(format!(
-            r#"<html><body style="font-family:monospace;background:#060010;color:#f55;padding:40px">
-           <h1>Error</h1><p>{msg}</p><a href="/" style="color:#53FC18">← Volver</a></body></html>"#
-        ))
-    };
+    let err_page = error_page;
 
     let code = match params.get("code") {
         Some(c) => c.clone(),
@@ -180,7 +233,7 @@ pub async fn handle_callback(
     // Panel token: generar si es nuevo canal, conservar si ya existe
     let existing_panel = st
         .channels
-        .get(&slug)
+        .get(&Platform::Kick.channel_key(&slug))
         .map(|c| c.panel_token.clone())
         .unwrap_or_default();
     let panel_token = if existing_panel.is_empty() {
@@ -228,16 +281,16 @@ pub async fn handle_callback(
     let overlay_url = format!("{base}/pixel.html?ch={slug}#token={playback_token}");
     let chat_dock_url = format!("{base}/dock-chat.html?ch={slug}#token={panel_token}");
     let stream_dock_url = format!("{base}/dock-stream.html?ch={slug}#token={panel_token}");
-    Html(
-        CONNECTED_PAGE
-            .replace("{{overlay_url}}", &overlay_url)
-            .replace("{{chat_dock_url}}", &chat_dock_url)
-            .replace("{{stream_dock_url}}", &stream_dock_url)
-            .replace("{{slug}}", &slug),
-    )
+    Html(connected_page(
+        Platform::Kick,
+        &slug,
+        &overlay_url,
+        &chat_dock_url,
+        &stream_dock_url,
+    ))
 }
 
-fn url_encode(s: &str) -> String {
+pub(crate) fn url_encode(s: &str) -> String {
     url::form_urlencoded::byte_serialize(s.as_bytes()).collect()
 }
 
@@ -248,7 +301,7 @@ fn valid_slug(slug: &str) -> bool {
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
-fn matches_cookie(headers: &HeaderMap, state: &str) -> bool {
+pub(crate) fn matches_cookie(headers: &HeaderMap, state: &str) -> bool {
     headers
         .get(header::COOKIE)
         .and_then(|h| h.to_str().ok())
@@ -258,7 +311,7 @@ fn matches_cookie(headers: &HeaderMap, state: &str) -> bool {
                 .any(|cookie| cookie.trim().strip_prefix("daibot_oauth=") == Some(state))
         })
 }
-fn escape_html(s: &str) -> String {
+pub(crate) fn escape_html(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")

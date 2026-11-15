@@ -26,6 +26,11 @@ pub fn app_with_io(db: sqlx::PgPool, io: socketioxide::SocketIo) -> Arc<AppState
                 .to_string_lossy()
                 .into_owned(),
             fish_audio_api_key: String::new(),
+            twitch: Some(crate::twitch::Config {
+                client_id: "tw-client".into(),
+                client_secret: "tw-secret".into(),
+                eventsub_secret: "tw-eventsub-secret".into(),
+            }),
         },
         http: reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(5))
@@ -33,6 +38,8 @@ pub fn app_with_io(db: sqlx::PgPool, io: socketioxide::SocketIo) -> Arc<AppState
             .build()
             .unwrap(),
         kick_endpoints: crate::kick::Endpoints::default(),
+        twitch_endpoints: crate::twitch::Endpoints::default(),
+        twitch_bot: RwLock::new(None),
         io,
         db,
         channels: Arc::new(DashMap::new()),

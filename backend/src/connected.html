@@ -9,7 +9,7 @@
   <style>
     :root {
       --bg: #07020f; --card: #110a1d; --line: #2a2140; --text: #ece8f4; --muted: #9a91ad;
-      --green: #53fc18; --green-ink: #062200; --warn-bg: #2a1d05; --warn: #ffc94a;
+      --green: {{accent}}; --green-ink: {{accent_ink}}; --warn-bg: #2a1d05; --warn: #ffc94a;
     }
     * { box-sizing: border-box; }
     body {
@@ -105,14 +105,14 @@
     <div class="check" aria-hidden="true">✓</div>
     <div>
       <h1>¡DaiBot conectado para <b>{{slug}}</b>!</h1>
-      <p class="sub">El bot ya está escuchando el chat de kick.com/{{slug}}.</p>
+      <p class="sub">El bot ya está escuchando el chat de {{channel_host}}/{{slug}}.</p>
     </div>
   </div>
 
   <section class="card">
     <h2>URL del overlay para OBS</h2>
     <p>Pégala en una fuente de navegador. Está oculta por si estás en directo.</p>
-    <fieldset class="themes">
+    <fieldset class="themes" {{themes_hidden}}>
       <legend>Estilo del overlay</legend>
       <label class="theme">
         <input type="radio" name="theme" value="pixel.html" checked>
@@ -183,11 +183,11 @@
   </section>
 
   <nav class="links">
-    <a href="/comandos.html?ch={{slug}}" target="_blank" rel="noopener">Comandos del chat<small>!play, TTS y más</small></a>
-    <a href="https://kick.com/{{slug}}" target="_blank" rel="noopener noreferrer">Tu canal en Kick<small>kick.com/{{slug}}</small></a>
+    <a href="/comandos.html?{{channel_param}}={{slug}}" target="_blank" rel="noopener">Comandos del chat<small>!play, TTS y más</small></a>
+    <a href="https://{{channel_host}}/{{slug}}" target="_blank" rel="noopener noreferrer">Tu canal en {{platform_name}}<small>{{channel_host}}/{{slug}}</small></a>
   </nav>
 
-  <footer>¿Perdiste la URL? Vuelve a <a href="/auth/kick">conectar con Kick</a> y te aparecerá la misma.</footer>
+  <footer>¿Perdiste la URL? Vuelve a <a href="{{connect_path}}">conectar con {{platform_name}}</a> y te aparecerá la misma.</footer>
 </main>
 
 <script>
@@ -205,7 +205,8 @@
     var lite = document.getElementById("lite");
     function applyTheme() {
       var page = document.querySelector('input[name="theme"]:checked').value;
-      url = baseUrl.replace("/pixel.html?", "/" + page + "?");
+      // Sin selector (Twitch) la URL ya trae su único tema.
+      url = document.querySelector(".themes").hidden ? baseUrl : baseUrl.replace("/pixel.html?", "/" + page + "?");
       if (!lite.checked) url = url.replace("#", "&lite=0#");
       if (shown) box.textContent = url;
     }

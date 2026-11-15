@@ -1371,3 +1371,251 @@ async fn kick_and_twitch_channels_with_the_same_name_stay_separate() {
     app.shutdown.cancel();
     database.cleanup().await;
 }
+
+/// Twitch simulado: tokens, validación y `/helix/users` con un usuario configurable.
+#[derive(Default)]
+struct MockTwitch {
+    forms: Mutex<Vec<HashMap<String, String>>>,
+    token_requests: AtomicUsize,
+    user: Mutex<Option<Value>>,
+    validate_status: Mutex<Option<StatusCode>>,
+    validations: AtomicUsize,
+}
+
+impl MockTwitch {
+    async fn serve(self: &Arc<Self>) -> test_support::HttpServer {
+        async fn token(
+            State(mock): State<Arc<MockTwitch>>,
+            axum::Form(form): axum::Form<HashMap<String, String>>,
+        ) -> axum::Json<Value> {
+            mock.forms.lock().await.push(form);
+            let n = mock.token_requests.fetch_add(1, Ordering::Relaxed) + 1;
+            axum::Json(
+                json!({"access_token":format!("tw-access-{n}"),"refresh_token":format!("tw-refresh-{n}"),"expires_in":14000}),
+            )
+        }
+        async fn validate(State(mock): State<Arc<MockTwitch>>) -> StatusCode {
+            mock.validations.fetch_add(1, Ordering::Relaxed);
+            mock.validate_status.lock().await.unwrap_or(StatusCode::OK)
+        }
+        async fn users(
+            State(mock): State<Arc<MockTwitch>>,
+            headers: HeaderMap,
+        ) -> axum::Json<Value> {
+            assert_eq!(headers.get("client-id").unwrap(), "tw-client");
+            axum::Json(json!({"data":[mock.user.lock().await.clone().unwrap()]}))
+        }
+        test_support::HttpServer::start(
+            axum::Router::new()
+                .route("/oauth2/token", axum::routing::post(token))
+                .route("/oauth2/validate", axum::routing::get(validate))
+                .route("/helix/users", axum::routing::get(users))
+                .with_state(self.clone()),
+        )
+        .await
+    }
+
+    async fn set_user(&self, id: &str, login: &str) {
+        *self.user.lock().await = Some(json!({
+            "id": id, "login": login, "display_name": login.to_uppercase(),
+            "profile_image_url": "https://static-cdn.jtvnw.net/avatar.png"
+        }));
+    }
+}
+
+/// Recorre `/auth/twitch…` como un navegador: redirige, guarda la cookie y vuelve con un código.
+async fn twitch_authorize(
+    app: &Arc<crate::state::AppState>,
+    bot: bool,
+) -> (HeaderMap, HashMap<String, String>) {
+    use axum::{http::header, response::IntoResponse};
+    let response = if bot {
+        crate::twitch::auth::redirect_bot(State(app.clone())).await
+    } else {
+        crate::twitch::auth::redirect_channel(State(app.clone())).await
+    }
+    .into_response();
+    let location = response.headers()[header::LOCATION]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    let url = url::Url::parse(&location).unwrap();
+    let query: HashMap<_, _> = url.query_pairs().into_owned().collect();
+    assert_eq!(query["client_id"], "tw-client");
+    assert_eq!(query["force_verify"], "true");
+    let callback = if bot {
+        "/auth/twitch/bot/callback"
+    } else {
+        "/auth/twitch/callback"
+    };
+    assert_eq!(
+        query["redirect_uri"],
+        format!("https://test.example{callback}")
+    );
+    let cookie = response.headers()[header::SET_COOKIE].to_str().unwrap();
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::COOKIE,
+        cookie.split(';').next().unwrap().parse().unwrap(),
+    );
+    let params = HashMap::from([
+        ("code".to_string(), "the-code".to_string()),
+        ("state".to_string(), query["state"].clone()),
+    ]);
+    (headers, params)
+}
+
+#[tokio::test]
+#[ignore = "requires TEST_DATABASE_URL"]
+async fn twitch_channels_and_the_bot_account_connect_and_renew_tokens() {
+    use crate::twitch::{auth as tw, bot};
+    use axum::extract::Query;
+    let database = test_support::TestDatabase::new().await;
+    let mock = Arc::new(MockTwitch::default());
+    let service = mock.serve().await;
+    let mut app = test_support::app(database.pool.clone());
+    Arc::get_mut(&mut app).unwrap().twitch_endpoints = crate::twitch::Endpoints {
+        oauth: format!("{}/oauth2", service.url),
+        api: format!("{}/helix", service.url),
+    };
+    // Un canal de Kick llamado igual no se ve afectado.
+    db::upsert_channel(&database.pool, &test_support::row("ana", 5))
+        .await
+        .unwrap();
+
+    // 1. El streamer conecta su canal de Twitch.
+    mock.set_user("5", "ana").await;
+    let (headers, params) = twitch_authorize(&app, false).await;
+    let page = tw::channel_callback(State(app.clone()), headers.clone(), Query(params.clone()))
+        .await
+        .0;
+    assert!(
+        page.contains("¡DaiBot conectado para <b>ana</b>!"),
+        "{page}"
+    );
+    assert!(page.contains("https://test.example/vsaturn.html?tw=ana#token="));
+    assert!(page.contains("/dock-chat.html?tw=ana#token="));
+    assert!(page.contains(r#"<fieldset class="themes" hidden>"#));
+    assert!(page.contains("twitch.tv/ana"));
+    let form = mock.forms.lock().await.last().unwrap().clone();
+    assert_eq!(form["grant_type"], "authorization_code");
+    assert_eq!(form["client_secret"], "tw-secret");
+    assert_eq!(
+        form["redirect_uri"],
+        "https://test.example/auth/twitch/callback"
+    );
+    let twitch = db::load_channel(&database.pool, Platform::Twitch, "ana")
+        .await
+        .unwrap();
+    assert_eq!(twitch.broadcaster_user_id, Some(5));
+    assert_eq!(twitch.access_token, "tw-access-1");
+    let ch = app.channels.get("twitch:ana").unwrap().clone();
+    assert_eq!(ch.platform, Platform::Twitch);
+    assert_eq!(*ch.display_name.read().await, "ANA");
+    assert_eq!(
+        db::load_channel(&database.pool, Platform::Kick, "ana")
+            .await
+            .unwrap()
+            .access_token,
+        "access"
+    );
+    // El mismo `state` no se puede reutilizar.
+    let replay = tw::channel_callback(State(app.clone()), headers, Query(params))
+        .await
+        .0;
+    assert!(replay.contains("venció"), "{replay}");
+
+    // 2. Un `state` del flujo del bot no sirve para conectar un canal, ni la cuenta bot como canal.
+    let (headers, params) = twitch_authorize(&app, true).await;
+    let crossed = tw::channel_callback(State(app.clone()), headers, Query(params))
+        .await
+        .0;
+    assert!(crossed.contains("venció"), "{crossed}");
+    mock.set_user(bot::BOT_USER_ID, "daibotsito").await;
+    let (headers, params) = twitch_authorize(&app, false).await;
+    let as_bot = tw::channel_callback(State(app.clone()), headers, Query(params))
+        .await
+        .0;
+    assert!(as_bot.contains("cuenta del bot"), "{as_bot}");
+
+    // 3. Solo daibotsito puede autorizarse como bot.
+    mock.set_user("701010126", "sr_dai_twitch").await;
+    let (headers, params) = twitch_authorize(&app, true).await;
+    let wrong = tw::bot_callback(State(app.clone()), headers, Query(params))
+        .await
+        .0;
+    assert!(wrong.contains("Entraste como sr_dai_twitch"), "{wrong}");
+    assert!(app.twitch_bot.read().await.is_none());
+    mock.set_user(bot::BOT_USER_ID, "daibotsito").await;
+    let (headers, params) = twitch_authorize(&app, true).await;
+    let ok = tw::bot_callback(State(app.clone()), headers, Query(params))
+        .await
+        .0;
+    assert!(ok.contains("daibotsito"), "{ok}");
+    let saved = db::load_bot_account(&database.pool, Platform::Twitch)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(saved.user_id, bot::BOT_USER_ID);
+    assert_eq!(
+        app.twitch_bot.read().await.as_ref().unwrap().access_token,
+        saved.access_token
+    );
+
+    // 4. Si el streamer cambia su login, el canal se renombra y conserva baneos y ajustes.
+    db::add_ban(&database.pool, Platform::Twitch, "ana", "troll")
+        .await
+        .unwrap();
+    db::update_command_text(&database.pool, Platform::Twitch, "ana", "pc", "mi pc")
+        .await
+        .unwrap();
+    mock.set_user("5", "ana_nueva").await;
+    let (headers, params) = twitch_authorize(&app, false).await;
+    let renamed = tw::channel_callback(State(app.clone()), headers, Query(params))
+        .await
+        .0;
+    assert!(
+        renamed.contains("vsaturn.html?tw=ana_nueva#token="),
+        "{renamed}"
+    );
+    assert!(db::load_channel(&database.pool, Platform::Twitch, "ana")
+        .await
+        .is_err());
+    let moved = db::load_channel(&database.pool, Platform::Twitch, "ana_nueva")
+        .await
+        .unwrap();
+    assert_eq!(moved.cmd_pc, "mi pc");
+    assert_eq!(moved.panel_token, twitch.panel_token);
+    assert_eq!(
+        db::load_bans(&database.pool, Platform::Twitch, "ana_nueva")
+            .await
+            .unwrap(),
+        ["troll"]
+    );
+    assert!(app.channels.get("twitch:ana").is_none());
+    assert!(ch.cancel.is_cancelled());
+
+    // 5. Los tokens de Twitch se renuevan con las credenciales de la app de Twitch.
+    let ch = app.channels.get("twitch:ana_nueva").unwrap().clone();
+    let before = mock.token_requests.load(Ordering::Relaxed);
+    assert!(crate::oauth::refresh_access_token(&ch, &app).await);
+    let form = mock.forms.lock().await.last().unwrap().clone();
+    assert_eq!(form["grant_type"], "refresh_token");
+    assert_eq!(form["client_id"], "tw-client");
+    let refreshed = db::load_channel(&database.pool, Platform::Twitch, "ana_nueva")
+        .await
+        .unwrap();
+    assert_eq!(refreshed.access_token, format!("tw-access-{}", before + 1));
+    assert_eq!(*ch.access_token.read().await, refreshed.access_token);
+    assert_eq!(
+        crate::twitch::validate(&app, &refreshed.access_token).await,
+        crate::twitch::Validation::Valid
+    );
+    *mock.validate_status.lock().await = Some(StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        crate::twitch::validate(&app, "revoked").await,
+        crate::twitch::Validation::Invalid
+    );
+    app.shutdown.cancel();
+    database.cleanup().await;
+}

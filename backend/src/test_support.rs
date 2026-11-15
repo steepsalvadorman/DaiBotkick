@@ -137,6 +137,7 @@ pub fn channel(
     (
         Arc::new(ChannelState {
             slug: slug.into(),
+            platform: crate::platform::Platform::Kick,
             access_token: Arc::new(RwLock::new("access".into())),
             refresh_token_val: Arc::new(RwLock::new("refresh".into())),
             persisted_refresh_token: RwLock::new("refresh".into()),

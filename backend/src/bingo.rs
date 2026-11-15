@@ -1,5 +1,5 @@
 use crate::{
-    kick::sender,
+    chat,
     server::ns_emit,
     state::{AppState, ChannelState},
 };
@@ -251,7 +251,7 @@ pub async fn handle(
                 let exhausted = game.phase == "exhausted";
                 drop(game);
                 let letter = ["B", "I", "N", "G", "O"][usize::from((number - 1) / 15)];
-                sender::send(
+                chat::send(
                     &format!(
                         "Bingo: {letter}-{number}.{}",
                         if exhausted {
@@ -273,7 +273,7 @@ pub async fn handle(
     let message = result
         .map(|(message, _)| message)
         .unwrap_or_else(str::to_owned);
-    sender::send(&message, ch, app).await;
+    chat::send(&message, ch, app).await;
     true
 }
 
@@ -454,13 +454,13 @@ mod tests {
         let app = crate::test_support::app(pool);
         let (ch, _rx) = crate::test_support::channel("alpha", 1);
         *ch.channel_id.write().await = None;
-        crate::commands::handle("intruder", "!ruleta", false, &ch, &app).await;
+        crate::commands::handle_text("intruder", "!ruleta", false, &ch, &app).await;
         assert_eq!(ch.bingo.lock().await.snapshot()["phase"], "idle");
-        crate::commands::handle("owner", "!ruleta", true, &ch, &app).await;
-        crate::commands::handle("viewer", "!carton", false, &ch, &app).await;
+        crate::commands::handle_text("owner", "!ruleta", true, &ch, &app).await;
+        crate::commands::handle_text("viewer", "!carton", false, &ch, &app).await;
         assert_eq!(ch.bingo.lock().await.cards.len(), 1);
         let started = tokio::time::Instant::now();
-        crate::commands::handle("owner", "!bingo iniciar", true, &ch, &app).await;
+        crate::commands::handle_text("owner", "!bingo iniciar", true, &ch, &app).await;
         assert!(ch.bingo.lock().await.drawn.is_empty());
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(ch.bingo.lock().await.drawn.is_empty());
@@ -476,7 +476,7 @@ mod tests {
         .unwrap();
         assert!(started.elapsed() >= Duration::from_secs(10));
         assert_eq!(ch.bingo.lock().await.drawn.len(), 1);
-        crate::commands::handle("owner", "!bingo cancelar", true, &ch, &app).await;
+        crate::commands::handle_text("owner", "!bingo cancelar", true, &ch, &app).await;
         let game = ch.bingo.lock().await;
         assert_eq!(game.snapshot()["phase"], "idle");
         assert!(game.drawn.is_empty());

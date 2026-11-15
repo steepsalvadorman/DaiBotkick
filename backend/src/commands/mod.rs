@@ -1,5 +1,6 @@
 use crate::{
-    kick::sender,
+    chat,
+    platform::ChatMessage,
     queue::VideoItem,
     state::{AppState, ChannelState},
     tts,
@@ -20,13 +21,9 @@ struct Ctx<'a> {
     global: &'a Arc<AppState>,
 }
 
-pub async fn handle(
-    username: &str,
-    content: &str,
-    is_owner: bool,
-    ch: &Arc<ChannelState>,
-    global: &Arc<AppState>,
-) {
+pub async fn handle(msg: &ChatMessage, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
+    let (username, content) = (msg.username.as_str(), msg.text.as_str());
+    let is_owner = msg.role.has_owner_access();
     if ch.cancel.is_cancelled() {
         return;
     }
@@ -51,6 +48,18 @@ pub async fn handle(
     if !handled {
         tts_command(&ctx).await;
     }
+}
+
+/// Atajo de pruebas: procesa `text` como si lo escribiera `username` (dueño o espectador).
+#[cfg(test)]
+pub async fn handle_text(
+    username: &str,
+    text: &str,
+    is_owner: bool,
+    ch: &Arc<ChannelState>,
+    global: &Arc<AppState>,
+) {
+    handle(&ChatMessage::for_test(username, text, is_owner), ch, global).await;
 }
 
 async fn owner_commands(c: &Ctx<'_>) -> bool {
@@ -113,7 +122,7 @@ async fn owner_commands(c: &Ctx<'_>) -> bool {
                 } else {
                     format!("🚫 Baneados: {}", trunc(&list, 400))
                 };
-                sender::send(&msg, ch, global).await;
+                chat::send(&msg, ch, global).await;
                 return true;
             }
             "!next" | "!skip" => {
@@ -153,7 +162,7 @@ async fn info_commands(c: &Ctx<'_>) -> bool {
 
     match cmd {
         "!voces" => global_cmd!("!voces", {
-            sender::send(
+            chat::send(
                 &tts::voice_list(!global.config.fish_audio_api_key.trim().is_empty()),
                 ch,
                 global,
@@ -173,7 +182,7 @@ async fn info_commands(c: &Ctx<'_>) -> bool {
             info(ch, global, "horario", "📅 Horario").await;
         }),
         "!comandos" | "!help" | "!ayuda" | "!commands" => global_cmd!("!comandos", {
-            sender::send(
+            chat::send(
                 "📋 Comandos: !play [url o canción] · !voces · !s/!dalia/!jorge/!alex/!narrador/!epico/!comedia/!jacinta [texto TTS] · !quitarme · !misongs · !dado · !carton · !bingo · !8ball [pregunta] · !sorteo · !uptime · !cola · !discord · !redes · !pc · !horario",
                 ch, global,
             ).await;
@@ -207,7 +216,7 @@ async fn dynamic_commands(c: &Ctx<'_>) -> bool {
                 }
                 None => "El canal esta offline o no hay datos del inicio".to_string(),
             };
-            sender::send(&msg, ch, global).await;
+            chat::send(&msg, ch, global).await;
             return true;
         }
         "!cola" | "!queue" => {
@@ -232,7 +241,7 @@ async fn dynamic_commands(c: &Ctx<'_>) -> bool {
                 };
                 format!("🎬 Cola: {}{}", lista.join(" · "), extra)
             };
-            sender::send(&msg, ch, global).await;
+            chat::send(&msg, ch, global).await;
             return true;
         }
         "!seguidores" | "!followers" => {
@@ -240,7 +249,7 @@ async fn dynamic_commands(c: &Ctx<'_>) -> bool {
                 return true;
             }
             if !ch.followers_known.load(Ordering::Relaxed) {
-                sender::send(
+                chat::send(
                     "Kick no proporciona un total de seguidores disponible ahora.",
                     ch,
                     global,
@@ -251,7 +260,7 @@ async fn dynamic_commands(c: &Ctx<'_>) -> bool {
             let actual = ch.followers.load(Ordering::Relaxed);
             let goal = ch.follow_goal.load(Ordering::Relaxed);
             let pct = actual.saturating_mul(100).checked_div(goal).unwrap_or(0);
-            sender::send(
+            chat::send(
                 &format!("👥 Seguidores: {actual} / {goal} ({pct}%)"),
                 ch,
                 global,
@@ -282,7 +291,7 @@ async fn entertainment_commands(c: &Ctx<'_>) -> bool {
             return true;
         }
         let n: u8 = rand::thread_rng().gen_range(1..=100);
-        sender::send(&format!("🎲 {username} sacó un {n}!"), ch, global).await;
+        chat::send(&format!("🎲 {username} sacó un {n}!"), ch, global).await;
         return true;
     }
 
@@ -304,7 +313,7 @@ async fn entertainment_commands(c: &Ctx<'_>) -> bool {
             "Muy dudoso 🔴",
         ];
         let resp = RESP.choose(&mut rand::thread_rng()).unwrap_or(&"Quizás");
-        sender::send(&format!("🎱 {resp}"), ch, global).await;
+        chat::send(&format!("🎱 {resp}"), ch, global).await;
         return true;
     }
 
@@ -321,7 +330,7 @@ async fn entertainment_commands(c: &Ctx<'_>) -> bool {
                 s.open = true;
                 s.participants.clear();
                 drop(s);
-                sender::send(
+                chat::send(
                     "🎟️ ¡El sorteo está abierto! Escribe !participar para unirte",
                     ch,
                     global,
@@ -333,7 +342,7 @@ async fn entertainment_commands(c: &Ctx<'_>) -> bool {
                 s.open = false;
                 let count = s.participants.len();
                 drop(s);
-                sender::send(
+                chat::send(
                     &format!("🔒 Sorteo cerrado. {count} participantes"),
                     ch,
                     global,
@@ -346,10 +355,8 @@ async fn entertainment_commands(c: &Ctx<'_>) -> bool {
                 let winner = s.participants.choose(&mut rand::thread_rng()).cloned();
                 drop(s);
                 match winner {
-                    Some(w) => {
-                        sender::send(&format!("🏆 ¡El ganador es @{w}! 🎉"), ch, global).await
-                    }
-                    None => sender::send("😅 No hay participantes", ch, global).await,
+                    Some(w) => chat::send(&format!("🏆 ¡El ganador es @{w}! 🎉"), ch, global).await,
+                    None => chat::send("😅 No hay participantes", ch, global).await,
                 }
             }
             "" => {
@@ -364,7 +371,7 @@ async fn entertainment_commands(c: &Ctx<'_>) -> bool {
                 s.participants.push(username.to_string());
                 let count = s.participants.len();
                 drop(s);
-                sender::send(
+                chat::send(
                     &format!("✅ @{username} se unió al sorteo! ({count})"),
                     ch,
                     global,
@@ -402,7 +409,7 @@ async fn queue_commands(c: &Ctx<'_>) -> bool {
         })
         .await;
         if changed {
-            sender::send(
+            chat::send(
                 &format!("@{username} retiro su video de la cola"),
                 ch,
                 global,
@@ -430,7 +437,7 @@ async fn queue_commands(c: &Ctx<'_>) -> bool {
         } else {
             format!("🎵 @{username}: {}", mis.join(" · "))
         };
-        sender::send(&msg, ch, global).await;
+        chat::send(&msg, ch, global).await;
         return true;
     }
     false
@@ -451,7 +458,7 @@ async fn play_command(c: &Ctx<'_>) -> bool {
             return true;
         }
         if url.is_empty() {
-            sender::send(
+            chat::send(
                 "Usa !play seguido de un enlace o del nombre y artista de la canción.",
                 ch,
                 global,
@@ -498,7 +505,7 @@ async fn tts_command(c: &Ctx<'_>) {
             cmd_low.trim_start_matches('!').to_string()
         };
         if !tts::enqueue_chat(ch, username, text, &voice) {
-            sender::send(
+            chat::send(
                 &format!("No se pudo agregar tu mensaje de voz: usa hasta {} caracteres y vuelve a intentar si la cola está llena.", tts::KICK_MESSAGE_MAX),
                 ch, global,
             ).await;
@@ -562,7 +569,7 @@ async fn info(ch: &Arc<ChannelState>, global: &Arc<AppState>, key: &str, label: 
     } else {
         format!("{label} → {text}")
     };
-    sender::send(&msg, ch, global).await;
+    chat::send(&msg, ch, global).await;
 }
 
 const SET_USAGE: &str =
@@ -581,7 +588,7 @@ async fn configure(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
         "horario" | "schedule" => "horario",
         "meta" | "goal" => "meta",
         _ => {
-            sender::send(SET_USAGE, ch, global).await;
+            chat::send(SET_USAGE, ch, global).await;
             return;
         }
     };
@@ -591,23 +598,23 @@ async fn configure(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
             .ok()
             .filter(|g| (1..=100_000_000).contains(g))
         else {
-            sender::send(SET_USAGE, ch, global).await;
+            chat::send(SET_USAGE, ch, global).await;
             return;
         };
         if let Err(e) = crate::db::update_follow_goal(&global.db, &ch.slug, goal as i64).await {
             tracing::error!("[Set][{}] {e}", ch.slug);
-            sender::send("No se pudo guardar. Intenta más tarde.", ch, global).await;
+            chat::send("No se pudo guardar. Intenta más tarde.", ch, global).await;
             return;
         }
         ch.follow_goal
             .store(goal, std::sync::atomic::Ordering::Relaxed);
-        sender::send(&format!("✅ Meta de seguidores: {goal}"), ch, global).await;
+        chat::send(&format!("✅ Meta de seguidores: {goal}"), ch, global).await;
         return;
     }
     let value = trunc(value, 400);
     if let Err(e) = crate::db::update_command_text(&global.db, &ch.slug, field, value).await {
         tracing::error!("[Set][{}] {e}", ch.slug);
-        sender::send("No se pudo guardar. Intenta más tarde.", ch, global).await;
+        chat::send("No se pudo guardar. Intenta más tarde.", ch, global).await;
         return;
     }
     {
@@ -625,7 +632,7 @@ async fn configure(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
     } else {
         format!("✅ !{field} actualizado")
     };
-    sender::send(&msg, ch, global).await;
+    chat::send(&msg, ch, global).await;
 }
 
 const BAN_USAGE: &str = "🚫 Uso: !ban usuario · !unban usuario · !baneados";
@@ -633,7 +640,7 @@ const BAN_USAGE: &str = "🚫 Uso: !ban usuario · !unban usuario · !baneados";
 /// Nombres que nunca se pueden banear: el propio canal y la cuenta con acceso total.
 async fn ban_protected(name: &str, ch: &ChannelState) -> bool {
     let display = ch.display_name.read().await.to_ascii_lowercase();
-    name == crate::webhook::FULL_ACCESS_USERNAME
+    name == ch.platform.full_access_login()
         || name == ch.slug.to_ascii_lowercase()
         || (!display.is_empty() && name == display)
 }
@@ -641,16 +648,16 @@ async fn ban_protected(name: &str, ch: &ChannelState) -> bool {
 /// `!ban usuario`: su chat queda como texto; pierde comandos, cola, sorteo, bingo y TTS.
 async fn ban(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
     let Some(name) = crate::state::normalize_username(args) else {
-        sender::send(BAN_USAGE, ch, global).await;
+        chat::send(BAN_USAGE, ch, global).await;
         return;
     };
     if ban_protected(&name, ch).await {
-        sender::send("No se puede banear al streamer.", ch, global).await;
+        chat::send("No se puede banear al streamer.", ch, global).await;
         return;
     }
     if let Err(e) = crate::db::add_ban(&global.db, &ch.slug, &name).await {
         tracing::error!("[Ban][{}] {e}", ch.slug);
-        sender::send(
+        chat::send(
             "No se pudo guardar el baneo. Intenta más tarde.",
             ch,
             global,
@@ -660,7 +667,7 @@ async fn ban(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
     }
     let added = ch.banned.write().await.insert(name.clone());
     if !added {
-        sender::send(&format!("@{name} ya estaba baneado."), ch, global).await;
+        chat::send(&format!("@{name} ya estaba baneado."), ch, global).await;
         return;
     }
     // Lo que ya había pedido tampoco sigue activo en el overlay.
@@ -670,7 +677,7 @@ async fn ban(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
         .await
         .participants
         .retain(|p| !p.eq_ignore_ascii_case(&name));
-    sender::send(
+    chat::send(
         &format!("🚫 @{name} baneado: solo puede escribir en el chat."),
         ch,
         global,
@@ -680,12 +687,12 @@ async fn ban(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
 
 async fn unban(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
     let Some(name) = crate::state::normalize_username(args) else {
-        sender::send(BAN_USAGE, ch, global).await;
+        chat::send(BAN_USAGE, ch, global).await;
         return;
     };
     if let Err(e) = crate::db::remove_ban(&global.db, &ch.slug, &name).await {
         tracing::error!("[Ban][{}] {e}", ch.slug);
-        sender::send("No se pudo quitar el baneo. Intenta más tarde.", ch, global).await;
+        chat::send("No se pudo quitar el baneo. Intenta más tarde.", ch, global).await;
         return;
     }
     let msg = if ch.banned.write().await.remove(&name) {
@@ -693,7 +700,7 @@ async fn unban(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
     } else {
         format!("@{name} no estaba baneado.")
     };
-    sender::send(&msg, ch, global).await;
+    chat::send(&msg, ch, global).await;
 }
 
 /// Interpreta `!disco`, `!disco on` y `!disco off`; `None` si el argumento no es válido.
@@ -710,7 +717,7 @@ fn lights_target(args: &str, current: bool) -> Option<bool> {
 async fn stage_lights(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
     use std::sync::atomic::Ordering;
     let Some(on) = lights_target(args, ch.stage_lights.load(Ordering::Relaxed)) else {
-        sender::send("🪩 Uso: !disco · !disco on · !disco off", ch, global).await;
+        chat::send("🪩 Uso: !disco · !disco on · !disco off", ch, global).await;
         return;
     };
     ch.stage_lights.store(on, Ordering::Relaxed);
@@ -735,7 +742,7 @@ fn meteor_level(args: &str) -> Option<&'static str> {
 /// `!meteoros [suave|tormenta]`: lanza una lluvia de meteoritos sobre todo el overlay.
 async fn meteor_shower(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
     let Some(level) = meteor_level(args) else {
-        sender::send(
+        chat::send(
             "☄️ Uso: !meteoros · !meteoros suave · !meteoros tormenta",
             ch,
             global,
@@ -754,7 +761,7 @@ async fn meteor_shower(args: &str, ch: &Arc<ChannelState>, global: &Arc<AppState
     } else {
         "☄️ ¡Lluvia de meteoritos! ☄️"
     };
-    sender::send(announce, ch, global).await;
+    chat::send(announce, ch, global).await;
 }
 
 pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global: &Arc<AppState>) {
@@ -779,12 +786,12 @@ pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global:
                 };
                 enqueue_announced(item, &message, ch, global).await;
             }
-            Err(message) => sender::send(message, ch, global).await,
+            Err(message) => chat::send(message, ch, global).await,
         }
         return;
     }
     if url.len() > MAX_URL_LEN || !valid_media_url(&url) {
-        sender::send(
+        chat::send(
             "Enlace inválido. Usa una URL HTTPS o escribe el nombre y artista de la canción.",
             ch,
             global,
@@ -841,7 +848,7 @@ pub async fn play(url: String, username: String, ch: &Arc<ChannelState>, global:
         add_announced(item, &username, ch, global).await;
     } else {
         warn!("[PLAY] URL inválida: {url}");
-        sender::send(
+        chat::send(
             &format!("@{username} no pude procesar esa URL."),
             ch,
             global,
@@ -882,7 +889,7 @@ async fn enqueue_announced(
     global: &Arc<AppState>,
 ) {
     if enqueue(item, ch, global).await {
-        sender::send(message, ch, global).await;
+        chat::send(message, ch, global).await;
     }
 }
 
@@ -891,7 +898,7 @@ async fn enqueue(item: VideoItem, ch: &Arc<ChannelState>, global: &Arc<AppState>
         return false;
     }
     if ch.video_queue.read().await.items.len() >= MAX_QUEUE_ITEMS {
-        sender::send(
+        chat::send(
             &format!("La cola está llena ({MAX_QUEUE_ITEMS} solicitudes). Espera a que termine una canción."),
             ch,
             global,
@@ -917,7 +924,7 @@ where
         Ok(changed) => changed,
         Err(e) => {
             tracing::error!("[Queue][{}] {e}", ch.slug);
-            sender::send("No se pudo guardar la cola. Intenta mas tarde.", ch, global).await;
+            chat::send("No se pudo guardar la cola. Intenta mas tarde.", ch, global).await;
             false
         }
     }

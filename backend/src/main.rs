@@ -13,6 +13,7 @@ mod dock;
 mod integration_tests;
 mod kick;
 mod login;
+mod oauth;
 mod platform;
 mod queue;
 mod server;
@@ -21,6 +22,7 @@ mod stats;
 #[cfg(test)]
 mod test_support;
 mod tts;
+mod twitch;
 mod webhook;
 
 use axum::{extract::State, http::StatusCode};
@@ -28,7 +30,7 @@ use dashmap::DashMap;
 use socketioxide::SocketIo;
 use state::{AppState, GlobalConfig};
 use std::sync::Arc;
-use tokio::sync::{Mutex, Semaphore};
+use tokio::sync::{Mutex, RwLock, Semaphore};
 use tokio_util::sync::CancellationToken;
 use tower_http::services::ServeDir;
 use tracing::info;
@@ -142,6 +144,8 @@ async fn main() {
         config,
         http,
         kick_endpoints,
+        twitch_endpoints: twitch::Endpoints::default(),
+        twitch_bot: RwLock::new(None),
         io: io_inner,
         db,
         channels: Arc::new(DashMap::new()),
@@ -174,6 +178,10 @@ async fn main() {
     tokio::spawn(async move {
         webhook::worker(inbox).await;
     });
+    if state.config.twitch.is_some() {
+        twitch::bot::load(&state).await;
+        tokio::spawn(twitch::bot::run(state.clone()));
+    }
     let overlay_dir = resolve_overlay_dir(&state.config.overlay_dir);
     info!("Overlay: {}", overlay_dir.display());
 
@@ -223,7 +231,11 @@ fn load_config() -> GlobalConfig {
                 .into_owned()
         }),
         fish_audio_api_key: std::env::var("FISH_AUDIO_API_KEY").unwrap_or_default(),
+        twitch: twitch::Config::from_env(),
     };
+    if config.twitch.is_none() {
+        tracing::warn!("Twitch desactivado: faltan TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET o TWITCH_EVENTSUB_SECRET.");
+    }
     if config.client_id.is_empty() || config.client_secret.is_empty() {
         fatal("Faltan KICK_CLIENT_ID o KICK_CLIENT_SECRET.");
     }
@@ -262,6 +274,10 @@ fn build_router(
         .route("/auth/bingo", get(bingo_auth::login))
         .route("/auth/bingo/callback", get(bingo_auth::callback))
         .route("/kick_webhook", post(webhook::receive))
+        .route("/auth/twitch", get(twitch::auth::redirect_channel))
+        .route("/auth/twitch/callback", get(twitch::auth::channel_callback))
+        .route("/auth/twitch/bot", get(twitch::auth::redirect_bot))
+        .route("/auth/twitch/bot/callback", get(twitch::auth::bot_callback))
         .route("/healthz", get(|| async { StatusCode::OK }))
         .route("/readyz", get(ready))
         .route("/metrics", get(metrics))

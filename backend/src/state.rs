@@ -24,6 +24,8 @@ pub struct GlobalConfig {
     pub base_url: String,
     pub tts_cache_dir: String,
     pub fish_audio_api_key: String,
+    /// `None` si faltan las variables `TWITCH_*`: Twitch queda desactivado.
+    pub twitch: Option<crate::twitch::Config>,
 }
 
 /// Slot de reproducción: qué socket suena y con qué generación.
@@ -191,6 +193,9 @@ pub struct AppState {
     pub config: GlobalConfig,
     pub http: reqwest::Client,
     pub kick_endpoints: crate::kick::Endpoints,
+    pub twitch_endpoints: crate::twitch::Endpoints,
+    /// Cuenta DaiBotsito; `None` hasta autorizarla en `/auth/twitch/bot`.
+    pub twitch_bot: RwLock<Option<crate::twitch::bot::BotAccount>>,
     pub io: socketioxide::SocketIo,
     pub db: sqlx::PgPool,
     /// Clave del canal (`Platform::channel_key`) → ChannelState

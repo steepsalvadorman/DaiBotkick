@@ -255,3 +255,87 @@ fn unix_now() -> u64 {
         .unwrap_or_default()
         .as_secs()
 }
+
+/// Cuenta bot guardada para la plataforma; `None` si todavía no se autorizó.
+pub async fn load_bot_account(
+    pool: &PgPool,
+    platform: Platform,
+) -> Result<Option<crate::twitch::bot::BotAccount>, sqlx::Error> {
+    let row = sqlx::query_as::<_, (String, String, String, String, i64)>(
+        "SELECT user_id, login, access_token, refresh_token, token_expires FROM bot_accounts WHERE platform=$1",
+    )
+    .bind(platform.as_str())
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(
+        |(user_id, login, access_token, refresh_token, token_expires)| {
+            crate::twitch::bot::BotAccount {
+                user_id,
+                login,
+                access_token,
+                refresh_token,
+                token_expires,
+            }
+        },
+    ))
+}
+
+pub async fn save_bot_account(
+    pool: &PgPool,
+    platform: Platform,
+    bot: &crate::twitch::bot::BotAccount,
+    scopes: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO bot_accounts (platform, user_id, login, access_token, refresh_token, token_expires, scopes, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT (platform) DO UPDATE SET
+           user_id=EXCLUDED.user_id, login=EXCLUDED.login, access_token=EXCLUDED.access_token,
+           refresh_token=EXCLUDED.refresh_token, token_expires=EXCLUDED.token_expires,
+           scopes=EXCLUDED.scopes, updated_at=EXCLUDED.updated_at",
+    )
+    .bind(platform.as_str())
+    .bind(&bot.user_id)
+    .bind(&bot.login)
+    .bind(&bot.access_token)
+    .bind(&bot.refresh_token)
+    .bind(bot.token_expires)
+    .bind(scopes)
+    .bind(unix_now() as i64)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Si el broadcaster ya tiene un canal con otro nombre (cambió su login), lo renombra junto
+/// con sus baneos y devuelve el nombre anterior. Tokens, ajustes y cola se conservan.
+pub async fn rename_channel_by_broadcaster(
+    pool: &PgPool,
+    platform: Platform,
+    broadcaster_user_id: i64,
+    new_slug: &str,
+) -> Result<Option<String>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    let old: Option<String> = sqlx::query_scalar(
+        "SELECT slug FROM channels WHERE platform=$1 AND broadcaster_user_id=$2 AND slug<>$3 FOR UPDATE",
+    )
+    .bind(platform.as_str())
+    .bind(broadcaster_user_id)
+    .bind(new_slug)
+    .fetch_optional(&mut *tx)
+    .await?;
+    if let Some(old) = &old {
+        for table in ["channels", "chat_bans"] {
+            sqlx::query(&format!(
+                "UPDATE {table} SET slug=$1 WHERE platform=$2 AND slug=$3"
+            ))
+            .bind(new_slug)
+            .bind(platform.as_str())
+            .bind(old)
+            .execute(&mut *tx)
+            .await?;
+        }
+    }
+    tx.commit().await?;
+    Ok(old)
+}

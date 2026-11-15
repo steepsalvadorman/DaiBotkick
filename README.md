@@ -1,20 +1,23 @@
-# DaiBot para Kick
+# DaiBot para Kick y Twitch
 
-Bot para varios canales de Kick, con comandos de chat, cola de YouTube/video, TTS, sorteos y overlay para OBS.
+Bot para varios canales de Kick y de Twitch, con comandos de chat, cola de YouTube/video, TTS, sorteos, bingo y overlay para OBS. Cada canal vive en una sola plataforma: un canal de Twitch tiene su propio overlay, cola, voces, bingo y comandos, separado de cualquier canal de Kick aunque se llame igual. Ver [Twitch](#twitch).
 
 La mascota original es **DaiBot**, un ninja veloz electrónico y programador con identidad gamer. Su imagen compartida en `overlay/daibot.svg` se usa en la conexión del canal, el bingo, los comandos, los iconos de la aplicación y el logo de la barra superior del overlay. Este logo local no depende de la URL de una foto de perfil externa.
 
 ## Funcionamiento
 
 ```text
-Kick -> webhook firmado -> inbox PostgreSQL -> comandos del canal
-                                           -> Socket.IO -> overlay OBS
-OAuth Kick -> PostgreSQL -> estado y tareas del canal
+Kick   -> webhook firmado (RSA)         -┐
+Twitch -> EventSub firmado (HMAC-SHA256) -┴-> inbox PostgreSQL -> comandos del canal
+                                                              -> Socket.IO -> overlay OBS
+OAuth Kick / Twitch -> PostgreSQL -> estado y tareas del canal
 ```
+
+Kick y Twitch comparten el mismo núcleo (`platform.rs`, `chat.rs`): cada plataforma convierte sus eventos a un `ChatMessage` común y recibe las respuestas por `chat::send`, que publica en la plataforma del canal. Los canales se identifican por plataforma + nombre (`channels` tiene clave `(platform, slug)`); en memoria y en Socket.IO la clave de un canal de Kick es su slug, y la de uno de Twitch, `twitch:<login>`.
 
 El backend usa Rust, Axum, socketioxide y sqlx. `pixel.html` carga `app.js` y `style.css`; esos son los archivos que debes editar para cambiar el overlay. El reproductor utiliza la [API oficial de YouTube](https://developers.google.com/youtube/iframe_api_reference).
 
-EventSub es la única entrada de chat y alertas. Se verifica la [firma RSA de Kick](https://github.com/KickEngineering/KickDevDocs/blob/main/events/webhook-security.md), el timestamp y el ID de entrega. Pusher ya no forma parte del servidor activo.
+EventSub es la única entrada de chat y alertas. En Kick se verifica la [firma RSA](https://github.com/KickEngineering/KickDevDocs/blob/main/events/webhook-security.md), el timestamp y el ID de entrega; en Twitch, la [firma HMAC-SHA256](https://dev.twitch.tv/docs/eventsub/handling-webhook-events/) con `TWITCH_EVENTSUB_SECRET` y una antigüedad máxima de 10 minutos. Pusher ya no forma parte del servidor activo.
 
 ## Conectar un canal y OBS
 
@@ -65,7 +68,42 @@ La pantalla de conexión muestra dos URLs privadas más, pensadas para **Docks �
 - `dock-chat.html?ch=tu_canal#token=PANEL`: chat completo en vivo (comandos, respuestas de DaiBot, insignias, colores y emotes), con filtros locales y un campo para escribir en el chat **como el canal**.
 - `dock-stream.html?ch=tu_canal#token=PANEL`: estado del directo y espectadores, edición del título (1–140 caracteres) y búsqueda/cambio de categoría. Los cambios se guardan en Kick con `PATCH /public/v1/channels`.
 
-Ambas usan el `panel_token` del canal, que viaja en el fragmento y se envía como `Authorization: Bearer` a `/api/dock/:slug/{stream,categories,chat}`. Son respuestas `no-store` y `no-referrer`. Cambiar el stream requiere el scope `channel:write`: **los canales conectados antes de esta versión deben volver a conectarse** con Kick. El token de panel se conserva al reconectar, así que las URLs de los docks no cambian.
+Ambas usan el `panel_token` del canal, que viaja en el fragmento y se envía como `Authorization: Bearer` a `/api/dock/:clave/{stream,categories,chat}` (la clave es el slug en Kick o `twitch:<login>` en Twitch). Son respuestas `no-store` y `no-referrer`. Cambiar el stream requiere el scope `channel:write`: **los canales conectados antes de esta versión deben volver a conectarse** con Kick. El token de panel se conserva al reconectar, así que las URLs de los docks no cambian.
+
+## Twitch
+
+### Conectar un canal de Twitch
+
+1. Abre la raíz del servicio y pulsa **Conectar con Twitch** (`/auth/twitch`). Twitch siempre muestra su pantalla para elegir la cuenta.
+2. La pantalla de éxito muestra tres URLs privadas, igual que en Kick, pero solo con el tema V-Saturn:
+   - `vsaturn.html?tw=tu_login#token=…`: overlay para OBS (1920×1080). Cualquier otra página del overlay abierta con `?tw=` redirige a V-Saturn.
+   - `dock-chat.html?tw=tu_login#token=…` y `dock-stream.html?tw=tu_login#token=…`: docks de OBS.
+3. Si pierdes las URLs o cambias tu nombre en Twitch, vuelve a conectar: el canal se renombra solo y conserva tokens, ajustes, cola y baneos. Las URLs cambian porque llevan tu login, pero sus tokens son los mismos.
+
+El streamer autoriza `channel:bot` (que la cuenta bot lea y escriba en su chat), `moderator:read:followers` (alertas y total de seguidores), `channel:read:subscriptions` (alertas de suscripciones) y `channel:manage:broadcast` (título y categoría desde el dock).
+
+### Cuenta bot DaiBotsito
+
+Las respuestas en Twitch las escribe la cuenta **`daibotsito`** (ID 1609918794), con la insignia de bot de chat. Se autoriza **una sola vez** abriendo `/auth/twitch/bot` con la sesión de `daibotsito` iniciada en Twitch; cualquier otra cuenta se rechaza. Su token se guarda en la tabla `bot_accounts`, se valida cada hora y se renueva solo. Pide `user:read:chat`, `user:write:chat` y `user:bot`.
+
+Los mensajes del bot se envían con `POST /helix/chat/messages` y el token de app, uno a la vez por canal y con al menos 1,5 s entre ellos (el límite de Twitch para una cuenta que no es moderadora, 20 cada 30 s). Se cortan en 500 caracteres. El dock de chat de un canal de Twitch también escribe como DaiBotsito, porque el canal no autoriza escribir como él.
+
+### Eventos
+
+Cada canal de Twitch se suscribe por webhook (`/twitch_webhook`, token de app) a `channel.chat.message` (como DaiBotsito), `channel.follow` v2, `channel.subscribe`, `channel.subscription.message`, `channel.subscription.gift`, `stream.online` y `stream.offline`. Las notificaciones entran al mismo inbox que Kick, con `platform='twitch'`. Si la cuenta bot no está autorizada, se crean las demás suscripciones y la del chat se reintenta hasta que lo esté.
+
+Además, cada 60 s se consultan espectadores, estado del directo y total de seguidores (`/helix/streams`, `/helix/channels/followers`), y al arrancar, el nombre visible y la foto del canal para el overlay. Los tokens de los canales se validan cada hora con `/oauth2/validate`, como exige Twitch.
+
+### Permisos y diferencias con Kick
+
+- El streamer (por ID) y los moderadores (insignia `moderator`) tienen permisos de dueño, igual que en Kick.
+- **`sr_dai_twitch`** (ID 701010126) tiene acceso total en todos los canales de Twitch, el equivalente a `seniordai` en Kick. Se comprueba por ID, porque en Twitch el nombre se puede cambiar.
+- Los mensajes de DaiBotsito se ignoran (por ID) para que no se responda a sí mismo.
+- Los emotes de Twitch llegan separados del texto; el overlay arma la imagen desde `static-cdn.jtvnw.net` a partir del ID, que solo puede tener letras, números y `_`.
+- El nombre que se muestra es el visible si solo cambia mayúsculas respecto al login; si no (otros alfabetos), el login, para que `!ban` funcione.
+- Bingo: el enlace de `!carton` lleva `ch=twitch:<login>` y el espectador inicia sesión con Twitch (`/auth/bingo/twitch/callback`, sin permisos; el token se revoca al leer el login). La sesión recuerda la plataforma: una cuenta de Kick con el mismo nombre no abre un cartón de Twitch.
+
+Si faltan las variables `TWITCH_*`, Twitch queda desactivado (con un aviso en el log) y Kick funciona igual.
 
 ## Comandos
 
@@ -100,7 +138,7 @@ Solo la identidad del broadcaster, verificada por su ID en el webhook firmado, p
 
 ### Baneos del chat
 
-`!ban usuario` (con o sin `@`) bloquea a esa persona en el canal: sus mensajes siguen apareciendo en el chat del overlay, pero solo como texto apagado y sin emotes, y el bot ignora todos sus comandos (`!play`, voces TTS, sorteo, bingo, `!carton`, etc.). Al banear se retiran sus canciones de la cola (incluida la que suene) y su inscripción del sorteo abierto, y sus follows dejan de disparar alertas y voces. Las suscripciones y regalos sí se siguen anunciando. El baneo también aplica a moderadores; el broadcaster y `seniordai` no se pueden banear. `!unban usuario` lo revierte y `!baneados` lista los bloqueados. Se guarda en PostgreSQL (tabla `chat_bans`) y sobrevive a reinicios y reconexiones del canal. No banea a nadie en Kick: solo en DaiBot.
+`!ban usuario` (con o sin `@`) bloquea a esa persona en el canal: sus mensajes siguen apareciendo en el chat del overlay, pero solo como texto apagado y sin emotes, y el bot ignora todos sus comandos (`!play`, voces TTS, sorteo, bingo, `!carton`, etc.). Al banear se retiran sus canciones de la cola (incluida la que suene) y su inscripción del sorteo abierto, y sus follows dejan de disparar alertas y voces. Las suscripciones y regalos sí se siguen anunciando. El baneo también aplica a moderadores; el broadcaster, `seniordai` (Kick) y `sr_dai_twitch` (Twitch) no se pueden banear. `!unban usuario` lo revierte y `!baneados` lista los bloqueados. Se guarda en PostgreSQL (tabla `chat_bans`) y sobrevive a reinicios y reconexiones del canal. No banea a nadie en Kick ni en Twitch: solo en DaiBot. Los baneos son de cada canal y plataforma.
 
 Los moderadores del canal tienen exactamente los mismos permisos que el broadcaster: todos los comandos (incluidos `!set` y el control del bingo) y sin cooldowns. Se reconocen por la insignia `moderator` que Kick envía con cada mensaje en el webhook firmado, así que no se puede suplantar y quitar el rol de moderador en Kick revoca el acceso desde su siguiente mensaje.
 
@@ -144,7 +182,10 @@ Desde la raíz del repositorio, copia `.env.example` a `.env` y configura:
 
 | Variable | Uso |
 |---|---|
-| `KICK_CLIENT_ID`, `KICK_CLIENT_SECRET` | Credenciales de la app OAuth |
+| `KICK_CLIENT_ID`, `KICK_CLIENT_SECRET` | Credenciales de la app OAuth de Kick |
+| `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET` | Credenciales de la app de Twitch (tipo **Confidential**); sin ellas Twitch queda desactivado |
+| `TWITCH_EVENTSUB_SECRET` | Texto aleatorio de 10 a 100 caracteres con el que Twitch firma los webhooks (por ejemplo `openssl rand -hex 32`); no se configura en la consola de Twitch |
+| `TWITCH_FULL_ACCESS_LOGIN` | Documenta la cuenta con acceso total en Twitch (`sr_dai_twitch`); el código la comprueba por su ID |
 | `DATABASE_URL` | PostgreSQL; desarrollo y producción deben usar bases diferentes |
 | `BASE_URL` | Origen público del servidor; si se omite usa `RENDER_EXTERNAL_URL` o localhost |
 | `PORT` | Puerto HTTP/Socket.IO; por defecto 3000 |
@@ -160,7 +201,7 @@ cd backend
 cargo run --locked
 ```
 
-Registra en la app de Kick `BASE_URL/auth/callback` como redirect y `BASE_URL/kick_webhook` como webhook. Para recibir webhooks locales necesitas una URL HTTPS pública mediante un túnel. El flujo de registro es `/auth/kick`; el modo antiguo `--login` solo guarda tokens en `.env` y no registra canales del servidor actual.
+Registra en la app de Kick `BASE_URL/auth/callback` como redirect y `BASE_URL/kick_webhook` como webhook. En la app de Twitch (dev.twitch.tv/console, categoría *Chat Bot*, tipo *Confidential*) registra los redirects `BASE_URL/auth/twitch/callback`, `BASE_URL/auth/twitch/bot/callback` y `BASE_URL/auth/bingo/twitch/callback`; el webhook `BASE_URL/twitch_webhook` lo registra el propio servidor al suscribirse. Para recibir webhooks locales necesitas una URL HTTPS pública mediante un túnel. El flujo de registro es `/auth/kick`; el modo antiguo `--login` solo guarda tokens en `.env` y no registra canales del servidor actual.
 
 Las migraciones versionadas se ejecutan al arrancar. Si falla una migración o la carga de canales, el servidor termina con error. Las tablas de una instalación anterior creadas sin sqlx se conservan mediante `CREATE TABLE IF NOT EXISTS`; respalda la base antes de actualizar.
 
@@ -173,7 +214,7 @@ cargo +1.88.0 test --manifest-path backend/Cargo.toml --locked
 node --test tests/overlay.test.cjs
 ```
 
-Las ocho pruebas de integración requieren PostgreSQL de pruebas y permiso para crear/eliminar schemas aislados. Incluyen OAuth/Kick simulados por HTTP, conexiones Socket.IO reales, aislamiento, renovación concurrente, fallos de DB y recuperación del inbox. Nunca las apuntes a producción:
+Las pruebas de integración marcadas con `#[ignore]` requieren PostgreSQL de pruebas y permiso para crear/eliminar schemas aislados. Incluyen OAuth de Kick y de Twitch simulados por HTTP, webhooks firmados de ambas plataformas, conexiones Socket.IO reales, aislamiento, renovación concurrente, fallos de DB y recuperación del inbox. Nunca las apuntes a producción:
 
 ```powershell
 $env:TEST_DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/daibot_test'
@@ -185,6 +226,8 @@ Para comprobar backup/restauración, instala `psql`, `pg_dump`, `pg_restore` y P
 Antes de desplegar, valida en local desde `backend/`: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` y, con `TEST_DATABASE_URL` apuntando a una base de pruebas, `cargo test -- --ignored`. Los tests del overlay se ejecutan con `node --test tests/overlay.test.cjs`. `tests/runtime.test.cjs` comprueba un backend ya iniciado (configura `DAIBOT_BASE_URL`); espera `/comandos.html`, que el Dockerfile copia al directorio del overlay.
 
 La validación local del 3 de octubre de 2026 pasó con Rust 1.88.0 y Node 22.16.0 en Linux: 43 tests aislados, ocho integraciones con PostgreSQL 18.6, doce tests del overlay, cuatro del backend en ejecución, formato, Clippy y build release. Pasó el backup/restauración de fixtures y `/readyz` pasó de 200 a 503 al detener la DB y volvió a 200 al reiniciarla. CI usa PostgreSQL 16; su ejecución y la imagen Docker siguen pendientes porque esta sesión no tiene acceso al servicio Docker.
+
+La validación del 15 de noviembre de 2026, tras integrar Twitch, pasó con Rust 1.88.0 (imagen del Dockerfile) y PostgreSQL 16: formato, Clippy, 107 tests aislados, 14 integraciones (incluidas las de Twitch contra un servicio simulado: conexión de canales y bot, EventSub firmado, respuestas espaciadas, docks, estadísticas y login del bingo), 53 tests del overlay y del cartón, y 4 del backend en ejecución. La prueba en vivo con el canal `sr_dai_twitch` confirmó las 7 suscripciones verificadas por Twitch y las respuestas de DaiBotsito en el chat.
 
 Las pruebas del overlay simulan DOM y media: no sustituyen una sesión real de OBS/YouTube. Consulta [el plan de pruebas](PLAN_PRUEBAS_DESPLIEGUE.md) para la validación real y de carga.
 
@@ -198,9 +241,10 @@ Las pruebas del overlay simulan DOM y media: no sustituyen una sesión real de O
 
 1. *New Project → Deploy from GitHub repo* con este repositorio.
 2. *+ New → Database → PostgreSQL* en el mismo proyecto.
-3. Variables del servicio del bot: `DATABASE_URL=${{Postgres.DATABASE_URL}}`, `KICK_CLIENT_ID`, `KICK_CLIENT_SECRET` y `BASE_URL` con el dominio público (sin `/` final). `PORT` lo asigna Railway.
+3. Variables del servicio del bot: `DATABASE_URL=${{Postgres.DATABASE_URL}}`, `KICK_CLIENT_ID`, `KICK_CLIENT_SECRET`, `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`, `TWITCH_EVENTSUB_SECRET` y `BASE_URL` con el dominio público (sin `/` final). `PORT` lo asigna Railway.
 4. *Settings → Networking → Custom Domain*: añade el dominio y crea en tu DNS el CNAME que indique Railway (en Cloudflare, con el proxy desactivado hasta que Railway emita el certificado).
 5. En la app de Kick: Redirect URL `<BASE_URL>/auth/callback` y webhook `<BASE_URL>/kick_webhook`.
+6. En la app de Twitch: los tres redirects de [Desarrollo local](#desarrollo-local). Tras el primer despliegue, abre `<BASE_URL>/auth/twitch/bot` con la cuenta `daibotsito` para autorizar el bot.
 
 Mantén una sola réplica.
 

@@ -29,7 +29,8 @@
     const notify = text => { status.textContent = text; };
     // Modo ligero por defecto: sin animaciones decorativas infinitas para no competir con el juego por la GPU.
     // Se desactiva con ?lite=0.
-    if (new URLSearchParams(location.search).get('lite') !== '0') document.body.classList.add('lite');
+    const lite = new URLSearchParams(location.search).get('lite') !== '0';
+    if (lite) document.body.classList.add('lite');
     // Un solo consejo visible. La animación CSS los dejaba los tres en la misma celda y se pintaban juntos.
     const tips = [...document.querySelectorAll('.tip')];
     let tipIndex = 0;
@@ -314,19 +315,17 @@
         }).catch(error => { apiPromise = null; throw error; });
         return apiPromise;
     }
-    /** Pide 720p al iframe de YouTube cuando el video lo ofrece; si no, la mejor calidad por debajo. */
+    /** Pide 720p al iframe de YouTube cuando el video lo ofrece; si no, la mejor calidad por debajo.
+     *  En pixel.html con modo ligero pide 360p: su reproductor mide unos 370 px de ancho (~490 px a 1440p),
+     *  así que decodificar 720p solo gastaba CPU y GPU. */
+    const lowVideo = lite && /\/pixel\.html$/.test(location.pathname);
+    const qualityOrder = lowVideo ? ['medium', 'small', 'tiny'] : ['hd720', 'large', 'medium', 'small', 'tiny'];
     function preferYouTubeQuality(target) {
         if (!target?.getAvailableQualityLevels || !target.setPlaybackQuality) return;
         let levels;
         try { levels = target.getAvailableQualityLevels(); } catch { return; }
         if (!Array.isArray(levels) || !levels.length) return;
-        let quality = null;
-        if (levels.includes('hd720')) quality = 'hd720';
-        else {
-            for (const q of ['large', 'medium', 'small', 'tiny']) {
-                if (levels.includes(q)) { quality = q; break; }
-            }
-        }
+        const quality = qualityOrder.find(q => levels.includes(q));
         if (!quality) return;
         try {
             if (target.getPlaybackQuality?.() !== quality) target.setPlaybackQuality(quality);

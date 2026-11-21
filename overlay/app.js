@@ -81,7 +81,7 @@
     }
     let active = false, queue = [], version = 0, playingId = null, pending = false, visible = true;
     let myEpoch = null, pongTimer = null;
-    let player = null, retry, generation = 0, apiPromise;
+    let player = null, retry, loadWatch, generation = 0, apiPromise;
     let musicShown = true, musicVolume = 85, ttsVolume = 100;
     let mediaReady = false, paused = false, actuallyPlaying = false, canGoBack = false;
     // Posición del video actual, para retomarlo si OBS recarga la fuente.
@@ -286,9 +286,11 @@
     renderQueue();
     function stop() {
         mediaReady = false; paused = false; actuallyPlaying = false;
-        generation++; clearTimeout(retry);
+        generation++; clearTimeout(retry); clearTimeout(loadWatch);
         direct.onended = direct.onerror = null; direct.pause(); direct.removeAttribute('src'); direct.load();
-        if (player) { player.destroy(); player = null; }
+        // destroy() de YouTube puede lanzar si el iframe aún no terminó de cargar; si eso cortaba
+        // stop(), el player roto quedaba guardado y cada canción siguiente volvía a fallar aquí.
+        if (player) { const old = player; player = null; try { old.destroy(); } catch {} }
         media.removeAttribute('data-source');
         youtube.replaceChildren(); playingId = null; pending = false;
         updateTransport();
@@ -355,7 +357,16 @@
                 const target = document.createElement('div'); youtube.append(target);
                 player = new YT.Player(target, {
                     width: '100%', height: '100%', videoId: item.videoId,
-                    playerVars: { autoplay: 1, playsinline: 1, controls: 0, rel: 0, origin: location.origin },
+                    playerVars: {
+                        autoplay: 1,
+                        playsinline: 1,
+                        controls: 0,
+                        rel: 0,
+                        enablejsapi: 1,
+                        origin: location.origin,
+                        // Sin query ni hash: la URL privada de OBS lleva el token y no debe llegar a YouTube.
+                        widget_referrer: `${location.origin}${location.pathname}`,
+                    },
                     events: {
                         onReady: event => {
                             if (run !== generation) return;
@@ -377,10 +388,23 @@
                             updateTransport();
                             if (event.data === YT.PlayerState.ENDED) finish(item.id);
                         },
-                        onError: () => { if (run === generation) finish(item.id); },
+                        onError: event => {
+                            if (run !== generation) return;
+                            const code = event?.data;
+                            if (code === 101 || code === 150) notify('YouTube no permite reproducir este video fuera de YouTube.');
+                            else if (code === 153) notify('YouTube rechazó el reproductor (error 153). Revisa el origen/HTTPS del overlay.');
+                            else notify('YouTube no pudo reproducir este video.');
+                            finish(item.id);
+                        },
                         onAutoplayBlocked: () => notify('Audio bloqueado. Interactúa con la fuente de OBS.'),
                     },
                 });
+                // Si el iframe nunca queda listo (YouTube no responde), la cola no se queda colgada.
+                loadWatch = setTimeout(() => {
+                    if (run !== generation || mediaReady) return;
+                    notify('YouTube no cargó este video; paso a la siguiente.');
+                    finish(item.id);
+                }, 20000);
             } catch (error) { if (run === generation) { notify(error.message); finish(item.id); } }
         } else if (item.url) {
             youtube.style.display = 'none'; direct.style.display = 'block'; direct.src = item.url; direct.volume = musicVolume / 100;

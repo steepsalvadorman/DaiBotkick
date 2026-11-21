@@ -601,8 +601,27 @@ test('YouTube ended/error events advance once', async () => {
     app.handlers.syncQueue({ items: [{ ...item('youtube'), videoId: 'dQw4w9WgXcQ', url: undefined }], version: 1 });
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(app.players.length, 1);
+    assert.equal(app.players[0].options.playerVars.enablejsapi, 1);
+    assert.equal(app.players[0].options.playerVars.widget_referrer, 'https://bot.example/pixel.html');
     app.players[0].options.events.onStateChange({ data: 0 }); app.players[0].options.events.onError();
     assert.equal(app.emitted.length, 1);
+});
+test('a YouTube player that throws on destroy does not block the next song', async () => {
+    const app = overlay(); app.handlers.playbackRole({ active: true });
+    const yt = id => ({ ...item(id), videoId: 'dQw4w9WgXcQ', url: undefined });
+    app.handlers.syncQueue({ items: [yt('one'), yt('two')], version: 1 });
+    await new Promise(resolve => setImmediate(resolve));
+    app.players[0].destroy = () => { throw new TypeError('iframe not ready'); };
+    app.handlers.syncQueue({ items: [yt('two')], version: 2 });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(app.players.length, 2);
+});
+test('a YouTube player that never gets ready advances after the watchdog', async () => {
+    const app = overlay(); app.handlers.playbackRole({ active: true });
+    app.handlers.syncQueue({ items: [{ ...item('stuck'), videoId: 'dQw4w9WgXcQ', url: undefined }], version: 1 });
+    await new Promise(resolve => setImmediate(resolve));
+    for (const fn of [...app.timers.values()]) fn();
+    assert.equal(JSON.stringify(app.emitted.find(([name]) => name === 'advanceQueue')), JSON.stringify(['advanceQueue', { id: 'stuck', version: 1 }]));
 });
 test('missing channel produces guidance and does not open a socket', () => {
     const app = overlay('', ''); assert.equal(app.context.options, undefined);

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="neon">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,17 +7,34 @@
     <link rel="icon" href="/daibot.svg" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@500;600&family=Manrope:wght@400;500;600;700&family=VT323&display=swap" rel="stylesheet">
+    <!-- display=block: en el stream nunca se ve un fotograma con la letra de reserva. -->
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@500;600&family=Geist+Mono:wght@500;600&family=Orbitron:wght@600&display=block" rel="stylesheet">
     <script src="/sio.js"></script>
-    <link rel="stylesheet" href="/vsaturn.css?v=no-stereo">
+    <link rel="stylesheet" href="/vsaturn.css?v=neon">
     <link rel="stylesheet" href="/lights.css">
     <link rel="stylesheet" href="/meteors.css">
+    <script>
+        // ?preview=1 dibuja un fondo claro y oscuro de prueba; ?motion=reduced calma el overlay.
+        // Las piezas esperan a las fuentes (como mucho 3 s) antes de su primera entrada.
+        (function () {
+            var root = document.documentElement, query = new URLSearchParams(location.search);
+            if (query.has('preview')) root.classList.add('preview');
+            if (query.get('motion') === 'reduced') root.classList.add('motion-reduced');
+            if (!document.fonts || !document.fonts.load) return;
+            root.classList.add('fonts-loading');
+            var ready = function () { root.classList.remove('fonts-loading'); };
+            Promise.all(['600 24px "Orbitron"', '500 20px "Geist"', '600 20px "Geist"', '600 20px "Geist Mono"']
+                .map(function (font) { return document.fonts.load(font); })).then(ready, ready);
+            setTimeout(ready, 3000);
+        })();
+    </script>
 </head>
 <body>
 
     <main aria-label="Overlay del stream">
-    <!-- Barra superior: placa de consola (avatar en la tapa del lector) y mando con seis botones. -->
+    <!-- Barra superior: isla con el avatar, el nombre y los controles que se despliegan. -->
     <header id="hud" class="system-topbar dynamic-island" data-island="idle" aria-label="Barra de controles del stream">
+        <span class="fx-clip" aria-hidden="true"><span class="fx-sweep"></span><span class="fx-scan"></span></span>
         <div class="topbar-start">
             <span class="disc-lid">
                 <img class="brand-mark channel-avatar" id="channel-avatar"
@@ -27,12 +44,9 @@
             <span class="brand-copy">
                 <span id="stream-title-display" class="stream-title">seniordai</span>
                 <span class="brand-meta">
-                    <span class="brand-live" aria-hidden="true">En vivo</span>
-                    <span class="brand-jp" lang="ja" aria-hidden="true">配信中</span>
+                    <span class="brand-live label" aria-hidden="true">En vivo</span>
+                    <span class="topbar-clock"><time id="desktop-clock" class="desktop-clock">00:00</time></span>
                 </span>
-                <div class="topbar-clock">
-                    <time id="desktop-clock" class="desktop-clock">00:00</time>
-                </div>
             </span>
         </div>
         <div class="topbar-center">
@@ -67,7 +81,7 @@
     </header>
 
     <section id="volume-panel" class="topbar-panel" hidden aria-label="Volumen">
-        <div class="aero-window-title">Volumen <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>
+        <div class="aero-window-title">Volumen</div>
         <div class="topbar-panel-body">
             <label for="music-volume">Música <output id="volume-value" for="music-volume">85%</output></label>
             <input id="music-volume" type="range" min="0" max="100" value="85">
@@ -77,7 +91,7 @@
         </div>
     </section>
     <section id="queue-panel" class="topbar-panel" hidden aria-label="Cola de música">
-        <div class="aero-window-title">Cola de música <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>
+        <div class="aero-window-title">Cola de música</div>
         <ol id="queue-list" class="topbar-panel-body"><li>La cola está vacía.</li></ol>
     </section>
 
@@ -88,50 +102,50 @@
 
     <!-- Alertas de la comunidad -->
     <section id="alert-box" aria-label="Alerta del stream" aria-live="polite">
-        <span class="alert-disc" aria-hidden="true"><img class="alert-art channel-avatar-sync" src="/daibot.svg" alt=""></span>
+        <span class="fx-clip" aria-hidden="true"><span class="fx-sweep"></span></span>
+        <span class="alert-disc" aria-hidden="true"><span class="fx-ring"></span><span class="fx-ring"></span><span class="fx-sparks" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><img class="alert-art channel-avatar-sync" src="/daibot.svg" alt=""></span>
         <div class="alert-header"><span class="alert-spark" aria-hidden="true"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M208,144a15.78,15.78,0,0,1-10.42,14.94L146,178l-19,51.62a15.92,15.92,0,0,1-29.88,0L78,178l-51.62-19a15.92,15.92,0,0,1,0-29.88L78,110l19-51.62a15.92,15.92,0,0,1,29.88,0L146,110l51.62,19A15.78,15.78,0,0,1,208,144ZM152,48h16V64a8,8,0,0,0,16,0V48h16a8,8,0,0,0,0-16H184V16a8,8,0,0,0-16,0V32H152a8,8,0,0,0,0,16Zm88,32h-8V72a8,8,0,0,0-16,0v8h-8a8,8,0,0,0,0,16h8v8a8,8,0,0,0,16,0V96h8a8,8,0,0,0,0-16Z"/></svg></span> <span id="alert-title">Nueva alerta</span></div>
-        <span class="alert-jp" lang="ja" aria-hidden="true">＼ ディスクが、遊びになる。 ／</span>
         <div class="alert-body" id="alert-text"></div>
     </section>
 
-    <!-- Música y solicitudes: reproductor portátil. No se muestra ninguna videocámara. -->
+    <!-- Música y solicitudes. No se muestra ninguna videocámara. -->
     <section id="media-widget" aria-label="Música y solicitudes" data-shown="false" aria-hidden="true">
+        <span class="fx-clip" aria-hidden="true"><span class="fx-sweep"></span></span>
+        <span class="fx-breathe" aria-hidden="true"></span>
         <div class="deck-head">
             <span class="deck-led" aria-hidden="true"></span>
-            <span class="deck-brand">dai·play</span>
-            <span class="window-jp" lang="ja" aria-hidden="true">再生中</span>
+            <span class="deck-brand label">dai·play</span>
         </div>
         <div id="video-container">
             <div id="youtube-player"></div>
             <video id="direct-video" autoplay></video>
         </div>
         <div class="media-info deck-lcd">
-            <!-- Mascota pixelada original: salta mientras suena la música. -->
+            <!-- Mascota pixelada original: oculta en el tema neon. -->
             <span class="deck-pet" aria-hidden="true"><i></i></span>
-            <div class="media-label"><span class="equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i></span> <span class="np-text" role="text" aria-label="Ahora suena"><span aria-hidden="true"><i style="--i:0">A</i><i style="--i:1">h</i><i style="--i:2">o</i><i style="--i:3">r</i><i style="--i:4">a</i><i style="--i:5">&nbsp;</i><i style="--i:6">s</i><i style="--i:7">u</i><i style="--i:8">e</i><i style="--i:9">n</i><i style="--i:10">a</i></span></span></div>
+            <div class="media-label label"><span class="equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i></span> Ahora suena</div>
             <div id="video-title">---</div>
-            <!-- Quién pidió la canción, en la pantalla del reproductor. -->
             <div id="topbar-requester" class="deck-requester" hidden>
-                <span class="requester-label">pedido por</span>
+                <span class="requester-label label">Pedido por</span>
                 <span id="video-requester">---</span>
             </div>
             <span id="queue-indicator"></span>
         </div>
-        <!-- Controles de la música: botones redondos de goma del reproductor. -->
         <div class="deck-keys" role="group" aria-label="Reproducción musical">
-            <button id="music-prev" class="topbar-button face-button face-slate" type="button" disabled aria-label="Canción anterior" title="Canción anterior"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h2v14H4Zm16 0v14l-7-7Zm-7 0v14l-7-7Z"/></svg></button>
-            <button id="music-restart" class="topbar-button face-button face-slate" type="button" disabled aria-label="Reiniciar canción" title="Reiniciar canción"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7Z"/></svg></button>
-            <button id="music-pause" class="topbar-button face-button face-power" type="button" disabled aria-label="Pausar" title="Pausar"><svg viewBox="0 0 24 24" aria-hidden="true"><path id="music-pause-icon" d="M6 5h4v14H6Zm8 0h4v14h-4Z"/></svg></button>
-            <button id="music-stop" class="topbar-button face-button face-violet" type="button" disabled aria-label="Detener" title="Detener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6Z"/></svg></button>
-            <button id="music-next" class="topbar-button face-button face-ink" type="button" disabled aria-label="Siguiente canción" title="Siguiente canción"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 5h2v14h-2ZM5 5l11 7-11 7Z"/></svg></button>
+            <button id="music-prev" class="topbar-button face-button" type="button" disabled aria-label="Canción anterior" title="Canción anterior"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h2v14H4Zm16 0v14l-7-7Zm-7 0v14l-7-7Z"/></svg></button>
+            <button id="music-restart" class="topbar-button face-button" type="button" disabled aria-label="Reiniciar canción" title="Reiniciar canción"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7Z"/></svg></button>
+            <button id="music-pause" class="topbar-button face-button" type="button" disabled aria-label="Pausar" title="Pausar"><svg viewBox="0 0 24 24" aria-hidden="true"><path id="music-pause-icon" d="M6 5h4v14H6Zm8 0h4v14h-4Z"/></svg></button>
+            <button id="music-stop" class="topbar-button face-button" type="button" disabled aria-label="Detener" title="Detener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6Z"/></svg></button>
+            <button id="music-next" class="topbar-button face-button" type="button" disabled aria-label="Siguiente canción" title="Siguiente canción"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 5h2v14h-2ZM5 5l11 7-11 7Z"/></svg></button>
         </div>
     </section>
 
     <section id="bingo-widget" hidden aria-label="Bingo en vivo">
+        <span class="fx-clip" aria-hidden="true"><span class="fx-sweep"></span></span>
         <div class="aero-window-title"><span class="aero-app-orb" aria-hidden="true"><svg viewBox="0 0 256 256" aria-hidden="true"><path d="M216,56v60a4,4,0,0,1-4,4H136V44a4,4,0,0,1,4-4h60A16,16,0,0,1,216,56ZM116,40H56A16,16,0,0,0,40,56v60a4,4,0,0,0,4,4h76V44A4,4,0,0,0,116,40Zm96,96H136v76a4,4,0,0,0,4,4h60a16,16,0,0,0,16-16V140A4,4,0,0,0,212,136ZM40,140v60a16,16,0,0,0,16,16h60a4,4,0,0,0,4-4V136H44A4,4,0,0,0,40,140Z"/></svg></span> Bingo <span id="bingo-count" class="bingo-caption">0 / 75</span></div>
         <div class="bingo-content">
             <div class="bingo-draw">
-                <div class="bingo-drum" aria-hidden="true"><i></i><i></i><i></i><span id="bingo-ball">—</span></div>
+                <div class="bingo-drum" aria-hidden="true"><i></i><i></i><i></i><span id="bingo-ball">—</span><span class="fx-sparks bingo-burst" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
                 <div class="bingo-info" role="status">
                     <strong id="bingo-status">Esperando partida</strong>
                     <span id="bingo-participants">0 cartones</span>
@@ -150,18 +164,8 @@
         <div class="tip"><span class="tip-label">Envía un saludo</span><b>!s</b> / <b>!dalia</b> / <b>!jorge</b> / <b>!alex</b> + texto</div>
         <div class="tip"><span class="tip-label">Síguenos</span><b class="kick-channel-url">kick.com/seniordai</b></div>
     </div>
-
-    <!-- Esquina inferior derecha: eslogan, limitado a la franja inferior. -->
-    <div class="pad-corner pad-corner-right" aria-hidden="true">
-        <span class="pad-tagline" lang="ja">ディスクが、遊びになる。</span>
-    </div>
-    <!-- Detalles de catálogo en las esquinas, fuera del centro del juego. -->
-    <div class="catalog-deco" aria-hidden="true">
-        <!-- Estrella de precio del catálogo: "nuevo lanzamiento". -->
-        <span class="deco-burst" lang="ja">新発売</span>
-    </div>
     </main>
 
-    <script src="/app.js?v=twitch"></script>
+    <script src="/app.js?v=neon"></script>
 </body>
 </html>

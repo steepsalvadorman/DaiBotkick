@@ -26,7 +26,16 @@
     const token = new URLSearchParams(location.hash.slice(1)).get('token') || '';
     const status = document.createElement('div');
     status.id = 'connection-status'; status.setAttribute('role', 'status'); document.body.append(status);
-    const notify = text => { status.textContent = text; };
+    // Los avisos son para el streamer: se retiran a los 8 s para no quedarse en el stream.
+    // Solo el de configuración (sticky) permanece.
+    let statusTimer;
+    const notify = (text, sticky = false) => {
+        status.textContent = text;
+        clearTimeout(statusTimer);
+        if (text && !sticky) statusTimer = setTimeout(() => { status.textContent = ''; }, 8000);
+    };
+    // Los comandos (!play, !s...) no salen en el chat del overlay salvo con ?commands=1.
+    const showCommands = new URLSearchParams(location.search).get('commands') === '1';
     // Modo ligero por defecto: sin animaciones decorativas infinitas para no competir con el juego por la GPU.
     // Se desactiva con ?lite=0.
     const lite = new URLSearchParams(location.search).get('lite') !== '0';
@@ -62,7 +71,7 @@
     // ?demo=1: sin servidor ni canal. Un socket falso simula música, chat, alertas, bingo y luces
     // para diseñar el overlay en local.
     const demo = new URLSearchParams(location.search).has('demo');
-    if (!channel && !demo) { notify('Falta el canal. Copia la URL que aparece al conectar tu canal.'); return; }
+    if (!channel && !demo) { notify('Falta el canal. Copia la URL que aparece al conectar tu canal.', true); return; }
     const socket = demo ? demoSocket() : io({ query: twitchChannel ? { tw: channel } : { ch: channel }, auth: { token }, reconnectionDelayMax: 10000 });
     function demoSocket() {
         const handlers = {};
@@ -83,7 +92,7 @@
     let myEpoch = null, pongTimer = null;
     let player = null, retry, loadWatch, generation = 0, apiPromise;
     let musicShown = true, musicVolume = 85, ttsVolume = 100;
-    let mediaReady = false, paused = false, actuallyPlaying = false, canGoBack = false;
+    let mediaReady = false, paused = false, actuallyPlaying = false, canGoBack = false, trackCount = 0;
     // Posición del video actual, para retomarlo si OBS recarga la fuente.
     const resumeKey = `daibot:resume:${twitchChannel ? 'twitch:' : ''}${channel}`;
     let resumeAt = 0;
@@ -349,6 +358,8 @@
         title.textContent = `${item.title || 'Sin título'}   ◆   ${item.title || 'Sin título'}   ◆`;
         el('video-title').replaceChildren(title); el('video-title').classList.add('scrolling');
         el('video-requester').textContent = item.user || 'Anónimo'; display();
+        // Alterna 0/1 en cada canción para que el tema pueda relanzar sus efectos de cambio de pista.
+        media.setAttribute('data-track', String(++trackCount % 2));
         media.setAttribute('data-source', item.videoId ? 'youtube' : 'direct');
         if (item.videoId) {
             direct.style.display = 'none'; youtube.style.display = 'block';
@@ -561,10 +572,12 @@
         else target.append(document.createTextNode(content.slice(offset)));
     }
     socket.on('chatMessage', data => {
+        const content = typeof data?.content === 'string' ? data.content : '';
+        const plain = content || (Array.isArray(data?.parts) ? data.parts.map(part => String(part?.text ?? '')).join('') : '');
+        if (!showCommands && /^\s*!/.test(plain)) return;
         const item = document.createElement('div'); item.className = 'msg';
         const user = document.createElement('div'); user.className = 'msg-user'; user.textContent = data.user || '';
         const text = document.createElement('div'); text.className = 'msg-text';
-        const content = typeof data.content === 'string' ? data.content : '';
         // Un usuario baneado solo comenta texto: sin emotes ni estilo destacado.
         if (data.textOnly === true) { item.className = 'msg text-only'; text.textContent = content; }
         else if (Array.isArray(data.parts) && data.parts.length) renderChatParts(text, data.parts.slice(0, 200));
@@ -575,14 +588,26 @@
     let alertTimer;
     // El backend marca cada alerta con su tipo; el tema le da título y color propios.
     const alertTitles = { follow: 'Nuevo seguidor', sub: 'Nuevo suscriptor', giftsub: 'Suscripciones regaladas' };
-    const showAlert = data => {
+    // Cola: una alerta a la vez (6 s y una pausa breve), para que una ráfaga no se pise.
+    const alertQueue = []; let alertBusy = false;
+    function nextAlert() {
+        const data = alertQueue.shift();
+        if (!data) { alertBusy = false; return; }
+        alertBusy = true;
         const type = Object.hasOwn(alertTitles, data?.type) ? data.type : 'other';
         el('alert-box').setAttribute('data-type', type);
         if (el('alert-title')) el('alert-title').textContent = alertTitles[type] || 'Nueva alerta';
-        el('alert-text').textContent = data.message || data.text || '¡Nueva alerta!';
-        el('alert-box').classList.add('show'); clearTimeout(alertTimer);
-        alertTimer = setTimeout(() => el('alert-box').classList.remove('show'), 6000);
+        el('alert-text').textContent = data?.message || data?.text || '¡Nueva alerta!';
+        el('alert-box').classList.add('show');
+        alertTimer = setTimeout(() => {
+            el('alert-box').classList.remove('show');
+            alertTimer = setTimeout(nextAlert, 400);
+        }, 6000);
         if (type === 'follow' || type === 'sub') playJingle();
+    }
+    const showAlert = data => {
+        if (alertQueue.length < 20) alertQueue.push(data);
+        if (!alertBusy) nextAlert();
     };
     socket.on('kickAlert', showAlert); socket.on('alert', showAlert);
     // Sintonía de follow y suscripción. Suena solo en el reproductor activo (OBS) para no duplicar

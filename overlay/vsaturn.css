@@ -1739,5 +1739,174 @@ body.lite #video-title.scrolling:not(.deck-lcd #video-title) { text-overflow: el
     #video-title.scrolling { text-overflow: ellipsis; }
 }
 
+/* Old Times: superficies transparentes, rayas finas y divisiones de película. */
+:root {
+    --old-glass: rgba(13, 20, 38, 0.58);
+    --old-glass-hi: rgba(29, 38, 66, 0.46);
+    --old-line: rgba(204, 224, 238, 0.28);
+    --old-line-hi: rgba(221, 237, 247, 0.48);
+}
+
+#hud.system-topbar {
+    background:
+        linear-gradient(180deg, rgba(235, 246, 255, 0.10), transparent 46%),
+        repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 3px),
+        var(--old-glass);
+    background-size: 100% 100%, 100% 3px, 100% 100%;
+    border-bottom: 1px solid var(--old-line-hi);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.16),
+        inset 0 -1px 0 var(--old-line),
+        0 8px 24px rgba(7, 12, 28, 0.18);
+}
+
+.topbar-start {
+    padding-right: 16px;
+    border-right: 1px solid var(--old-line);
+}
+
+#hud.dynamic-island .island-slot {
+    border-left: 1px solid transparent;
+}
+
+#hud.dynamic-island .island-slot[data-slot="bingo"],
+#hud.dynamic-island .island-slot[data-slot="music"],
+#hud.dynamic-island .island-slot:not([data-slot="bingo"]) {
+    border-left-color: var(--old-line);
+}
+
+.topbar-panel,
+#connection-status,
+.topbar-panel-body,
+.aero-window-title {
+    border-color: var(--old-line);
+}
+
+.topbar-panel,
+#connection-status {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 42%),
+        var(--old-glass);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.16),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+        0 8px 24px rgba(7, 12, 28, 0.22);
+    backdrop-filter: none;
+}
+
+.topbar-panel .aero-window-title {
+    border-bottom: 1px solid var(--old-line-hi);
+    background: rgba(7, 12, 28, 0.28);
+}
+
+.topbar-panel-body label,
+#queue-list li {
+    border-bottom: 1px solid var(--old-line);
+}
+
+.topbar-panel-body label:last-of-type,
+#queue-list li:last-child {
+    border-bottom: 0;
+}
+
+.chat-body {
+    gap: 12px;
+    padding-top: 8px;
+}
+
+.msg {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 48%),
+        var(--old-glass);
+    border: 1px solid var(--old-line);
+    border-left: 3px solid rgba(127, 216, 255, 0.48);
+    box-shadow: 0 4px 14px rgba(7, 12, 28, 0.16);
+}
+
+.msg:nth-child(even) {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 48%),
+        rgba(43, 36, 74, 0.48);
+    border-left-color: rgba(220, 213, 244, 0.48);
+    margin-left: 12px;
+}
+
+.msg::before {
+    opacity: 0.38;
+}
+
+#media-widget {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.09), transparent 38%),
+        repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px),
+        var(--old-glass);
+    border: 1px solid var(--old-line);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.14),
+        inset 0 -1px 0 var(--old-line),
+        0 8px 24px rgba(7, 12, 28, 0.22);
+}
+
+.deck-head,
+.media-info.deck-lcd,
+.deck-keys {
+    border-bottom: 1px solid var(--old-line);
+}
+
+.deck-keys {
+    padding-top: 8px;
+    border-bottom: 0;
+    border-top: 1px solid var(--old-line);
+}
+
+#bingo-widget,
+#alert-box {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 38%),
+        repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px),
+        rgba(13, 20, 38, 0.66);
+    border: 1px solid var(--old-line-hi);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.14),
+        0 10px 30px rgba(7, 12, 28, 0.24);
+}
+
+#bingo-widget .aero-window-title,
+#alert-box .alert-header {
+    border-bottom: 1px solid var(--old-line-hi);
+}
+
+.bingo-draw,
+.bingo-board-row,
+#bingo-history,
+#bingo-winning-card {
+    border-bottom: 1px solid var(--old-line);
+}
+
+#bingo-winning-card {
+    border-bottom: 0;
+    border-top: 1px solid var(--old-line);
+}
+
+#tips .tip,
+.pad-tagline {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 48%),
+        var(--old-glass);
+    border: 1px solid var(--old-line);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        0 6px 18px rgba(7, 12, 28, 0.16);
+}
+
+#tips .tip-label {
+    border-right: 1px solid var(--old-line-hi);
+}
+
+.pad-corner-right {
+    border-left: 1px solid var(--old-line);
+    padding-left: 12px;
+}
+
 /* Usuario baneado con !ban: su mensaje queda apagado y en texto plano. */
 .msg.text-only { opacity: .62; filter: grayscale(1); }

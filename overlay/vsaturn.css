@@ -1791,7 +1791,6 @@ body.lite #video-title.scrolling:not(.deck-lcd #video-title) { text-overflow: el
         inset 0 1px 0 rgba(255, 255, 255, 0.16),
         inset 0 0 0 1px rgba(255, 255, 255, 0.04),
         0 8px 24px rgba(7, 12, 28, 0.22);
-    backdrop-filter: none;
 }
 
 .topbar-panel .aero-window-title {

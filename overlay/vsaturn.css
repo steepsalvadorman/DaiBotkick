@@ -1,480 +1,346 @@
-/* Lienzo transparente 1920x1080, renderizado al tamaño de salida por app.js.
-   Identidad "V-Saturn Aero": catálogo de consola japonesa de 1994 visto con el cristal brillante
-   de los 2000. Papel gris azulado, tinta marino, chasis pizarra, violeta del logo y azul del botón
-   de encendido. Brillo vítreo en la mitad superior de cada superficie y orbes como los seis botones
-   del mando. Sin backdrop-filter: en OBS solo desenfocaría el lienzo transparente, nunca el juego. */
-:root {
-    --paper: #e4eaf3;
-    --paper-hi: #f6f9fd;
-    --paper-glass: rgba(228, 234, 243, 0.84);
-    --lavender: #dcd5f4;
-    --lcd: #b4c9dc;
-    --lcd-ink: #1d2b45;
-    --slate: #6a7798;
-    --slate-deep: #46526f;
-    --slate-light: #c3cbdd;
-    --ink: #161d36;
-    --ink-muted: #4d577a;
-    --power: #2f6fe8;
-    --power-deep: #1e4fb8;
-    --violet: #8b6fe2;
-    --violet-deep: #5b45b5;
-    --aqua: #7fd8ff;
-    --led: #53fc18;
-    /* Naranja fosforescente: el LED de lectura del frontal; con --led forma el borde del video. */
-    --led-orange: #ff7a00;
-    /* Neón del avatar: cian y magenta, opuestos al naranja y verde del video para que no se confundan. */
-    --neon-cyan: #00e5ff;
-    --neon-magenta: #ff2bd6;
-    /* Pantalla del notch: la misma LCD a color del reproductor (rejilla, línea de barrido y
-       fondo noche). La línea de barrido usa px para recorrer el alto del notch. */
-    --notch-lcd:
-        repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px),
-        repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.14) 0 1px, transparent 1px 3px),
-        linear-gradient(180deg, rgba(143, 244, 255, 0) 0 44%, rgba(143, 244, 255, 0.12) 50%, rgba(143, 244, 255, 0) 56%),
-        linear-gradient(180deg, #2c1663 0%, #1a1046 55%, #0f2f5c 100%);
-    --notch-lcd-size: auto, auto, 100% 384px, 100% var(--rail-h);
-    /* La misma pantalla, quieta, para las demás piezas (alertas, reproductor, consejos...). */
-    --lcd-panel:
-        repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px),
-        repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.14) 0 1px, transparent 1px 3px),
-        linear-gradient(180deg, #2c1663 0%, #1a1046 55%, #0f2f5c 100%);
-    --lcd-glow: 0 0 0 2px var(--slate-deep), 0 8px 28px rgba(0, 229, 255, 0.2), 0 4px 18px rgba(255, 43, 214, 0.16), var(--lift);
-    --white: #ffffff;
-    --safe: 24px;
-    /* Zonas del lienzo OBS 1920×1080. El centro del juego queda libre salvo cuando el bingo está activo. */
-    --rail-top: 0px;
-    --rail-h: 128px;
-    --avatar: 96px;
+/* Overlay V-Saturn con el preset «neon» de la skill landing-page-design, acento de la mascota DaiBot.
+   Lienzo transparente de 1920×1080; app.js lo escala al tamaño de salida.
+   Toda la piel lee los tokens de abajo: para cambiar de look se reescribe solo ese bloque.
+   Reglas de emisión: placas casi opacas detrás de todo texto, trazos de 2 px, brillos de 8 px como
+   máximo, nada por debajo de 18 px, solo transform y opacity en movimiento, zona segura de 96/48 px.
+   Sin backdrop-filter: en OBS solo desenfocaría el lienzo transparente, nunca el juego. */
+
+/* ── Contrato de tokens (D2), con los valores del tema neon ── */
+:root, [data-theme="neon"] {
+    /* Tipo */
+    --font-display: 'Orbitron', 'Geist', system-ui, sans-serif;   /* solo a 24 px o más */
+    --font-text: 'Geist', system-ui, sans-serif;                   /* chat, consejos, etiquetas */
+    --font-mono: 'Geist Mono', ui-monospace, monospace;            /* reloj y números */
+    --font-emoji: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji';
+    --display-weight: 600;
+    --label-case: uppercase;
+    --label-tracking: 0.08em;
+
+    /* Color: texto 17,2:1 y apagado 7,7:1 sobre la placa; #120E24 sobre cian 12,5:1 y sobre magenta 6,6:1 */
+    --surface-plate: rgb(18 14 36 / 0.94);
+    --surface-plate-solid: #120E24;
+    --surface-raised: #1D1738;
+    --surface-scene: #07060F;
+    --text: #F5F3FF;
+    --text-muted: #A89FD0;
+    --accent: #36E6FF;          /* cian de DaiBot: trazos y estado activo */
+    --accent-2: #FF4FD8;        /* magenta: realces (nombres, sub, última bola) */
+    --on-accent: #120E24;
+    --stroke: var(--accent);
+    --stroke-soft: #3A3166;     /* placas secundarias y divisores */
+
+    /* Forma */
+    --stroke-width: 2px;
+    --radius-plate: 8px;
+    --radius-inner: 4px;        /* 8 − 16 de relleno no llega a 2: los hijos usan un radio propio */
+    --radius-outer: 12px;       /* anillos que rodean una pieza de 8 px a 6 px de distancia */
+    --plate-padding: 16px;
+    --glow: 0 0 8px rgb(54 230 255 / 0.55);
+    --glow-2: 0 0 8px rgb(255 79 216 / 0.55);
+    --shadow-plate: 0 4px 0 rgb(7 6 15 / 0.6);
+    --focus-ring: var(--accent-2);
+
+    /* Movimiento */
+    --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-exit: cubic-bezier(0.64, 0, 0.78, 0);
+    --dur-enter: 400ms;
+    --dur-exit: 250ms;
+    --dur-flicker: 150ms;
+    --enter-y: 16px;
+
+    /* Zonas del lienzo */
+    --safe-x: 96px;
+    --safe-y: 48px;
+    --rail-h: 112px;
+    --below-rail: calc(var(--safe-y) + var(--rail-h) + 16px);
     --yt-w: 384px;
-    --yt-slot: 416px;
     --chat-w: 440px;
-    --chat-bottom: 80px;
-    --chat-max: 280px;
-    --bingo-w: 1200px;
-    --font: 'Manrope', 'Segoe UI', system-ui, sans-serif;
-    --mono: 'Geist Mono', ui-monospace, 'Cascadia Mono', monospace;
-    /* Mascota virtual de los 90: LCD de matriz de puntos verde oliva y tinta casi negra. */
-    --pixel: 'VT323', 'Geist Mono', ui-monospace, monospace;
-    --pet-lcd: #a8b58c;
-    --pet-lcd-hi: #bfcaa2;
-    --pet-ink: #26301c;
-    --jp: 'Yu Gothic UI', 'Yu Gothic', 'Meiryo', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
-    --emoji: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
-    --mass: cubic-bezier(0.32, 0.72, 0, 1);
-    --spring: cubic-bezier(0.22, 1, 0.36, 1);
-    --swing: cubic-bezier(0.65, 0, 0.35, 1);
-    /* Reflejo Aero: mitad superior iluminada con corte nítido en el ecuador. */
-    --sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0.2) 49%, rgba(255, 255, 255, 0) 50%);
-    --orb-light: radial-gradient(110% 80% at 50% 0%, rgba(255, 255, 255, 0.8) 0 26%, rgba(255, 255, 255, 0) 54%),
-                 radial-gradient(90% 60% at 50% 110%, rgba(127, 216, 255, 0.6), rgba(127, 216, 255, 0) 70%);
-    /* Grano de papel del catálogo; se rasteriza una sola vez. */
-    --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .09 0 0 0 0 .11 0 0 0 0 .21 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    --glass-edge: 0 0 0 1px rgba(22, 29, 54, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -2px 0 rgba(70, 82, 111, 0.16);
-    --lift: 0 8px 24px rgba(22, 29, 54, 0.3), 0 2px 4px rgba(22, 29, 54, 0.2);
+    --chat-max: 400px;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--slate) var(--paper); }
-::selection { background: var(--violet); color: var(--white); }
+* { margin: 0; padding: 0; box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--stroke-soft) transparent; }
+::selection { background: var(--accent-2); color: var(--on-accent); }
 html, body { overflow: hidden; background: transparent; }
 body {
     position: relative;
     width: 1920px;
     height: 1080px;
     transform-origin: top left;
-    font-family: var(--font);
+    font-family: var(--font-text);
     font-variant-numeric: tabular-nums;
-    color: var(--ink);
+    color: var(--text);
     user-select: none;
     -webkit-font-smoothing: antialiased;
 }
 button { font: inherit; cursor: pointer; }
-button:disabled { cursor: default; opacity: .45; }
+button:disabled { cursor: default; opacity: .4; }
 [hidden] { display: none !important; }
 button:focus-visible, input:focus-visible {
-    outline: 3px solid var(--aqua);
+    outline: 3px solid var(--focus-ring);
     outline-offset: 4px;
 }
 
-/* Cristal real para OBS: el juego se ve a través del papel. El bingo y el reproductor
-   siguen opacos. backdrop-filter no se usa: en una fuente de navegador desenfoca este
-   lienzo transparente, no el juego, y gasta GPU. */
-.topbar-panel, .msg, #media-widget, #bingo-widget, #alert-box, .tip, #connection-status, .pad-tagline {
-    background: var(--sheen), var(--grain), var(--paper-glass);
-    box-shadow: var(--glass-edge), var(--lift);
+/* Fondo de prueba (?preview=1): mitad clara y mitad oscura para revisar la legibilidad. Nunca en OBS. */
+html.preview body {
+    background:
+        repeating-linear-gradient(135deg, rgb(255 255 255 / 0.45) 0 24px, transparent 24px 96px),
+        linear-gradient(90deg, #E9E4D4 0 50%, #16241B 50% 100%);
 }
-/* En ventanas altas el corte del ecuador cruzaría el contenido: el reflejo se desvanece arriba
-   y el papel es opaco para que el chat no se transparente detrás del bingo. */
-.topbar-panel, #bingo-widget {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0, rgba(255, 255, 255, 0) 120px), var(--grain), var(--paper);
+/* No se pinta nada hasta que cargan las fuentes: ningún fotograma con la letra de reserva. */
+html.fonts-loading main { visibility: hidden; }
+html.fonts-loading main * { animation-play-state: paused !important; }
+
+/* ── Placas ── */
+#hud.system-topbar, .topbar-panel, .msg, #media-widget, #bingo-widget, #alert-box, .tip, #connection-status {
+    background: var(--surface-plate);
+    border-radius: var(--radius-plate);
+    box-shadow: 0 0 0 var(--stroke-width) var(--stroke), var(--glow), var(--shadow-plate);
+}
+/* Placas secundarias, que están siempre en pantalla: trazo suave y sin brillo. */
+.msg, .tip {
+    box-shadow: 0 0 0 var(--stroke-width) var(--stroke-soft), var(--shadow-plate);
+}
+.label {
+    font-size: 18px;
+    line-height: 28px;
+    font-weight: 600;
+    text-transform: var(--label-case);
+    letter-spacing: var(--label-tracking);
 }
 
-/* Una sola consola: la tapa del CD abre la barra y el mando sigue dentro del mismo cristal. */
+/* ── Barra superior: isla dinámica centrada ── */
 #hud.system-topbar {
     position: absolute;
-    top: var(--rail-top);
+    top: var(--safe-y);
     left: 50%;
-    right: auto;
     width: max-content;
-    max-width: calc(100% - 48px);
-    margin-inline: 0;
-    translate: -50% 0;
+    max-width: calc(100% - 2 * var(--safe-x));
     height: var(--rail-h);
     display: flex;
     align-items: center;
     gap: 16px;
     padding: 16px 24px 16px 16px;
-    /* Notch: sale del borde superior, recto arriba y redondeado abajo. */
-    border-radius: 0 0 56px 56px;
-    background: var(--notch-lcd);
-    background-size: var(--notch-lcd-size);
-    /* Bloque recto arriba y redondeado abajo, con bisel pizarra y resplandor cian y magenta. */
-    box-shadow:
-        inset 0 -3px 0 rgba(0, 229, 255, 0.35),
-        0 0 0 2px var(--slate-deep),
-        0 8px 28px rgba(0, 229, 255, 0.22),
-        0 4px 18px rgba(255, 43, 214, 0.18),
-        var(--lift);
-    color: var(--white);
     z-index: 50;
-    animation: notch-drop 900ms var(--mass) both, notch-scan 4000ms linear infinite;
-    transition: translate 600ms var(--mass);
+    transform: translateX(-50%);
+    transition: transform var(--dur-enter) var(--ease-enter);
+    animation: notch-in var(--dur-enter) var(--ease-enter) backwards, flicker var(--dur-flicker) steps(1, end) backwards;
 }
-/* Recogido tras unos segundos sin interacción: solo asoma el borde inferior del notch.
-   Se usa translate (no transform) para no chocar con la animación de entrada. */
+/* Recogida tras unos segundos sin cambios: solo asoma un borde de 12 px arriba. */
 #hud.system-topbar.tucked {
-    translate: -50% calc(-100% + 12px);
-    transition: translate 700ms var(--spring);
+    transform: translate(-50%, calc(-100% - var(--safe-y) + 12px));
+    transition: transform var(--dur-enter) var(--ease-exit);
 }
 .topbar-start {
-    --avatar-size: var(--avatar);
-    position: relative;
     display: flex;
     align-items: center;
     flex: 0 0 auto;
-    gap: 14px;
+    gap: 16px;
     height: 100%;
-    padding: 0 4px 0 0;
-    border-radius: 0;
-    background: transparent;
-    color: var(--ink);
-    box-shadow: none;
-    animation: none;
 }
-#hud .stream-title {
-    max-width: 220px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--ink);
-    font-size: 20px;
-    line-height: 24px;
-    font-weight: 700;
-    letter-spacing: 0.01em;
-    text-shadow: none;
-}
+#hud.dynamic-island .topbar-start { cursor: pointer; }
 .disc-lid {
-    position: relative;
-    z-index: 1;
-    align-self: center;
     flex: 0 0 auto;
     display: grid;
     place-items: center;
-    width: var(--avatar-size);
-    height: var(--avatar-size);
-    padding: 6px;
-    border-radius: 9999px;
-    /* Protagonista: anillo de neón cian y magenta (distinto del naranja y verde del video) que
-       gira sin parar, con reflejo vítreo arriba y un halo que late como un foco. Es pequeño, así
-       que se anima también en modo ligero. */
-    background:
-        radial-gradient(120% 70% at 50% 0%, rgba(255, 255, 255, 0.7) 0 18%, rgba(255, 255, 255, 0) 44%),
-        conic-gradient(from var(--edge-angle), var(--neon-cyan), #8ff4ff, #ffffff, #ff8ae9, var(--neon-magenta), #ff8ae9, #ffffff, #8ff4ff, var(--neon-cyan));
-    animation: edge-spin 4000ms linear infinite, hero-glow 2400ms var(--swing) infinite;
-}
-/* Brillo que recorre el aro, como el reflejo de un trofeo. */
-.disc-lid::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: conic-gradient(from 0deg, transparent 0 64%, rgba(255, 252, 236, 0.98) 78%, transparent 90%);
-    animation: disc-spin 4200ms linear infinite;
-    -webkit-mask: radial-gradient(circle, transparent 60%, #000 70%);
-    mask: radial-gradient(circle, transparent 60%, #000 70%);
-    pointer-events: none;
+    width: 80px;
+    height: 80px;
+    padding: 4px;
+    border-radius: var(--radius-plate);
+    background: var(--surface-raised);
+    /* Trazo suave: el neón lo ponen las esquinas del escáner, a 6 px. */
+    box-shadow: 0 0 0 var(--stroke-width) var(--stroke-soft);
 }
 .channel-avatar {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    border-radius: 9999px;
-    background: var(--ink);
-    box-shadow: 0 0 0 2px var(--white), 0 0 0 4px rgba(22, 29, 54, 0.4);
+    border-radius: var(--radius-inner);
+    background: var(--surface-plate-solid);
 }
-.disc-lid .channel-avatar {
-    position: relative;
-    z-index: 1;
-    box-shadow: 0 0 0 2px var(--white), 0 0 0 4px var(--ink), 0 0 12px 4px rgba(0, 0, 0, 0.35);
+.brand-copy { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-width: 0; }
+#hud .stream-title {
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+    font-family: var(--font-display);
+    font-size: 24px;
+    line-height: 32px;
+    font-weight: var(--display-weight);
 }
-.brand-copy { display: flex; flex-direction: column; gap: 6px; min-width: 0; justify-content: center; }
-.brand-meta { display: flex; align-items: center; gap: 8px; }
+.brand-meta { display: flex; align-items: center; gap: 12px; }
 .brand-live {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 2px 12px 2px 8px;
-    border-radius: 9999px;
-    /* Pantallita LCD del frontal: hundida en el chasis, tinta marino y el LED verde encima. */
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0) 50%), var(--lcd);
-    color: var(--lcd-ink);
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.32), inset 0 1px 2px rgba(22, 29, 54, 0.28), 0 1px 0 rgba(255, 255, 255, 0.9);
-    font-size: 12px;
-    line-height: 16px;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: lowercase;
+    color: var(--accent);
 }
-/* LED de acceso: orbe verde con reflejo. */
 .brand-live::before {
     content: "";
     width: 8px;
     height: 8px;
     border-radius: 9999px;
-    background: radial-gradient(circle at 50% 30%, var(--white) 0 18%, var(--led) 46%, #1f8f00 100%);
-    box-shadow: 0 0 8px var(--led);
-    animation: led-pulse 1800ms var(--swing) infinite;
+    background: var(--accent);
+    box-shadow: var(--glow);
+    animation: led-breathe 4000ms var(--ease-enter) infinite;
 }
-.brand-jp { font-family: var(--jp); font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.16em; color: var(--slate); }
-/* Reloj LCD dentro de la placa, bajo el nombre. */
-.topbar-clock {
-    align-self: flex-start;
-    padding: 2px 10px;
-    border-radius: 8px;
-    background: var(--sheen), var(--lcd);
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.5), inset 0 2px 4px rgba(22, 29, 54, 0.3);
-    white-space: nowrap;
-}
+.topbar-clock { white-space: nowrap; }
 .desktop-clock {
-    font-family: var(--mono);
-    font-size: 16px;
-    line-height: 20px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 18px;
+    line-height: 28px;
     font-weight: 600;
-    letter-spacing: 0.08em;
-    color: var(--lcd-ink);
 }
 
-/* El mando ya no es una segunda pastilla: vive dentro de la consola. */
-.topbar-center {
-    display: flex;
-    align-items: center;
-    flex: 0 1 auto;
-    gap: 12px;
-    height: auto;
-    min-width: 0;
-    padding: 0;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-    animation: none;
-}
-/* Dynamic Island: la pastilla solo muestra lo que está pasando. El resto queda plegado. */
-#hud.dynamic-island .topbar-center { gap: 0; }
-#hud.dynamic-island .topbar-start { cursor: pointer; }
+.topbar-center { display: flex; align-items: center; gap: 0; min-width: 0; }
+/* Isla: solo se despliega lo que está pasando (bingo o música); al pasar el ratón, todo. */
 #hud.dynamic-island .island-slot {
     display: flex;
     flex-shrink: 0;
     max-width: 0;
-    margin-left: 0;
     opacity: 0;
     overflow: hidden;
     pointer-events: none;
-    /* Primero se apagan, quietos. Después se pliega la pastilla. */
-    transition: opacity 140ms var(--mass), max-width 480ms var(--spring) 140ms, margin-left 480ms var(--spring) 140ms;
+    transition: opacity var(--dur-exit) var(--ease-exit), max-width var(--dur-enter) var(--ease-enter) var(--dur-exit);
 }
 #hud.dynamic-island .island-clip {
     display: flex;
     align-items: center;
     gap: 12px;
     min-width: max-content;
-    padding: 14px 10px;
+    padding: 12px 4px 12px 16px;
 }
 #hud.dynamic-island[data-island="bingo"] .island-slot[data-slot="bingo"],
 #hud.dynamic-island[data-island="music"] .island-slot[data-slot="music"],
 #hud.dynamic-island[data-island="open"] .island-slot {
     max-width: 1100px;
-    margin-left: 12px;
     opacity: 1;
     pointer-events: auto;
-    /* La pastilla crece vacía y los botones aparecen ya en su sitio, sin deslizarse. */
-    transition: max-width 480ms var(--spring), margin-left 480ms var(--spring), opacity 160ms var(--mass) 420ms;
+    transition: max-width var(--dur-enter) var(--ease-enter), opacity var(--dur-enter) var(--ease-enter) var(--dur-exit);
 }
-.topbar-spacer { display: none; }
+/* Divisor entre grupos: una regla de 2 px dentro de la placa. */
+.pad-rule { flex: 0 0 auto; width: 2px; height: 32px; background: var(--stroke-soft); }
 .aero-control-cluster { display: flex; align-items: center; flex: 0 0 auto; gap: 8px; }
+#music-transport, .transport-row { display: flex; align-items: center; gap: 8px; }
 
-/* Botones de cara: orbes brillantes del mando de seis botones. */
-.topbar-button {
-    position: relative;
-    display: grid;
-    place-items: center;
-    border: 0;
-    border-radius: 9999px;
-    color: var(--white);
-    transition: transform 500ms var(--mass), box-shadow 500ms var(--mass), filter 500ms var(--mass), opacity 500ms var(--mass);
-}
-.face-button {
-    width: 56px;
-    height: 56px;
-    flex-shrink: 0;
-    box-shadow: 0 0 0 2px rgba(22, 29, 54, 0.55), inset 0 2px 0 rgba(255, 255, 255, 0.5), inset 0 -6px 8px rgba(22, 29, 54, 0.38), 0 5px 0 rgba(22, 29, 54, 0.22);
-}
-.face-button svg { width: 22px; height: 22px; fill: currentColor; filter: drop-shadow(0 1px 1px rgba(22, 29, 54, 0.5)); }
-.face-slate { background: var(--orb-light), var(--slate); }
-.face-power { background: var(--orb-light), var(--power); }
-.face-violet { background: var(--orb-light), var(--violet); }
-.face-ink { background: var(--orb-light), var(--slate-deep); }
-/* Interruptores del overlay: botones pequeños en gris claro, como Start. */
-.aero-icon-button {
-    width: 56px;
-    height: 56px;
-    flex-shrink: 0;
-    background: var(--orb-light), var(--slate-light);
-    color: var(--ink);
-    box-shadow: 0 0 0 2px rgba(22, 29, 54, 0.45), inset 0 2px 0 rgba(255, 255, 255, 0.65), inset 0 -6px 8px rgba(22, 29, 54, 0.22), 0 5px 0 rgba(22, 29, 54, 0.16);
-}
-.aero-icon-button svg { width: 26px; height: 26px; fill: currentColor; }
-.topbar-button:hover:not(:disabled) { transform: translateY(-2px) scale(1.06); filter: brightness(1.08); }
-.topbar-button:active:not(:disabled) { transform: translateY(1px) scale(0.98); box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.5), inset 0 3px 6px rgba(22, 29, 54, 0.4); }
-.topbar-button[aria-expanded="true"] { background: var(--orb-light), var(--power); color: var(--white); }
-.topbar-button[aria-pressed="false"] { opacity: .55; filter: saturate(.4); }
-
-.music-anchor {
-    display: flex;
+/* Teclas de la barra: apagadas con trazo suave, encendidas con trazo y brillo cian. */
+.topbar-button, .music-anchor {
+    display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
-    height: 56px;
     flex-shrink: 0;
-    padding: 8px 18px;
+    height: 56px;
     border: 0;
-    border-radius: 9999px;
-    background: var(--orb-light), var(--slate-light);
-    color: var(--ink);
-    box-shadow: 0 0 0 2px rgba(22, 29, 54, 0.45), inset 0 2px 0 rgba(255, 255, 255, 0.65), inset 0 -6px 8px rgba(22, 29, 54, 0.22), 0 5px 0 rgba(22, 29, 54, 0.16);
-    font-size: 16px;
-    line-height: 20px;
+    border-radius: var(--radius-inner);
+    background: var(--surface-raised);
+    color: var(--text-muted);
+    box-shadow: 0 0 0 var(--stroke-width) var(--stroke-soft);
+    transition: transform 300ms var(--ease-enter), opacity 300ms var(--ease-enter);
+}
+.aero-icon-button { width: 56px; }
+.aero-icon-button svg, .aero-app-orb svg { width: 24px; height: 24px; fill: currentColor; }
+.aero-app-orb { display: inline-grid; place-items: center; width: 24px; height: 24px; }
+.music-anchor {
+    padding: 8px 16px 8px 12px;
+    font-size: 18px;
+    line-height: 28px;
     font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: lowercase;
-    transition: transform 500ms var(--mass), box-shadow 500ms var(--mass), opacity 500ms var(--mass), filter 500ms var(--mass);
+    text-transform: var(--label-case);
+    letter-spacing: var(--label-tracking);
 }
-.music-anchor:hover { transform: translateY(-2px); filter: brightness(1.06); }
-.music-anchor:active { transform: translateY(1px) scale(0.98); }
-.music-anchor[data-playing="true"] { background: var(--orb-light), var(--violet); color: var(--white); }
-.music-anchor[aria-pressed="false"] { opacity: .55; filter: saturate(.4); }
-.aero-app-orb { display: inline-grid; place-items: center; width: 22px; height: 22px; }
-.aero-app-orb svg { width: 22px; height: 22px; fill: currentColor; }
-
-.pad-rule {
-    flex: 0 0 auto;
-    width: 1px;
-    height: 28px;
-    background: rgba(22, 29, 54, 0.18);
+.topbar-button[aria-pressed="true"], .topbar-button[aria-expanded="true"], .music-anchor[aria-pressed="true"] {
+    color: var(--accent);
+    box-shadow: 0 0 0 var(--stroke-width) var(--accent), var(--glow);
 }
-/* «Pedido por» vive en la fila del mando, entre la pantalla y los botones de cara. */
-#music-transport { display: flex; align-items: center; }
-.transport-row { display: flex; align-items: center; gap: 8px; }
+.music-anchor[data-playing="true"] {
+    color: var(--accent-2);
+    box-shadow: 0 0 0 var(--stroke-width) var(--accent-2), var(--glow-2);
+}
+.topbar-button:hover:not(:disabled), .music-anchor:hover { transform: translateY(-2px); }
+.topbar-button:active:not(:disabled), .music-anchor:active { transform: translateY(1px) scale(0.98); }
 
-/* CD iridiscente: gira a velocidad constante, como un disco real, solo cuando suena música. */
+/* CD: gira despacio (una vuelta cada 4 s) solo mientras suena y fuera del modo ligero. */
 .vinyl-record {
     position: relative;
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     border-radius: 9999px;
-    background: conic-gradient(from 0deg, #f3f6fb, #b9e6ff, #e6d8ff, #fff3c9, #c8ffe0, #f3f6fb, #c9d3ff, #f3f6fb);
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.45), inset 0 0 0 4px rgba(255, 255, 255, 0.5);
-    animation: disc-spin 2400ms linear infinite paused;
+    background: var(--surface-raised);
+    box-shadow: inset 0 0 0 var(--stroke-width) var(--accent);
+    animation: disc-spin 4000ms linear infinite paused;
+}
+.vinyl-record::before {
+    content: "";
+    position: absolute;
+    top: 6px;
+    left: 18px;
+    width: 4px;
+    height: 8px;
+    border-radius: 2px;
+    background: var(--accent);
 }
 .vinyl-record::after {
     content: "";
     position: absolute;
-    inset: 16px;
+    inset: 14px;
     border-radius: 9999px;
-    background: var(--paper);
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.45);
+    background: var(--accent-2);
 }
+.music-transport[data-state="playing"] .vinyl-record { animation-play-state: running; }
+/* Barras de nivel quietas: indican que suena, sin un bucle rápido junto al juego. */
 .music-bars, .equalizer { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; }
-.music-bars i, .equalizer i {
-    width: 4px;
-    height: 16px;
-    border-radius: 2px;
-    background: linear-gradient(180deg, var(--violet), var(--power));
-    transform-origin: bottom;
-    animation: music-bars 640ms var(--swing) infinite alternate paused;
-}
-.music-bars i:nth-child(2), .equalizer i:nth-child(2) { height: 8px; animation-delay: -300ms; }
-.music-bars i:nth-child(3), .equalizer i:nth-child(3) { height: 16px; animation-delay: -500ms; }
-.music-bars i:nth-child(4), .equalizer i:nth-child(4) { height: 12px; animation-delay: -100ms; }
-.music-transport[data-state="playing"] .vinyl-record,
-.music-transport[data-state="playing"] .music-bars i,
-#media-widget[data-state="playing"] .equalizer i { animation-play-state: running; }
-.music-transport[data-state="idle"] .music-bars { opacity: .4; }
+.music-bars i, .equalizer i { width: 4px; height: 16px; border-radius: 2px; background: var(--accent-2); }
+.music-bars i:nth-child(2), .equalizer i:nth-child(2) { height: 8px; }
+.music-bars i:nth-child(4), .equalizer i:nth-child(4) { height: 12px; }
+.music-transport[data-state="idle"] .music-bars, #media-widget[data-state="idle"] .equalizer { opacity: .4; }
 
-/* Ventanas Aero: barra de título azul brillante con los tres puntos de la consola. */
+/* ── Paneles de cola y volumen (se abren con Interactuar en OBS) ── */
+.topbar-panel {
+    position: absolute;
+    top: var(--below-rail);
+    right: calc(var(--safe-x) + var(--yt-w) + 16px);
+    width: 400px;
+    max-height: 440px;
+    overflow: auto;
+    z-index: 75;
+    animation: plate-in var(--dur-enter) var(--ease-enter) both;
+}
 .aero-window-title {
     display: flex;
     align-items: center;
     gap: 8px;
-    min-height: 40px;
-    padding: 8px 16px;
-    background: var(--sheen), linear-gradient(180deg, #5a8ff2 0%, var(--power-deep) 100%);
-    color: var(--white);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -1px 0 rgba(22, 29, 54, 0.35);
-    text-shadow: 0 1px 2px rgba(22, 29, 54, 0.45);
-    font-size: 14px;
-    line-height: 20px;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: lowercase;
+    padding: 12px 16px;
+    color: var(--accent);
+    box-shadow: inset 0 calc(-1 * var(--stroke-width)) 0 var(--stroke-soft);
+    font-size: 18px;
+    line-height: 28px;
+    font-weight: 600;
+    text-transform: var(--label-case);
+    letter-spacing: var(--label-tracking);
 }
-.window-jp { font-family: var(--jp); font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0.2em; color: rgba(255, 255, 255, 0.75); }
-.window-dots { display: inline-flex; gap: 4px; margin-left: auto; }
-.window-dots i {
-    width: 8px;
-    height: 8px;
-    border-radius: 9999px;
-    background: radial-gradient(circle at 50% 30%, var(--white) 0 20%, var(--slate-light) 60%, var(--slate) 100%);
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.35);
-}
+.topbar-panel-body { padding: 16px; font-size: 20px; line-height: 28px; font-weight: 500; }
+.topbar-panel-body label { display: flex; justify-content: space-between; gap: 12px; font-weight: 600; }
+.topbar-panel-body output { color: var(--accent); font-family: var(--font-mono); font-weight: 600; }
+.topbar-panel-body small { display: block; color: var(--text-muted); font-size: 18px; line-height: 28px; }
+#music-volume, #tts-volume { width: 100%; margin: 12px 0 16px; accent-color: var(--accent); cursor: pointer; }
+#queue-list { padding-left: 48px; overflow-wrap: anywhere; }
+#queue-list li { padding: 8px 0; box-shadow: inset 0 calc(-1 * var(--stroke-width)) 0 var(--stroke-soft); }
+#queue-list li:last-child { box-shadow: none; }
+#queue-list li::marker { color: var(--accent); font-family: var(--font-mono); }
 
-.topbar-panel {
-    position: absolute;
-    top: calc(var(--rail-top) + var(--rail-h) + 8px);
-    right: calc(var(--safe) + var(--yt-slot));
-    width: 380px;
-    max-height: 420px;
-    overflow: auto;
-    z-index: 75;
-    border-radius: 16px;
-    animation: rise 700ms var(--mass) both;
-}
-.topbar-panel-body { padding: 16px 24px; font-size: 16px; line-height: 24px; }
-.topbar-panel-body label { display: flex; justify-content: space-between; gap: 12px; font-weight: 700; }
-.topbar-panel-body output { font-family: var(--mono); font-weight: 600; color: var(--power-deep); }
-.topbar-panel-body small { color: var(--ink-muted); font-size: 14px; line-height: 20px; font-weight: 500; }
-#music-volume, #tts-volume { width: 100%; margin: 16px 0; accent-color: var(--power); cursor: pointer; }
-#queue-list { padding-left: 40px; overflow-wrap: anywhere; }
-#queue-list li { padding: 8px 0; font-weight: 600; }
-#queue-list li::marker { font-family: var(--mono); color: var(--violet-deep); font-weight: 600; }
-
-/* Chat: burbujas de cristal alternas en papel y lavanda, con etiqueta de usuario en píldora. */
+/* ── Chat: abajo a la izquierda, hasta cuatro mensajes de dos líneas ── */
 #chat-widget {
     position: absolute;
-    left: var(--safe);
-    bottom: var(--chat-bottom);
+    left: var(--safe-x);
+    bottom: var(--safe-y);
     width: var(--chat-w);
     max-height: var(--chat-max);
     display: flex;
     flex-direction: column;
+    justify-content: flex-end;
     z-index: 20;
 }
 body.no-chat #chat-widget { display: none; }
@@ -482,673 +348,295 @@ body.no-chat #chat-widget { display: none; }
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
-    gap: 24px;
-    max-height: calc(var(--chat-max) - 48px);
+    gap: 12px;
+    max-height: var(--chat-max);
+    padding: 4px;
     overflow: hidden;
-    padding: 16px 8px 8px 16px;
 }
+/* Nombre y mensaje en el mismo renglón; dos líneas como máximo. */
 .msg {
-    position: relative;
     flex-shrink: 0;
-    padding: 16px 16px 12px;
-    border-radius: 16px;
-    animation: msg-in 800ms var(--mass) both, msg-out 800ms var(--mass) 25s forwards;
-}
-/* Cola de la burbuja: rombo del mismo cristal asomando por la izquierda. */
-.msg::before {
-    content: "";
-    position: absolute;
-    left: -6px;
-    top: 24px;
-    width: 12px;
-    height: 12px;
-    border-radius: 2px;
-    background: inherit;
-    box-shadow: -1px 1px 0 rgba(22, 29, 54, 0.32);
-    transform: rotate(45deg);
-}
-.msg:nth-child(even) { background: var(--sheen), var(--grain), var(--lavender); margin-left: 16px; }
-.msg-user {
-    position: absolute;
-    top: -12px;
-    left: 16px;
-    max-width: calc(100% - 32px);
-    padding: 2px 12px;
-    border-radius: 9999px;
-    background: var(--sheen), var(--power);
-    color: var(--white);
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.4), 0 2px 4px rgba(22, 29, 54, 0.25);
-    text-shadow: 0 1px 1px rgba(22, 29, 54, 0.4);
-    font-size: 14px;
-    line-height: 20px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.msg:nth-child(even) .msg-user { background: var(--sheen), var(--violet-deep); }
-.msg-text {
-    font-family: var(--font), var(--emoji);
-    font-size: 20px;
-    line-height: 28px;
-    font-weight: 600;
-    overflow-wrap: anywhere;
-    text-wrap: pretty;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    padding: 12px 16px;
+    font-size: 20px;
+    line-height: 28px;
+    animation: msg-in var(--dur-enter) var(--ease-enter) both, msg-out var(--dur-exit) var(--ease-exit) 25s forwards;
 }
-.chat-emote { display: inline-block; width: 1.25em; height: 1.25em; object-fit: contain; vertical-align: -.25em; }
+.msg-user {
+    display: inline;
+    margin-right: 8px;
+    color: var(--accent-2);
+    font-weight: 600;
+}
+.msg-text {
+    display: inline;
+    font-family: var(--font-text), var(--font-emoji);
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+.chat-emote { display: inline-block; width: 28px; height: 28px; object-fit: contain; vertical-align: -6px; }
+/* Usuario baneado con !ban: texto plano y apagado. */
+.msg.text-only .msg-user, .msg.text-only .msg-text { color: var(--text-muted); }
 
-/* Reproductor portátil: carcasa de cristal esmerilado (deja ver el juego como el resto del
-   tema), pantalla del video en un bisel pizarra, LCD y teclas. Una columna con 12 px entre
-   piezas y 16 px de margen en la carcasa. */
-#media-widget, #bingo-widget {
-    position: absolute;
-    overflow: hidden;
-    border-radius: 24px;
-}
+/* ── Reproductor: arriba a la derecha, alineado con la barra ── */
 #media-widget {
-    top: calc(var(--rail-top) + var(--rail-h) + 40px);
-    right: var(--safe);
+    position: absolute;
+    top: var(--safe-y);
+    right: var(--safe-x);
     width: var(--yt-w);
     z-index: 45;
     display: flex;
     flex-direction: column;
     gap: 12px;
-    padding: 12px 16px 16px;
-    border-radius: 24px 24px 24px 40px;
-    background: var(--sheen), var(--grain), var(--paper-glass);
-    box-shadow: var(--glass-edge), inset 0 0 0 4px rgba(255, 255, 255, 0.35), var(--lift);
+    padding: var(--plate-padding);
     opacity: 0;
     visibility: hidden;
-    filter: blur(8px);
-    transform: translateY(-16px) scale(.96);
-    transition: opacity 600ms var(--mass), transform 800ms var(--mass), filter 600ms var(--mass), visibility 0ms var(--mass) 800ms;
+    transform: translateY(calc(-1 * var(--enter-y)));
+    transition: opacity var(--dur-exit) var(--ease-exit), transform var(--dur-exit) var(--ease-exit), visibility 0ms var(--ease-exit) var(--dur-exit);
 }
 #media-widget[data-shown="true"] {
     opacity: 1;
     visibility: visible;
-    filter: none;
     transform: none;
-    transition: opacity 600ms var(--mass), transform 800ms var(--spring), filter 600ms var(--mass), visibility 0ms var(--mass);
+    transition: opacity var(--dur-enter) var(--ease-enter), transform var(--dur-enter) var(--ease-enter), visibility 0ms var(--ease-enter);
+    animation: flicker var(--dur-flicker) steps(1, end);
 }
-/* Radio anidado: ventana de 24 px con 16 px de margen deja el bisel en 8 px. */
+body.bingo-active #media-widget { opacity: 0; visibility: hidden; pointer-events: none; }
+.deck-head { display: flex; align-items: center; gap: 8px; color: var(--accent); }
+.deck-led { width: 8px; height: 8px; border-radius: 9999px; background: var(--stroke-soft); }
+#media-widget[data-state="playing"] .deck-led { background: var(--accent); box-shadow: var(--glow); }
 #video-container {
     position: relative;
     width: 100%;
-    margin: 0;
     aspect-ratio: 16 / 9;
     overflow: hidden;
-    border-radius: 10px;
-    /* Borde iluminado de neón en los dos LEDs de la consola, naranja y verde fosforescentes. Gira
-       despacio mientras suena la música y cada lado proyecta su propio resplandor. */
-    border: 3px solid transparent;
-    background:
-        linear-gradient(var(--ink), var(--ink)) padding-box,
-        conic-gradient(from var(--edge-angle), var(--led-orange), #ffd23f, var(--led), #b6ff94, var(--led), #ffd23f, var(--led-orange)) border-box;
-    box-shadow:
-        -8px 0 22px -2px rgba(255, 122, 0, 0.85),
-        8px 0 22px -2px rgba(83, 252, 24, 0.8),
-        0 0 32px 2px rgba(255, 210, 63, 0.25),
-        0 0 0 1px rgba(22, 29, 54, 0.4),
-        inset 0 0 24px rgba(0, 0, 0, 0.6);
-    animation: edge-spin 6000ms linear infinite paused;
+    border-radius: var(--radius-inner);
+    background: var(--surface-scene);
+    box-shadow: 0 0 0 var(--stroke-width) var(--stroke-soft);
 }
-#media-widget[data-state="playing"] #video-container { animation-play-state: running; }
-/* TikTok es vertical: el reproductor pasa a 9:16 y se pega al borde izquierdo, bajo la hora;
-   queda por encima del bingo y del chat mientras suena. YouTube permanece arriba a la derecha. */
+#media-widget[data-state="playing"] #video-container { box-shadow: 0 0 0 var(--stroke-width) var(--accent-2), var(--glow-2); }
 #youtube-player, #direct-video { width: 100%; height: 100%; display: block; }
 #youtube-player iframe { width: 100%; height: 100%; border: 0; }
 #direct-video { display: none; object-fit: contain; }
-/* Cabecera de la carcasa: LED de reproducción y nombre grabado en relieve. */
-.deck-head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 4px;
-}
-.deck-led {
-    width: 8px;
-    height: 8px;
-    border-radius: 9999px;
-    background: radial-gradient(circle at 50% 30%, var(--white) 0 18%, var(--slate-light) 46%, var(--slate) 100%);
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.4);
-}
-#media-widget[data-state="playing"] .deck-led {
-    background: radial-gradient(circle at 50% 30%, var(--white) 0 18%, var(--led) 46%, #1f8f00 100%);
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.4), 0 0 8px var(--led);
-}
-.deck-brand {
-    color: var(--slate-deep);
-    font-family: var(--pixel);
-    font-size: 20px;
-    line-height: 20px;
-    font-weight: 400;
-    letter-spacing: 0.12em;
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
-}
-.deck-head .window-jp { color: var(--ink-muted); }
-/* Pantalla de mascota virtual a color: LCD retroiluminada en noche violeta y azul que cambia de
-   tono despacio, rejilla de píxeles, una línea de barrido, letra pixelada en neón y la mascota.
-   Es una zona pequeña, así que se anima también en modo ligero. */
 .media-info.deck-lcd {
-    display: grid;
-    grid-template-columns: 40px minmax(0, 1fr);
-    grid-template-rows: repeat(4, auto);
-    column-gap: 12px;
-    align-items: center;
-    margin: 0;
-    padding: 8px 12px;
-    border-radius: 12px;
-    position: relative;
-    overflow: hidden;
-    background:
-        repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.22) 0 1px, transparent 1px 3px),
-        repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.16) 0 1px, transparent 1px 3px),
-        radial-gradient(90% 120% at 15% 50%, rgba(255, 138, 31, 0.28), transparent 60%),
-        linear-gradient(120deg, #1a1046, #2c1663, #0f2f5c, #123f4f, #2c1663, #1a1046);
-    background-size: auto, auto, auto, 300% 100%;
-    color: var(--white);
-    box-shadow: 0 0 0 4px var(--slate-deep), 0 0 0 5px rgba(22, 29, 54, 0.5), inset 0 2px 8px rgba(0, 0, 0, 0.6);
-    font-family: var(--pixel);
-    animation: lcd-backlight 12s ease-in-out infinite alternate;
-}
-/* Línea de barrido que recorre la pantalla de arriba abajo, como un LCD de bolsillo. */
-.media-info.deck-lcd::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, transparent 0 44%, rgba(143, 244, 255, 0.14) 50%, transparent 56%);
-    background-size: 100% 300%;
-    pointer-events: none;
-    animation: lcd-scan 3200ms linear infinite;
-}
-.deck-pet {
-    grid-column: 1;
-    grid-row: 1 / -1;
-    position: relative;
-    z-index: 1;
-    width: 36px;
-    height: 33px;
-    filter: drop-shadow(0 0 4px rgba(255, 138, 31, 0.6));
-}
-.deck-pet i {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 3px;
-    height: 3px;
-    /* Mascota original a color: contorno marrón oscuro, cuerpo naranja, barriga crema,
-       cuernos amarillos, ojos con brillo y mejillas rosadas. Brilla un poco sobre la pantalla. */
-    --pet-ink: #3a1600;
-    --pet-body: #ff8a1f;
-    --pet-belly: #ffe9b0;
-    --pet-horn: #ffd23f;
-    --pet-cheek: #ff6fae;
-    box-shadow:
-        6px 0px 0 var(--pet-horn),
-        27px 0px 0 var(--pet-horn),
-        6px 3px 0 var(--pet-horn),
-        9px 3px 0 var(--pet-ink),
-        24px 3px 0 var(--pet-ink),
-        27px 3px 0 var(--pet-horn),
-        6px 6px 0 var(--pet-ink),
-        9px 6px 0 var(--pet-ink),
-        12px 6px 0 var(--pet-ink),
-        15px 6px 0 var(--pet-ink),
-        18px 6px 0 var(--pet-ink),
-        21px 6px 0 var(--pet-ink),
-        24px 6px 0 var(--pet-ink),
-        27px 6px 0 var(--pet-ink),
-        3px 9px 0 var(--pet-ink),
-        6px 9px 0 var(--pet-body),
-        9px 9px 0 var(--pet-body),
-        12px 9px 0 var(--pet-body),
-        15px 9px 0 var(--pet-body),
-        18px 9px 0 var(--pet-body),
-        21px 9px 0 var(--pet-body),
-        24px 9px 0 var(--pet-body),
-        27px 9px 0 var(--pet-body),
-        30px 9px 0 var(--pet-ink),
-        3px 12px 0 var(--pet-ink),
-        6px 12px 0 var(--pet-body),
-        9px 12px 0 #ffffff,
-        12px 12px 0 #1b1b2b,
-        15px 12px 0 var(--pet-body),
-        18px 12px 0 var(--pet-body),
-        21px 12px 0 #ffffff,
-        24px 12px 0 #1b1b2b,
-        27px 12px 0 var(--pet-body),
-        30px 12px 0 var(--pet-ink),
-        3px 15px 0 var(--pet-ink),
-        6px 15px 0 var(--pet-body),
-        9px 15px 0 #1b1b2b,
-        12px 15px 0 #1b1b2b,
-        15px 15px 0 var(--pet-body),
-        18px 15px 0 var(--pet-body),
-        21px 15px 0 #1b1b2b,
-        24px 15px 0 #1b1b2b,
-        27px 15px 0 var(--pet-body),
-        30px 15px 0 var(--pet-ink),
-        0px 18px 0 var(--pet-ink),
-        3px 18px 0 var(--pet-ink),
-        6px 18px 0 var(--pet-body),
-        9px 18px 0 var(--pet-cheek),
-        12px 18px 0 var(--pet-body),
-        15px 18px 0 var(--pet-body),
-        18px 18px 0 var(--pet-body),
-        21px 18px 0 var(--pet-body),
-        24px 18px 0 var(--pet-cheek),
-        27px 18px 0 var(--pet-body),
-        30px 18px 0 var(--pet-ink),
-        33px 18px 0 var(--pet-ink),
-        3px 21px 0 var(--pet-ink),
-        6px 21px 0 var(--pet-body),
-        9px 21px 0 var(--pet-body),
-        12px 21px 0 var(--pet-belly),
-        15px 21px 0 var(--pet-belly),
-        18px 21px 0 var(--pet-belly),
-        21px 21px 0 var(--pet-belly),
-        24px 21px 0 var(--pet-body),
-        27px 21px 0 var(--pet-body),
-        30px 21px 0 var(--pet-ink),
-        3px 24px 0 var(--pet-ink),
-        6px 24px 0 var(--pet-body),
-        9px 24px 0 var(--pet-body),
-        12px 24px 0 var(--pet-belly),
-        15px 24px 0 var(--pet-belly),
-        18px 24px 0 var(--pet-belly),
-        21px 24px 0 var(--pet-belly),
-        24px 24px 0 var(--pet-body),
-        27px 24px 0 var(--pet-body),
-        30px 24px 0 var(--pet-ink),
-        6px 27px 0 var(--pet-ink),
-        9px 27px 0 var(--pet-ink),
-        12px 27px 0 var(--pet-body),
-        15px 27px 0 var(--pet-body),
-        18px 27px 0 var(--pet-body),
-        21px 27px 0 var(--pet-body),
-        24px 27px 0 var(--pet-ink),
-        27px 27px 0 var(--pet-ink),
-        6px 30px 0 var(--pet-ink),
-        9px 30px 0 var(--pet-ink),
-        24px 30px 0 var(--pet-ink),
-        27px 30px 0 var(--pet-ink);
-}
-#media-widget[data-state="playing"] .deck-pet i { animation: pet-hop 700ms steps(1) infinite; }
-/* Sin música la mascota duerme: pierde el color y queda tenue. */
-#media-widget[data-state="idle"] .deck-pet { opacity: .5; filter: grayscale(1); }
-.deck-lcd .media-label {
-    grid-column: 2;
-    z-index: 1;
-    background: transparent;
-    box-shadow: none;
-    padding: 0;
-    color: var(--neon-cyan);
-    font-family: var(--pixel);
-    font-size: 18px;
-    line-height: 16px;
-    font-weight: 400;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-.deck-lcd .equalizer i { width: 3px; border-radius: 0; background: var(--led-orange); box-shadow: 0 0 4px currentColor; }
-.deck-lcd .equalizer i:nth-child(1) { background: var(--neon-magenta); color: var(--neon-magenta); }
-.deck-lcd .equalizer i:nth-child(2) { background: var(--led-orange); color: var(--led-orange); }
-.deck-lcd .equalizer i:nth-child(3) { background: var(--led); color: var(--led); }
-.deck-lcd .equalizer i:nth-child(4) { background: var(--neon-cyan); color: var(--neon-cyan); }
-/* "Ahora suena": cada letra sube y baja en ola y cambia de color con un pequeño desfase. */
-.np-text i {
-    display: inline-block;
-    font-style: normal;
-    text-shadow: 0 0 6px currentColor;
-}
-#media-widget[data-state="playing"] .np-text i {
-    animation: np-wave 1400ms var(--swing) infinite, np-hue 2800ms linear infinite;
-    animation-delay: calc(var(--i) * -90ms), calc(var(--i) * -160ms);
-}
-/* Título en neón: degradado de los colores del tema que fluye por las letras mientras corre. */
-.deck-lcd #video-title {
-    grid-column: 2;
-    z-index: 1;
-    margin-top: 2px;
-    font-family: var(--pixel);
-    font-size: 24px;
-    line-height: 24px;
-    font-weight: 400;
-    letter-spacing: 0.02em;
-}
-.deck-lcd #video-title .title-inner {
-    background: linear-gradient(90deg, var(--led-orange), #ffd23f, var(--led), var(--neon-cyan), var(--neon-magenta), var(--led-orange));
-    background-size: 200% 100%;
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    filter: drop-shadow(0 0 4px rgba(143, 244, 255, 0.45));
-}
-.deck-lcd #video-title .title-inner.marquee {
-    animation: title-marquee 24s var(--swing) infinite alternate, neon-flow 4s linear infinite;
-}
-/* "Pedido por": etiqueta cian pequeña y el nombre en amarillo neón con brillo. */
-.deck-requester {
-    grid-column: 2;
-    z-index: 1;
     display: flex;
-    align-items: baseline;
-    gap: 6px;
+    flex-direction: column;
+    gap: 4px;
     min-width: 0;
-    margin-top: 2px;
+    padding: 12px 16px;
+    border-radius: var(--radius-inner);
+    background: var(--surface-raised);
 }
-.deck-requester[hidden] { display: none; }
-.deck-requester .requester-label {
-    flex-shrink: 0;
-    color: var(--neon-cyan);
-    font-size: 16px;
-    line-height: 16px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    opacity: .85;
-}
-.deck-requester .requester-label::before { content: "▸ "; color: var(--neon-magenta); }
-#video-requester {
-    min-width: 0;
-    overflow: hidden;
-    color: #ffd23f;
-    font-size: 20px;
-    line-height: 18px;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    text-shadow: 0 0 6px rgba(255, 210, 63, 0.7);
-}
-.deck-lcd #queue-indicator {
-    grid-column: 2;
-    z-index: 1;
-    justify-self: start;
-    margin-top: 4px;
-    border-radius: 2px;
-    background: var(--neon-magenta);
-    color: var(--white);
-    box-shadow: 0 0 8px rgba(255, 43, 214, 0.6);
-    font-family: var(--pixel);
-    font-size: 16px;
-    line-height: 16px;
-    font-weight: 400;
-}
-/* Controles de la música en el reproductor: los mismos orbes del mando, algo más pequeños.
-   Pausa se queda hundida mientras la música está en pausa. */
-.deck-keys {
-    display: flex;
-    justify-content: center;
-    gap: 12px;
-    margin: 0 0 4px;
-}
-.deck-keys .face-button { width: 48px; height: 48px; }
-.deck-keys .face-button svg { width: 20px; height: 20px; }
-#media-widget[data-state="paused"] #music-pause:not(:disabled) {
-    transform: translateY(3px);
-    box-shadow: 0 0 0 2px rgba(22, 29, 54, 0.55), inset 0 3px 6px rgba(22, 29, 54, 0.45), 0 1px 0 rgba(22, 29, 54, 0.22);
-}
-
-.media-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 2px 12px;
-    border-radius: 9999px;
-    background: var(--sheen), var(--slate-light);
-    box-shadow: inset 0 0 0 1px rgba(22, 29, 54, 0.2);
-    color: var(--ink);
-    font-size: 12px;
-    line-height: 16px;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: lowercase;
-}
+/* La mascota pixelada pertenece a otro preset: queda en el HTML, oculta. */
+.deck-pet { display: none; }
+.media-label { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); }
 #video-title {
-    margin-top: 8px;
-    font-size: 20px;
-    line-height: 28px;
-    font-weight: 700;
-    white-space: nowrap;
     overflow: hidden;
+    white-space: nowrap;
     text-overflow: ellipsis;
+    font-size: 24px;
+    line-height: 32px;
+    font-weight: 600;
 }
 #video-title.scrolling { text-overflow: clip; }
 .title-inner { display: inline-block; }
-.title-inner.marquee { animation: title-marquee 24s var(--swing) infinite alternate; }
+/* Desplazamiento lento del título: es información, así que sigue en modo ligero. */
+.title-inner.marquee { animation: title-marquee 24s var(--ease-enter) infinite alternate; }
+.deck-requester { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.deck-requester[hidden] { display: none; }
+.deck-requester .requester-label { flex-shrink: 0; color: var(--text-muted); }
+#video-requester {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--accent);
+    font-size: 20px;
+    line-height: 28px;
+    font-weight: 600;
+}
 #queue-indicator {
     display: none;
-    flex-shrink: 0;
-    margin-top: 8px;
-    padding: 2px 12px;
-    border-radius: 9999px;
-    background: var(--sheen), var(--violet);
-    color: var(--white);
-    font-size: 12px;
-    line-height: 16px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-}
-
-/* Bingo: tablero grande, centrado en ambos ejes. YouTube y TikTok se ocultan mientras está en juego. */
-body.bingo-active #media-widget {
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-}
-#bingo-widget {
-    top: 50%;
-    left: 50%;
-    width: max-content;
-    max-width: calc(100% - 160px);
-    z-index: 42;
-    transform: translate(-50%, -50%);
-    animation: bingo-in 800ms var(--mass) both;
-}
-#bingo-widget .aero-window-title { min-height: 56px; padding: 12px 24px; font-size: 20px; line-height: 28px; }
-#bingo-widget .aero-app-orb, #bingo-widget .aero-app-orb svg { width: 24px; height: 24px; }
-.bingo-caption {
-    margin-left: auto;
-    padding: 2px 12px;
-    border-radius: 9999px;
-    background: var(--sheen), var(--lcd);
-    color: var(--lcd-ink);
-    box-shadow: inset 0 0 0 1px rgba(22, 29, 54, 0.35);
-    text-shadow: none;
-    font-family: var(--mono);
+    align-self: flex-start;
+    margin-top: 4px;
+    padding: 0 8px;
+    border-radius: 2px;
+    background: var(--accent-2);
+    color: var(--on-accent);
     font-size: 18px;
     line-height: 28px;
     font-weight: 600;
-    letter-spacing: 0.04em;
 }
-.bingo-content { padding: 32px 36px 36px; }
+.deck-keys { display: flex; justify-content: center; gap: 12px; }
+.deck-keys .face-button { width: 56px; height: 48px; color: var(--text); }
+.deck-keys .face-button svg { width: 24px; height: 24px; fill: currentColor; }
+.deck-keys .face-button:hover:not(:disabled) { box-shadow: 0 0 0 var(--stroke-width) var(--accent); }
+/* Pausa queda encendida mientras la música está en pausa. */
+#media-widget[data-state="paused"] #music-pause:not(:disabled) { background: var(--accent); color: var(--on-accent); box-shadow: var(--glow); }
+
+/* ── Bingo: tablero centrado mientras dura la partida ── */
+#bingo-widget {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max-content;
+    max-width: calc(100% - 2 * var(--safe-x));
+    overflow: hidden;
+    z-index: 42;
+    transform: translate(-50%, -50%);
+    animation: bingo-in var(--dur-enter) var(--ease-enter) both, flicker var(--dur-flicker) steps(1, end) both;
+}
+#bingo-widget .aero-window-title { padding: 12px 24px; color: var(--text); }
+#bingo-widget .aero-window-title, #bingo-widget .bingo-title { font-family: var(--font-display); font-size: 24px; line-height: 32px; font-weight: var(--display-weight); }
+#bingo-widget .aero-app-orb { color: var(--accent); }
+.bingo-caption {
+    margin-left: auto;
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 20px;
+    line-height: 28px;
+    font-weight: 600;
+    letter-spacing: 0;
+}
+.bingo-content { padding: 24px; }
 .bingo-draw { display: flex; align-items: center; gap: 32px; }
-.bingo-drum {
-    position: relative;
-    display: grid;
-    place-items: center;
-    width: 208px;
-    height: 208px;
-    flex: 0 0 208px;
-    isolation: isolate;
-}
-.bingo-drum i { position: absolute; inset: 0; border-radius: 9999px; }
-/* Esfera de cristal exterior. */
-.bingo-drum i:nth-child(1) {
-    background: var(--orb-light), radial-gradient(circle at 50% 60%, rgba(127, 216, 255, 0.25), rgba(70, 82, 111, 0.35));
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.4), inset 0 -8px 16px rgba(22, 29, 54, 0.25), var(--lift);
-}
-/* Jaula giratoria con bolas de colores asomando. */
-.bingo-drum i:nth-child(2) {
-    inset: 12px;
-    border: 2px dashed rgba(70, 82, 111, 0.55);
-    box-shadow:
-        0 -48px 0 -54px var(--power),
-        42px -24px 0 -56px var(--violet),
-        42px 24px 0 -56px var(--white),
-        0 48px 0 -54px var(--power),
-        -42px 24px 0 -56px var(--white),
-        -42px -24px 0 -56px var(--violet);
-    animation: bingo-cage 900ms var(--swing) infinite alternate;
-}
-.bingo-drum i:nth-child(3) {
-    inset: 24px;
-    background: radial-gradient(circle at 50% 40%, rgba(246, 249, 253, 0.6), rgba(195, 203, 221, 0.4));
-}
+.bingo-drum { position: relative; display: grid; place-items: center; width: 176px; height: 176px; flex: 0 0 176px; }
+.bingo-drum > i { position: absolute; inset: 0; border-radius: 9999px; }
+.bingo-drum > i:nth-child(1) { background: var(--surface-raised); box-shadow: 0 0 0 var(--stroke-width) var(--accent), var(--glow); }
+.bingo-drum > i:nth-child(2) { inset: 12px; border: var(--stroke-width) dashed var(--accent-2); animation: bingo-cage 1600ms var(--ease-enter) infinite alternate; }
+.bingo-drum > i:nth-child(3) { display: none; }
 #bingo-ball {
+    z-index: 1;
     display: grid;
     place-items: center;
-    z-index: 1;
-    width: 132px;
-    height: 132px;
+    width: 120px;
+    height: 120px;
     border-radius: 9999px;
-    background: var(--orb-light), var(--paper-hi);
-    color: var(--ink);
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.4), inset 0 -8px 12px rgba(139, 111, 226, 0.35), 0 6px 12px rgba(22, 29, 54, 0.3);
-    font-family: var(--mono);
+    background: var(--surface-plate-solid);
+    box-shadow: 0 0 0 var(--stroke-width) var(--accent-2), var(--glow-2);
+    font-family: var(--font-mono);
     font-size: 30px;
     line-height: 36px;
     font-weight: 600;
 }
-.bingo-ball-arrival { animation: bingo-arrival 900ms var(--spring) both; }
-.bingo-info { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-#bingo-status { font-size: 48px; line-height: 52px; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; overflow-wrap: anywhere; }
+.bingo-ball-arrival { animation: bingo-arrival 600ms var(--ease-enter) both; }
+.bingo-info { display: flex; flex-direction: column; gap: 8px; min-width: 0; max-width: 640px; }
+#bingo-status {
+    font-family: var(--font-display);
+    font-size: 48px;
+    line-height: 48px;
+    font-weight: var(--display-weight);
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+}
+#bingo-widget[data-phase="won"] #bingo-status { color: var(--accent); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 #bingo-participants {
     align-self: flex-start;
-    padding: 2px 12px;
-    border-radius: 9999px;
-    background: var(--sheen), var(--ink);
-    color: var(--paper-hi);
-    font-size: 14px;
-    line-height: 20px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-}
-#bingo-help { color: var(--ink-muted); font-size: 16px; line-height: 24px; font-weight: 600; }
-#bingo-history {
-    margin: 16px 0 12px;
-    font-family: var(--mono);
+    padding: 0 8px;
+    border-radius: 2px;
+    background: var(--accent);
+    color: var(--on-accent);
     font-size: 18px;
     line-height: 28px;
     font-weight: 600;
-    color: var(--violet-deep);
-    overflow-wrap: anywhere;
 }
-.bingo-board-row { display: grid; grid-template-columns: 56px repeat(15, 56px); gap: 10px; margin: 10px 0; align-items: center; justify-items: center; }
+#bingo-help { color: var(--text-muted); font-size: 20px; line-height: 28px; font-weight: 500; }
+#bingo-history { margin: 16px 0 8px; color: var(--accent); font-family: var(--font-mono); font-size: 20px; line-height: 28px; font-weight: 600; overflow-wrap: anywhere; }
+.bingo-board-row { display: grid; grid-template-columns: repeat(16, 48px); gap: 8px; margin-top: 8px; }
 .bingo-board-row b, .bingo-board-row span {
     display: grid;
     place-items: center;
-    width: 52px;
-    height: 52px;
-    border-radius: 9999px;
-    font-family: var(--mono);
-    font-size: 16px;
-    line-height: 20px;
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-inner);
 }
 .bingo-board-row b {
-    background: var(--orb-light), var(--slate-deep);
-    color: var(--white);
-    font-family: var(--font);
-    font-size: 18px;
-    line-height: 28px;
-    font-weight: 700;
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.45), inset 0 -3px 4px rgba(22, 29, 54, 0.3);
+    background: var(--surface-raised);
+    color: var(--accent);
+    font-family: var(--font-display);
+    font-size: 24px;
+    line-height: 32px;
+    font-weight: var(--display-weight);
 }
 .bingo-board-row span {
-    background: rgba(195, 203, 221, 0.55);
-    color: var(--ink-muted);
+    color: var(--text-muted);
+    box-shadow: inset 0 0 0 var(--stroke-width) var(--stroke-soft);
+    font-family: var(--font-mono);
+    font-size: 18px;
+    line-height: 28px;
     font-weight: 500;
-    box-shadow: inset 0 0 0 1px rgba(70, 82, 111, 0.25);
-    transition: background-color 600ms var(--mass), color 600ms var(--mass), transform 600ms var(--spring), box-shadow 600ms var(--mass);
+    transition: transform 300ms var(--ease-enter), opacity 300ms var(--ease-enter);
 }
-.bingo-board-row .called {
-    background: var(--orb-light), var(--power);
-    color: var(--white);
-    font-weight: 600;
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.45), inset 0 -3px 4px rgba(22, 29, 54, 0.3);
-}
-.bingo-board-row .latest {
-    background: var(--orb-light), var(--violet);
-    transform: scale(1.22);
-    box-shadow: 0 0 0 2px var(--white), 0 0 0 3px rgba(22, 29, 54, 0.45), 0 0 16px rgba(139, 111, 226, 0.7);
-}
-#bingo-widget[data-phase="won"] #bingo-status { color: var(--violet-deep); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.bingo-board-row .called { background: var(--accent); color: var(--on-accent); box-shadow: none; font-weight: 600; }
+.bingo-board-row .latest { background: var(--accent-2); color: var(--on-accent); box-shadow: var(--glow-2); transform: scale(1.15); }
 #bingo-widget[data-phase="won"] #bingo-board,
 #bingo-widget[data-phase="won"] #bingo-history { display: none; }
 #bingo-winning-card {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(5, 64px);
     gap: 8px;
+    justify-content: center;
+    margin-top: 24px;
     padding: 12px;
-    margin-top: 16px;
-    border-radius: 16px;
-    background: var(--sheen), var(--slate-light);
-    box-shadow: inset 0 0 0 1px rgba(22, 29, 54, 0.25);
+    border-radius: var(--radius-inner);
+    background: var(--surface-raised);
     text-align: center;
-    font-size: 20px;
-    line-height: 28px;
-    font-weight: 700;
 }
-#bingo-winning-card b { color: var(--slate-deep); letter-spacing: 0.16em; }
-/* Radio anidado: 16 px de contenedor menos 12 px de relleno deja 4 px por celda. */
-#bingo-winning-card span { padding: 4px 2px; border-radius: 4px; background: var(--paper-hi); font-family: var(--mono); font-weight: 600; }
-#bingo-winning-card .winning { background: var(--orb-light), var(--violet); color: var(--white); }
+#bingo-winning-card b { color: var(--accent); font-family: var(--font-display); font-size: 24px; line-height: 32px; font-weight: var(--display-weight); }
+#bingo-winning-card span { padding: 8px 0; border-radius: 2px; background: var(--surface-plate-solid); font-family: var(--font-mono); font-size: 24px; line-height: 32px; font-weight: 600; }
+#bingo-winning-card .winning { background: var(--accent-2); color: var(--on-accent); }
 
-/* Alerta: tarjeta de catálogo con el avatar dentro de un disco iridiscente. El disco ocupa
-   su propia columna y queda centrado en vertical, siempre dentro de los márgenes. */
+/* ── Alertas: bajo la barra, centradas. El tipo se lee en la etiqueta, no solo en el color ── */
 #alert-box {
+    --alert-key: var(--accent);
+    --alert-glow: var(--glow);
     position: absolute;
-    top: calc(var(--rail-top) + var(--rail-h) + 28px);
+    top: var(--below-rail);
     left: 50%;
     display: grid;
-    grid-template-columns: 112px minmax(0, 1fr);
+    grid-template-columns: 96px minmax(0, 1fr);
     grid-template-rows: auto auto;
     column-gap: 24px;
+    row-gap: 8px;
     min-width: 560px;
     max-width: 820px;
-    padding: 24px 40px 24px 24px;
-    border-radius: 24px;
-    opacity: 0;
-    filter: blur(8px);
-    transform: translate(-50%, -32px) scale(.94);
-    transition: opacity 500ms var(--mass), transform 800ms var(--mass), filter 500ms var(--mass);
+    padding: 24px;
     pointer-events: none;
     z-index: 80;
+    /* Opaca: queda encima de la barra y del bingo, que no deben transparentarse. */
+    background: var(--surface-plate-solid);
+    box-shadow: 0 0 0 var(--stroke-width) var(--alert-key), var(--alert-glow), var(--shadow-plate);
+    opacity: 0;
+    transform: translate(-50%, calc(-1 * var(--enter-y)));
+    transition: opacity var(--dur-exit) var(--ease-exit), transform var(--dur-exit) var(--ease-exit);
 }
+#alert-box[data-type="sub"], #alert-box[data-type="giftsub"] { --alert-key: var(--accent-2); --alert-glow: var(--glow-2); }
+/* Con el bingo en juego la alerta sube sobre la barra para no tapar la cabecera del tablero. */
+body.bingo-active #alert-box { top: var(--safe-y); }
 #alert-box.show {
     opacity: 1;
-    filter: none;
-    transform: translate(-50%, 0) scale(1);
-    transition: opacity 400ms var(--mass), transform 800ms var(--spring), filter 400ms var(--mass);
+    transform: translate(-50%, 0);
+    transition: opacity var(--dur-enter) var(--ease-enter), transform var(--dur-enter) var(--ease-enter);
+    animation: flicker var(--dur-flicker) steps(1, end);
 }
 .alert-disc {
     grid-column: 1;
     grid-row: 1 / span 2;
     align-self: center;
-    display: grid;
-    place-items: center;
-    width: 112px;
-    height: 112px;
-    padding: 8px;
-    border-radius: 9999px;
-    background: var(--orb-light), conic-gradient(from 0deg, #f3f6fb, #b9e6ff, #e6d8ff, #fff3c9, #c8ffe0, #f3f6fb, #c9d3ff, #f3f6fb);
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.45), var(--lift);
-    transform: rotate(-120deg) scale(.6);
-    transition: transform 1000ms var(--spring) 120ms;
+    width: 96px;
+    height: 96px;
+    padding: 4px;
+    border-radius: var(--radius-plate);
+    background: var(--surface-raised);
+    box-shadow: 0 0 0 var(--stroke-width) var(--alert-key);
+    transform: scale(.9);
+    transition: transform var(--dur-enter) var(--ease-enter);
 }
-#alert-box.show .alert-disc { transform: rotate(0) scale(1); }
-.alert-art {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 9999px;
-    background: var(--ink);
-    box-shadow: 0 0 0 2px var(--white), 0 0 0 4px rgba(22, 29, 54, 0.4);
-}
+#alert-box.show .alert-disc { transform: none; }
+.alert-art { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-inner); background: var(--surface-plate-solid); }
 .alert-header {
     grid-column: 2;
     justify-self: start;
@@ -1156,582 +644,113 @@ body.bingo-active #media-widget {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 4px 12px;
-    border-radius: 9999px;
-    background: var(--sheen), var(--violet);
-    color: var(--white);
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.35);
-    text-shadow: 0 1px 1px rgba(22, 29, 54, 0.4);
-    font-size: 14px;
-    line-height: 20px;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: lowercase;
+    padding: 0 8px;
+    border-radius: 2px;
+    background: var(--alert-key);
+    color: var(--on-accent);
+    font-size: 18px;
+    line-height: 28px;
+    font-weight: 600;
+    text-transform: var(--label-case);
+    letter-spacing: var(--label-tracking);
 }
-/* Cada tipo de alerta con su color: seguidor en azul de encendido, suscriptor en violeta del
-   logo y suscripciones regaladas en dorado de trofeo. El aro del disco acompaña al color. */
-#alert-box[data-type="follow"] .alert-header { background: var(--sheen), var(--power); }
-#alert-box[data-type="sub"] .alert-header { background: var(--sheen), var(--violet-deep); }
-#alert-box[data-type="giftsub"] .alert-header { background: var(--sheen), linear-gradient(90deg, #c98a14, #e8b23a); }
-#alert-box[data-type="follow"] .alert-disc { box-shadow: 0 0 0 2px var(--power), var(--lift); }
-#alert-box[data-type="sub"] .alert-disc { box-shadow: 0 0 0 2px var(--violet), 0 0 16px 2px rgba(139, 111, 226, 0.55), var(--lift); }
-#alert-box[data-type="giftsub"] .alert-disc { box-shadow: 0 0 0 2px #fff4cc, 0 0 18px 4px rgba(255, 198, 64, 0.75), var(--lift); }
-.alert-spark { display: inline-grid; place-items: center; width: 16px; height: 16px; }
-.alert-spark svg { width: 16px; height: 16px; fill: currentColor; }
-.alert-jp {
-    position: absolute;
-    top: 24px;
-    right: 40px;
-    font-family: var(--jp);
-    font-size: 14px;
-    line-height: 20px;
-    font-weight: 500;
-    letter-spacing: 0.12em;
-    color: var(--ink-muted);
-}
+.alert-spark { display: inline-grid; place-items: center; width: 18px; height: 18px; }
+.alert-spark svg { width: 18px; height: 18px; fill: currentColor; }
 .alert-body {
     grid-column: 2;
     align-self: start;
-    padding-top: 12px;
-    font-size: 36px;
-    line-height: 40px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
+    font-family: var(--font-display);
+    font-size: 30px;
+    line-height: 36px;
+    font-weight: var(--display-weight);
     overflow-wrap: anywhere;
     text-wrap: balance;
 }
 
-/* Un consejo a la vez, centrado en la franja inferior. Los otros no se pintan. */
+/* ── Consejos: un mensaje cada 9 s, centrado sobre el margen inferior ── */
 #tips {
     position: absolute;
     left: 50%;
-    right: auto;
-    bottom: 16px;
+    bottom: var(--safe-y);
     width: max-content;
-    max-width: 720px;
-    height: 56px;
+    max-width: 800px;
     z-index: 20;
     display: grid;
     justify-items: center;
-    translate: -50% 0;
+    transform: translateX(-50%);
     pointer-events: none;
 }
 .tip {
     grid-area: 1 / 1;
-    max-width: 900px;
     display: none;
     align-items: center;
     gap: 12px;
-    padding: 8px 24px 8px 8px;
-    border-radius: 9999px;
-    font-size: 18px;
-    line-height: 28px;
-    font-weight: 600;
+    max-width: 800px;
+    padding: 8px 16px 8px 8px;
+    font-size: 24px;
+    line-height: 32px;
+    font-weight: 500;
 }
 .tip.current { display: flex; }
+body:not(.lite) .tip.current { animation: plate-in var(--dur-enter) var(--ease-enter) both; }
 .tip-label {
     flex: 0 0 auto;
-    padding: 4px 12px;
-    border-radius: 9999px;
-    background: var(--sheen), var(--slate-deep);
-    color: var(--white);
-    box-shadow: 0 0 0 1px rgba(22, 29, 54, 0.35);
-    font-size: 14px;
-    line-height: 20px;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: lowercase;
-}
-.tip b { color: var(--power-deep); font-weight: 700; }
-
-#connection-status {
-    position: absolute;
-    top: calc(var(--rail-top) + var(--rail-h) + 8px);
-    left: 420px;
-    max-width: 720px;
-    z-index: 100;
-    padding: 12px 24px;
-    border-radius: 16px;
-    box-shadow: 0 0 0 2px var(--power), var(--lift);
+    padding: 2px 8px;
+    border-radius: 2px;
+    background: var(--accent-2);
+    color: var(--on-accent);
     font-size: 18px;
     line-height: 28px;
     font-weight: 600;
+    text-transform: var(--label-case);
+    letter-spacing: var(--label-tracking);
+}
+.tip b { color: var(--accent); font-weight: 600; }
+
+/* Avisos para el streamer, arriba a la izquierda (fuera de la alerta); app.js los retira a los 8 s. */
+#connection-status {
+    position: absolute;
+    top: var(--safe-y);
+    left: var(--safe-x);
+    max-width: 520px;
+    z-index: 100;
+    padding: 12px 16px;
+    font-size: 20px;
+    line-height: 28px;
+    font-weight: 500;
     overflow-wrap: anywhere;
 }
 #connection-status:empty { display: none; }
 
-/* Esquinas decorativas limitadas a los últimos 64 px, fuera del centro del juego. */
-.pad-corner {
-    position: absolute;
-    bottom: 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    pointer-events: none;
-    z-index: 1;
-    animation: rise 1000ms var(--mass) 240ms both;
+/* ── Movimiento ── */
+/* Parpadeo de neón: tres destellos en 150 ms, solo al entrar una pieza (nunca en bucle). */
+@keyframes flicker {
+    0% { opacity: 0; }
+    20% { opacity: 1; }
+    40% { opacity: .3; }
+    60% { opacity: 1; }
+    80% { opacity: .5; }
+    100% { opacity: 1; }
 }
-.pad-corner-right { right: var(--safe); }
-.pad-tagline {
-    padding: 4px 16px;
-    border-radius: 9999px;
-    color: var(--ink-muted);
-    font-size: 14px;
-    line-height: 20px;
-    font-weight: 500;
-    letter-spacing: 0.24em;
-    white-space: nowrap;
-}
-.pad-corner-right .pad-tagline { font-family: var(--jp); letter-spacing: 0.16em; }
-
-/* Detalle de catálogo: estrella de precio.
-   Solo en las esquinas y la franja inferior, fuera del centro del juego. */
-.catalog-deco { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
-.catalog-deco > * { position: absolute; animation: rise 1000ms var(--mass) 320ms both; }
-/* Estrella de precio del catálogo de 1994, en azul de encendido. */
-.deco-burst {
-    bottom: 12px;
-    left: calc(50% - 432px);
-    display: grid;
-    place-items: center;
-    width: 64px;
-    height: 64px;
-    background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.5), transparent 60%), var(--power);
-    clip-path: polygon(50% 0, 61% 14%, 79% 9%, 80% 27%, 97% 33%, 88% 50%, 97% 67%, 80% 73%, 79% 91%, 61% 86%, 50% 100%, 39% 86%, 21% 91%, 20% 73%, 3% 67%, 12% 50%, 3% 33%, 20% 27%, 21% 9%, 39% 14%);
-    color: var(--white);
-    font-family: var(--jp);
-    font-size: 13px;
-    line-height: 16px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    rotate: -12deg;
-}
-
-/* Notch con la estética de la pantalla de mascota: textos en letra pixelada y neón sobre la
-   LCD oscura. Solo cambian colores y tipografía; la disposición es la misma. */
-#hud .stream-title {
-    font-family: var(--pixel);
-    font-size: 28px;
-    line-height: 26px;
-    font-weight: 400;
-    letter-spacing: 0.04em;
-    background: linear-gradient(90deg, var(--neon-cyan), #ffffff, var(--neon-magenta), var(--neon-cyan));
-    background-size: 200% 100%;
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    filter: drop-shadow(0 0 5px rgba(0, 229, 255, 0.55));
-    animation: neon-flow 6s linear infinite;
-}
-.brand-live {
-    background: rgba(0, 0, 0, 0.35);
-    color: var(--led);
-    box-shadow: 0 0 0 1px rgba(83, 252, 24, 0.45), inset 0 0 8px rgba(83, 252, 24, 0.18);
-    font-family: var(--pixel);
-    font-size: 16px;
-    line-height: 16px;
-    font-weight: 400;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    text-shadow: 0 0 6px rgba(83, 252, 24, 0.8);
-}
-.brand-jp { color: var(--neon-cyan); text-shadow: 0 0 6px rgba(0, 229, 255, 0.7); }
-.topbar-clock {
-    background: rgba(0, 0, 0, 0.35);
-    box-shadow: 0 0 0 1px rgba(255, 210, 63, 0.4), inset 0 0 8px rgba(255, 210, 63, 0.15);
-}
-.desktop-clock {
-    font-family: var(--pixel);
-    font-size: 22px;
-    line-height: 20px;
-    font-weight: 400;
-    color: #ffd23f;
-    text-shadow: 0 0 6px rgba(255, 210, 63, 0.75);
-}
-.pad-rule { background: rgba(0, 229, 255, 0.35); box-shadow: 0 0 6px rgba(0, 229, 255, 0.5); }
-/* Teclas LCD de neón del notch: oscuras y translúcidas con contorno e icono en su color.
-   Encendidas (aria-pressed/expanded = true) se rellenan de color con el icono oscuro, como un
-   píxel iluminado; apagadas quedan solo con el contorno, más tenue. */
-#bingo-toggle { --key: #ffd23f; }
-#music-anchor { --key: var(--neon-magenta); }
-#chat-toggle { --key: var(--neon-cyan); }
-#queue-toggle { --key: var(--led); }
-#volume-toggle { --key: var(--led-orange); }
-#hud .music-anchor, #hud .aero-icon-button {
-    background: rgba(8, 6, 28, 0.55);
-    color: var(--key);
-    box-shadow:
-        0 0 0 2px var(--key),
-        0 0 14px color-mix(in srgb, var(--key) 45%, transparent),
-        inset 0 0 12px color-mix(in srgb, var(--key) 22%, transparent);
-    font-family: var(--pixel);
-    font-size: 20px;
-    letter-spacing: 0.08em;
-    text-shadow: 0 0 6px color-mix(in srgb, var(--key) 80%, transparent);
-    filter: none;
-    opacity: 1;
-}
-#hud .music-anchor svg, #hud .aero-icon-button svg { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--key) 80%, transparent)); }
-#hud .music-anchor[aria-pressed="true"],
-#hud .aero-icon-button[aria-pressed="true"],
-#hud .aero-icon-button[aria-expanded="true"] {
-    background: var(--key);
-    color: #120c2a;
-    text-shadow: none;
-    box-shadow:
-        0 0 0 2px color-mix(in srgb, var(--key) 60%, white),
-        0 0 22px 2px color-mix(in srgb, var(--key) 70%, transparent),
-        inset 0 2px 0 rgba(255, 255, 255, 0.45);
-}
-#hud .music-anchor[aria-pressed="true"] svg,
-#hud .aero-icon-button[aria-pressed="true"] svg,
-#hud .aero-icon-button[aria-expanded="true"] svg { filter: none; }
-#hud .music-anchor[aria-pressed="false"],
-#hud .aero-icon-button[aria-pressed="false"] { opacity: .6; filter: none; }
-#hud .music-anchor:hover,
-#hud .aero-icon-button:hover:not(:disabled) { filter: brightness(1.2); transform: translateY(-2px); }
-#hud .music-anchor:active,
-#hud .aero-icon-button:active:not(:disabled) { transform: translateY(1px) scale(0.97); }
-/* Mientras suena música, la tecla music late suavemente. */
-#hud .music-anchor[data-playing="true"] { animation: key-pulse 1800ms var(--swing) infinite; }
-
-/* ── Toda la consola en modo pantalla: alertas, reproductor, consejos, paneles y decoración
-   comparten la LCD oscura del notch, letra pixelada y contornos de neón. ── */
-
-/* Reproductor: carcasa oscura de la misma consola. */
-#media-widget {
-    background: var(--lcd-panel);
-    box-shadow: var(--lcd-glow), inset 0 0 0 1px rgba(0, 229, 255, 0.25);
-}
-.deck-brand { color: var(--neon-cyan); text-shadow: 0 0 6px rgba(0, 229, 255, 0.7); }
-.deck-head .window-jp { color: var(--neon-magenta); text-shadow: 0 0 6px rgba(255, 43, 214, 0.6); }
-/* Botones del reproductor: teclas de neón como las del notch, cada una con su color. */
-#music-prev, #music-next { --key: var(--neon-cyan); }
-#music-restart { --key: var(--led); }
-#music-pause { --key: var(--led-orange); }
-#music-stop { --key: var(--neon-magenta); }
-.deck-keys .face-button {
-    background: rgba(8, 6, 28, 0.55);
-    color: var(--key);
-    box-shadow:
-        0 0 0 2px var(--key),
-        0 0 12px color-mix(in srgb, var(--key) 45%, transparent),
-        inset 0 0 10px color-mix(in srgb, var(--key) 22%, transparent);
-}
-.deck-keys .face-button svg { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--key) 80%, transparent)); }
-.deck-keys .face-button:disabled { opacity: .35; }
-.deck-keys .face-button:hover:not(:disabled) { filter: brightness(1.2); }
-/* Pausa encendida mientras la música está en pausa. */
-#media-widget[data-state="paused"] #music-pause:not(:disabled) {
-    background: var(--key);
-    color: #120c2a;
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--key) 60%, white), 0 0 22px 2px color-mix(in srgb, var(--key) 70%, transparent);
-}
-
-/* Alertas: tarjeta LCD con contorno y disco de neón según el tipo. */
-#alert-box { --alert-key: var(--neon-cyan); }
-#alert-box[data-type="follow"] { --alert-key: var(--led); }
-#alert-box[data-type="sub"] { --alert-key: var(--neon-magenta); }
-#alert-box[data-type="giftsub"] { --alert-key: #ffd23f; }
-#alert-box {
-    background: var(--lcd-panel);
-    color: var(--white);
-    box-shadow:
-        0 0 0 2px var(--alert-key),
-        0 0 32px 4px color-mix(in srgb, var(--alert-key) 45%, transparent),
-        inset 0 0 24px color-mix(in srgb, var(--alert-key) 18%, transparent),
-        var(--lift);
-}
-#alert-box .alert-header,
-#alert-box[data-type] .alert-header {
-    background: var(--alert-key);
-    color: #120c2a;
-    box-shadow: 0 0 14px color-mix(in srgb, var(--alert-key) 60%, transparent);
-    text-shadow: none;
-    font-family: var(--pixel);
-    font-size: 20px;
-    font-weight: 400;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-}
-#alert-box .alert-disc,
-#alert-box[data-type] .alert-disc {
-    background: conic-gradient(from var(--edge-angle), var(--alert-key), #ffffff, var(--alert-key), color-mix(in srgb, var(--alert-key) 40%, #120c2a), var(--alert-key));
-    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 0 24px 4px color-mix(in srgb, var(--alert-key) 70%, transparent);
-    animation: edge-spin 3000ms linear infinite;
-}
-#alert-box .alert-art { box-shadow: 0 0 0 2px var(--white), 0 0 0 4px #120c2a; }
-.alert-jp { color: var(--alert-key); text-shadow: 0 0 6px color-mix(in srgb, var(--alert-key) 70%, transparent); }
-.alert-body {
-    font-family: var(--pixel);
-    font-size: 44px;
-    line-height: 40px;
-    font-weight: 400;
-    letter-spacing: 0.02em;
-    text-shadow: 0 0 8px rgba(255, 255, 255, 0.35);
-}
-
-/* Consejos flotantes: píldora LCD con contorno cian, etiqueta magenta y comandos en amarillo. */
-#tips .tip {
-    background: var(--lcd-panel);
-    color: var(--white);
-    box-shadow: 0 0 0 2px var(--neon-cyan), 0 0 18px rgba(0, 229, 255, 0.35), var(--lift);
-    font-family: var(--pixel);
-    font-size: 22px;
-    font-weight: 400;
-    letter-spacing: 0.03em;
-}
-#tips .tip-label {
-    background: var(--neon-magenta);
-    color: #120c2a;
-    box-shadow: 0 0 12px rgba(255, 43, 214, 0.6);
-    font-family: var(--pixel);
-    font-size: 18px;
-    font-weight: 400;
-    letter-spacing: 0.08em;
-}
-#tips .tip b { color: #ffd23f; font-weight: 400; text-shadow: 0 0 6px rgba(255, 210, 63, 0.75); }
-
-/* Paneles de cola y volumen, y avisos de conexión: misma pantalla. */
-.topbar-panel, #connection-status {
-    background: var(--lcd-panel);
-    color: var(--white);
-    box-shadow: 0 0 0 2px var(--neon-cyan), 0 0 22px rgba(0, 229, 255, 0.3), var(--lift);
-}
-.topbar-panel .aero-window-title {
-    background: rgba(0, 0, 0, 0.35);
-    color: var(--neon-cyan);
-    box-shadow: inset 0 -1px 0 rgba(0, 229, 255, 0.4);
-    text-shadow: 0 0 6px rgba(0, 229, 255, 0.7);
-    font-family: var(--pixel);
-    font-size: 20px;
-    font-weight: 400;
-}
-.topbar-panel-body { color: var(--white); }
-.topbar-panel output { color: #ffd23f; }
-
-/* Decoración: estrella 新発売 en magenta neón que late, y eslogan en píldora LCD. */
-.deco-burst {
-    background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.55), transparent 60%), var(--neon-magenta);
-    filter: drop-shadow(0 0 10px rgba(255, 43, 214, 0.75));
-    animation: rise 1000ms var(--mass) 320ms both, burst-pulse 2200ms var(--swing) infinite;
-}
-.pad-tagline {
-    background: var(--lcd-panel);
-    color: var(--neon-cyan);
-    box-shadow: 0 0 0 2px var(--slate-deep), 0 0 14px rgba(0, 229, 255, 0.3);
-    text-shadow: 0 0 6px rgba(0, 229, 255, 0.7);
-}
-
-/* Chat: burbujas LCD con contorno neón que alterna cian y magenta; el usuario va en una
-   etiqueta rellena del mismo color y el texto en blanco legible. */
-.msg {
-    --msg-key: var(--neon-cyan);
-    background: var(--lcd-panel);
-    color: var(--white);
-    box-shadow:
-        0 0 0 2px var(--msg-key),
-        0 0 16px color-mix(in srgb, var(--msg-key) 35%, transparent),
-        var(--lift);
-}
-.msg:nth-child(even) { --msg-key: var(--neon-magenta); background: var(--lcd-panel); }
-.msg::before { box-shadow: -2px 2px 0 var(--msg-key); }
-.msg-user,
-.msg:nth-child(even) .msg-user {
-    background: var(--msg-key);
-    color: #120c2a;
-    box-shadow: 0 0 12px color-mix(in srgb, var(--msg-key) 60%, transparent);
-    text-shadow: none;
-    font-family: var(--pixel);
-    font-size: 18px;
-    line-height: 20px;
-    font-weight: 400;
-    letter-spacing: 0.06em;
-}
-
-/* Bingo: tablero en pantalla LCD con contorno amarillo (el color de la tecla bingo). Cada
-   columna B·I·N·G·O tiene su neón y las bolas sorteadas se encienden de ese color. */
-#bingo-widget {
-    background: var(--lcd-panel);
-    color: var(--white);
-    box-shadow: 0 0 0 2px #ffd23f, 0 0 36px 4px rgba(255, 210, 63, 0.35), var(--lift);
-}
-#bingo-widget .aero-window-title {
-    background: rgba(0, 0, 0, 0.35);
-    color: #ffd23f;
-    box-shadow: inset 0 -1px 0 rgba(255, 210, 63, 0.45);
-    text-shadow: 0 0 8px rgba(255, 210, 63, 0.75);
-    font-family: var(--pixel);
-    font-size: 28px;
-    font-weight: 400;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-.bingo-caption {
-    background: rgba(0, 0, 0, 0.4);
-    color: var(--neon-cyan);
-    box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.6);
-    text-shadow: 0 0 6px rgba(0, 229, 255, 0.7);
-    font-family: var(--pixel);
-    font-size: 24px;
-    font-weight: 400;
-}
-/* Bombo: esfera oscura con aro cian, jaula magenta y bolas de neón. */
-.bingo-drum i:nth-child(1) {
-    background: radial-gradient(circle at 50% 35%, rgba(0, 229, 255, 0.18), rgba(8, 6, 28, 0.85) 70%);
-    box-shadow: 0 0 0 2px var(--neon-cyan), 0 0 24px rgba(0, 229, 255, 0.45), inset 0 -8px 16px rgba(0, 0, 0, 0.5);
-}
-.bingo-drum i:nth-child(2) {
-    border-color: rgba(255, 43, 214, 0.7);
-    box-shadow:
-        0 -48px 0 -54px #ffd23f,
-        42px -24px 0 -56px var(--neon-magenta),
-        42px 24px 0 -56px var(--led),
-        0 48px 0 -54px var(--led-orange),
-        -42px 24px 0 -56px var(--neon-cyan),
-        -42px -24px 0 -56px var(--neon-magenta);
-}
-.bingo-drum i:nth-child(3) { background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.2)); }
-#bingo-ball {
-    background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.25), transparent 55%), #120c2a;
-    color: #ffd23f;
-    box-shadow: 0 0 0 3px #ffd23f, 0 0 24px 4px rgba(255, 210, 63, 0.6), inset 0 0 18px rgba(255, 210, 63, 0.3);
-    text-shadow: 0 0 8px rgba(255, 210, 63, 0.85);
-    font-family: var(--pixel);
-    font-size: 40px;
-    font-weight: 400;
-}
-#bingo-status {
-    font-family: var(--pixel);
-    font-size: 56px;
-    line-height: 52px;
-    font-weight: 400;
-    text-shadow: 0 0 10px rgba(255, 255, 255, 0.35);
-}
-#bingo-widget[data-phase="won"] #bingo-status { color: #ffd23f; text-shadow: 0 0 12px rgba(255, 210, 63, 0.85); }
-#bingo-participants {
-    background: var(--neon-magenta);
-    color: #120c2a;
-    box-shadow: 0 0 12px rgba(255, 43, 214, 0.6);
-    font-family: var(--pixel);
-    font-size: 18px;
-    font-weight: 400;
-}
-#bingo-help { color: var(--neon-cyan); font-family: var(--pixel); font-size: 20px; font-weight: 400; text-shadow: 0 0 6px rgba(0, 229, 255, 0.6); }
-#bingo-history { color: #ffd23f; font-family: var(--pixel); font-size: 24px; font-weight: 400; text-shadow: 0 0 6px rgba(255, 210, 63, 0.6); }
-.bingo-board-row:nth-child(1) { --row: var(--neon-cyan); }
-.bingo-board-row:nth-child(2) { --row: var(--neon-magenta); }
-.bingo-board-row:nth-child(3) { --row: #ffd23f; }
-.bingo-board-row:nth-child(4) { --row: var(--led); }
-.bingo-board-row:nth-child(5) { --row: var(--led-orange); }
-.bingo-board-row b, .bingo-board-row span { font-family: var(--pixel); font-size: 22px; font-weight: 400; }
-.bingo-board-row b {
-    background: var(--row);
-    color: #120c2a;
-    box-shadow: 0 0 14px color-mix(in srgb, var(--row) 60%, transparent);
-    font-family: var(--pixel);
-    font-size: 28px;
-}
-.bingo-board-row span {
-    background: rgba(0, 0, 0, 0.3);
-    color: rgba(255, 255, 255, 0.45);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--row) 35%, transparent);
-}
-.bingo-board-row .called {
-    background: color-mix(in srgb, var(--row) 85%, #120c2a);
-    color: #120c2a;
-    box-shadow: 0 0 10px color-mix(in srgb, var(--row) 55%, transparent);
-}
-.bingo-board-row .latest {
-    background: var(--white);
-    color: #120c2a;
-    box-shadow: 0 0 0 3px var(--row), 0 0 22px 4px color-mix(in srgb, var(--row) 80%, transparent);
-}
-#bingo-winning-card {
-    background: rgba(0, 0, 0, 0.35);
-    box-shadow: 0 0 0 2px #ffd23f, 0 0 18px rgba(255, 210, 63, 0.35);
-    font-family: var(--pixel);
-    font-weight: 400;
-}
-#bingo-winning-card b { color: #ffd23f; text-shadow: 0 0 6px rgba(255, 210, 63, 0.7); }
-#bingo-winning-card span { background: rgba(255, 255, 255, 0.08); color: var(--white); font-family: var(--pixel); font-size: 24px; font-weight: 400; }
-#bingo-winning-card .winning { background: #ffd23f; color: #120c2a; box-shadow: 0 0 12px rgba(255, 210, 63, 0.7); }
-
-@keyframes rise {
-    from { opacity: 0; transform: translateY(16px); filter: blur(8px); }
-    to { opacity: 1; transform: none; filter: none; }
-}
-@keyframes bingo-in {
-    from { opacity: 0; transform: translate(-50%, -46%) scale(.96); filter: blur(8px); }
-    to { opacity: 1; transform: translate(-50%, -50%); filter: none; }
-}
-@keyframes msg-in {
-    from { opacity: 0; transform: translateY(24px) scale(.96); filter: blur(8px); }
-    to { opacity: 1; transform: none; filter: none; }
-}
-@keyframes msg-out { to { opacity: 0; transform: translateY(-8px); filter: blur(4px); } }
-@keyframes led-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
-@keyframes hero-glow {
-    0%, 100% {
-        box-shadow:
-            0 0 0 2px rgba(255, 255, 255, 0.9),
-            -6px 0 16px 2px rgba(0, 229, 255, 0.75),
-            6px 0 16px 2px rgba(255, 43, 214, 0.7),
-            0 0 28px 6px rgba(190, 140, 255, 0.3);
-    }
-    50% {
-        box-shadow:
-            0 0 0 2px var(--white),
-            -8px 0 26px 6px rgba(0, 229, 255, 0.95),
-            8px 0 26px 6px rgba(255, 43, 214, 0.9),
-            0 0 48px 14px rgba(190, 140, 255, 0.45);
-    }
-}
-@keyframes notch-drop {
-    from { opacity: 0; transform: translateY(-100%); }
-    to { opacity: 1; transform: none; }
-}
-@keyframes pet-hop { 50% { transform: translateY(-3px); } }
-/* Ángulo animable para el borde iluminado del video. */
-@property --edge-angle { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
-@keyframes edge-spin { to { --edge-angle: 360deg; } }
-@keyframes lcd-backlight { to { background-position: 0 0, 0 0, 0 0, 100% 0; } }
-@keyframes lcd-scan { from { background-position: 0 100%; } to { background-position: 0 0; } }
-@keyframes np-wave { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
-@keyframes np-hue {
-    0%, 100% { color: var(--neon-cyan); }
-    25% { color: var(--led); }
-    50% { color: #ffd23f; }
-    75% { color: var(--neon-magenta); }
-}
-@keyframes neon-flow { to { background-position: -200% 0; } }
-@keyframes notch-scan { from { background-position: 0 0, 0 0, 0 384px, 0 0; } to { background-position: 0 0, 0 0, 0 0, 0 0; } }
-@keyframes key-pulse {
-    0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--key) 60%, white), 0 0 14px 1px color-mix(in srgb, var(--key) 55%, transparent), inset 0 2px 0 rgba(255, 255, 255, 0.45); }
-    50% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--key) 60%, white), 0 0 28px 6px color-mix(in srgb, var(--key) 85%, transparent), inset 0 2px 0 rgba(255, 255, 255, 0.45); }
-}
-@keyframes burst-pulse { 50% { scale: 1.08; filter: drop-shadow(0 0 18px rgba(255, 43, 214, 0.95)); } }
-@keyframes disc-spin { to { transform: rotate(360deg); } }
-@keyframes music-bars { to { transform: scaleY(.3); } }
-@keyframes title-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-@keyframes bingo-cage { from { transform: rotate(-16deg); } to { transform: rotate(16deg); } }
+@keyframes notch-in { from { transform: translate(-50%, calc(-1 * var(--enter-y))); } to { transform: translateX(-50%); } }
+@keyframes plate-in { from { opacity: 0; transform: translateY(var(--enter-y)); } to { opacity: 1; transform: none; } }
+@keyframes msg-in { from { opacity: 0; transform: translateY(var(--enter-y)); } to { opacity: 1; transform: none; } }
+@keyframes msg-out { to { opacity: 0; transform: translateY(-8px); } }
+@keyframes bingo-in { from { transform: translate(-50%, -46%); } to { transform: translate(-50%, -50%); } }
 @keyframes bingo-arrival {
-    0% { opacity: 0; transform: translateY(-56px) scale(.3); }
-    55% { opacity: 1; transform: translateY(8px) scale(1.08); }
+    0% { opacity: 0; transform: translateY(-48px) scale(.4); }
+    60% { opacity: 1; transform: translateY(4px) scale(1.04); }
     100% { opacity: 1; transform: none; }
 }
-/* Modo ligero (?lite=1): conserva entradas y alertas, pero elimina todo movimiento continuo
-   para que la página quede quieta entre eventos. app.js rota los consejos cada 9 s. */
-body.lite .brand-live::before, body.lite .disc-lid::before, body.lite .vinyl-record,
-body.lite .music-bars i, body.lite .equalizer i:not(.deck-lcd .equalizer i),
-body.lite .bingo-drum i, body.lite #video-container, body.lite #hud .music-anchor,
-body.lite #alert-box .alert-disc,
-body.lite .title-inner.marquee:not(.deck-lcd .title-inner) { animation: none !important; }
-/* El notch es grande: en modo ligero conserva su entrada pero no la línea de barrido. */
-body.lite #hud.system-topbar { animation: notch-drop 900ms var(--mass) both; }
-body.lite .deco-burst { animation: rise 1000ms var(--mass) 320ms both; }
-/* La pantalla del reproductor es pequeña y se mantiene animada; el resto del título se corta. */
-body.lite #video-title.scrolling:not(.deck-lcd #video-title) { text-overflow: ellipsis; }
+@keyframes bingo-cage { from { transform: rotate(-16deg); } to { transform: rotate(16deg); } }
+@keyframes led-breathe { 50% { opacity: .35; } }
+@keyframes disc-spin { to { transform: rotate(360deg); } }
+@keyframes title-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+/* Modo ligero (por defecto): quietos el LED, el CD y el bombo; las entradas se conservan. */
+body.lite .brand-live::before, body.lite .vinyl-record, body.lite .bingo-drum > i { animation: none !important; }
+/* Movimiento reducido: del sistema o con ?motion=reduced (OBS no informa la preferencia). */
+html.motion-reduced *, html.motion-reduced *::before, html.motion-reduced *::after { animation: none !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
     .tip { display: none; }
@@ -1739,173 +758,259 @@ body.lite #video-title.scrolling:not(.deck-lcd #video-title) { text-overflow: el
     #video-title.scrolling { text-overflow: ellipsis; }
 }
 
-/* Old Times: superficies transparentes, rayas finas y divisiones de película. */
-:root {
-    --old-glass: rgba(13, 20, 38, 0.58);
-    --old-glass-hi: rgba(29, 38, 66, 0.46);
-    --old-line: rgba(204, 224, 238, 0.28);
-    --old-line-hi: rgba(221, 237, 247, 0.48);
+/* ══ Efectos ══
+   Dos capas. Efectos de evento (alerta, mensaje, canción, bola, ganador, consejo): duran menos de
+   un segundo y se ven también en modo ligero. Ambiente (escáner del avatar, línea de la barra,
+   brillo del reproductor): ciclos de 6 a 8 s y solo con lite=0.
+   Solo transform y opacity; ningún destello supera tres por segundo. */
+
+/* Capa recortada a la forma de la placa para barridos y líneas de escaneo. */
+.fx-clip { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; pointer-events: none; z-index: 2; }
+/* Barrido de luz: una franja inclinada que cruza la placa una vez. */
+.fx-sweep, .msg::after, .tip::after {
+    content: "";
+    position: absolute;
+    top: -8px;
+    bottom: -8px;
+    left: 0;
+    width: 120px;
+    background: rgb(54 230 255 / 0.16);
+    opacity: 0;
+    transform: translateX(-160px) skewX(-20deg);
+    pointer-events: none;
+}
+/* Línea de escaneo que baja por la barra cada 6 s (ambiente). */
+.fx-scan {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 2px;
+    background: rgb(54 230 255 / 0.5);
+    opacity: 0;
+    animation: scan-down 6000ms var(--ease-enter) 1200ms infinite;
 }
 
-#hud.system-topbar {
-    background:
-        linear-gradient(180deg, rgba(235, 246, 255, 0.10), transparent 46%),
-        repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 3px),
-        var(--old-glass);
-    background-size: 100% 100%, 100% 3px, 100% 100%;
-    border-bottom: 1px solid var(--old-line-hi);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.16),
-        inset 0 -1px 0 var(--old-line),
-        0 8px 24px rgba(7, 12, 28, 0.18);
+/* ── Barra ── */
+/* Al desplegarse (también al cargar) la cruza un barrido. */
+#hud:not(.tucked) .fx-sweep { animation: sweep 900ms var(--ease-enter) 250ms both; }
+/* Escáner del avatar: cuatro esquinas que siguen la forma cuadrada del marco (cian arriba a la
+   izquierda, magenta abajo a la derecha). Se cierran sobre el avatar al desplegarse la barra y,
+   con lite=0, respiran despacio. Radio exterior = 8 del marco + 6 de separación ≈ 12. */
+.disc-lid { position: relative; }
+.disc-lid::before {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: var(--radius-outer);
+    border: var(--stroke-width) solid var(--accent);
+    border-right-color: var(--accent-2);
+    border-bottom-color: var(--accent-2);
+    -webkit-mask:
+        linear-gradient(#000 0 0) left top / 20px 20px no-repeat,
+        linear-gradient(#000 0 0) right top / 20px 20px no-repeat,
+        linear-gradient(#000 0 0) left bottom / 20px 20px no-repeat,
+        linear-gradient(#000 0 0) right bottom / 20px 20px no-repeat;
+    mask:
+        linear-gradient(#000 0 0) left top / 20px 20px no-repeat,
+        linear-gradient(#000 0 0) right top / 20px 20px no-repeat,
+        linear-gradient(#000 0 0) left bottom / 20px 20px no-repeat,
+        linear-gradient(#000 0 0) right bottom / 20px 20px no-repeat;
+    pointer-events: none;
 }
+#hud:not(.tucked) .disc-lid::before { animation: bracket-in 600ms var(--ease-enter) 200ms both, bracket-breathe 4000ms var(--ease-enter) 800ms infinite; }
+/* En modo ligero solo queda la entrada. */
+body.lite #hud:not(.tucked) .disc-lid::before { animation: bracket-in 600ms var(--ease-enter) 200ms both; }
+.channel-avatar { position: relative; z-index: 1; }
 
-.topbar-start {
-    padding-right: 16px;
-    border-right: 1px solid var(--old-line);
+/* ── Chat: cada mensaje entra deslizándose desde la izquierda y lo cruza un barrido ── */
+.msg { position: relative; animation: msg-slide var(--dur-enter) var(--ease-enter) both, msg-out var(--dur-exit) var(--ease-exit) 25s forwards; }
+.msg::after { width: 80px; animation: sweep 700ms var(--ease-enter) 120ms both; }
+.msg-user { display: inline-block; animation: chip-in 400ms var(--ease-enter) 80ms both; }
+
+/* ── Alertas: el avatar estalla con dos ondas y chispas; barrido, etiqueta y texto en cascada ── */
+.alert-disc { position: relative; }
+.alert-disc .alert-art { position: relative; z-index: 1; }
+.fx-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-plate);
+    box-shadow: 0 0 0 var(--stroke-width) var(--alert-key, var(--accent));
+    opacity: 0;
+    pointer-events: none;
 }
-
-#hud.dynamic-island .island-slot {
-    border-left: 1px solid transparent;
+.fx-sparks { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+.fx-sparks i {
+    --s: 52px;
+    --d: 116px;
+    position: absolute;
+    left: -4px;
+    top: -4px;
+    width: 8px;
+    height: 8px;
+    background: var(--accent);
+    opacity: 0;
 }
+.fx-sparks i:nth-child(even) { --d: 96px; width: 6px; height: 6px; background: var(--accent-2); }
+.fx-sparks i:nth-child(1) { --a: 0deg; }
+.fx-sparks i:nth-child(2) { --a: 36deg; }
+.fx-sparks i:nth-child(3) { --a: 72deg; }
+.fx-sparks i:nth-child(4) { --a: 108deg; }
+.fx-sparks i:nth-child(5) { --a: 144deg; }
+.fx-sparks i:nth-child(6) { --a: 180deg; }
+.fx-sparks i:nth-child(7) { --a: 216deg; }
+.fx-sparks i:nth-child(8) { --a: 252deg; }
+.fx-sparks i:nth-child(9) { --a: 288deg; }
+.fx-sparks i:nth-child(10) { --a: 324deg; }
+.fx-sparks i:nth-child(11) { --a: 18deg; }
+.fx-sparks i:nth-child(12) { --a: 198deg; }
+#alert-box.show .alert-disc { animation: disc-pop 600ms var(--ease-enter) 60ms both; }
+#alert-box.show .fx-ring { animation: ring-out 900ms var(--ease-enter) 160ms both; }
+#alert-box.show .fx-ring + .fx-ring { animation-delay: 380ms; }
+#alert-box.show .fx-sparks i { animation: spark 800ms var(--ease-enter) 180ms both; }
+#alert-box.show .fx-sparks i:nth-child(3n) { animation-delay: 240ms; }
+#alert-box.show .fx-sweep { animation: sweep 800ms var(--ease-enter) 300ms both; }
+#alert-box.show .alert-header { animation: chip-in 400ms var(--ease-enter) 160ms both; }
+#alert-box.show .alert-body { animation: rise-in 500ms var(--ease-enter) 260ms both; }
+/* Suscripciones regaladas: chispas más lejos y una segunda ráfaga. */
+#alert-box[data-type="giftsub"] .fx-sparks i { --d: 160px; }
+#alert-box.show[data-type="giftsub"] .fx-sparks i { animation-iteration-count: 2; }
+#alert-box[data-type="sub"] .fx-sweep, #alert-box[data-type="giftsub"] .fx-sweep { background: rgb(255 79 216 / 0.16); }
 
-#hud.dynamic-island .island-slot[data-slot="bingo"],
-#hud.dynamic-island .island-slot[data-slot="music"],
-#hud.dynamic-island .island-slot:not([data-slot="bingo"]) {
-    border-left-color: var(--old-line);
+/* ── Reproductor ── */
+/* Al aparecer y en cada canción nueva lo cruza un barrido (dos nombres para poder relanzarlo). */
+#media-widget[data-shown="true"] .fx-sweep { animation: sweep 900ms var(--ease-enter) 200ms both; }
+#media-widget[data-shown="true"][data-track="1"] .fx-sweep { animation-name: sweep-b; }
+/* Título nuevo: sube en la pantalla antes de empezar a desplazarse. */
+.title-inner.marquee { animation: rise-in 500ms var(--ease-enter) backwards, title-marquee 24s var(--ease-enter) 2s infinite alternate; }
+#video-requester { display: inline-block; }
+#media-widget[data-track="0"] #video-requester { animation: chip-in 500ms var(--ease-enter) 200ms both; }
+#media-widget[data-track="1"] #video-requester { animation: chip-in-b 500ms var(--ease-enter) 200ms both; }
+/* Ecualizador: baila 8 s al empezar cada canción y luego descansa (no es un bucle de todo el stream). */
+.equalizer i { transform-origin: bottom; }
+#media-widget[data-track="0"] .equalizer i { animation: eq-a 8000ms var(--ease-enter) both; }
+#media-widget[data-track="1"] .equalizer i { animation: eq-b 8000ms var(--ease-enter) both; }
+#media-widget[data-track] .equalizer i:nth-child(2) { animation-delay: -120ms; }
+#media-widget[data-track] .equalizer i:nth-child(3) { animation-delay: -260ms; }
+#media-widget[data-track] .equalizer i:nth-child(4) { animation-delay: -60ms; }
+/* Brillo que respira alrededor del reproductor mientras suena (ambiente, ciclo de 6 s). */
+.fx-breathe {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: 0 0 8px rgb(255 79 216 / 0.6), 0 0 0 var(--stroke-width) var(--accent-2);
+    opacity: 0;
+    pointer-events: none;
 }
+#media-widget[data-state="playing"] .fx-breathe { animation: breathe 6000ms var(--ease-enter) infinite; }
 
-.topbar-panel,
-#connection-status,
-.topbar-panel-body,
-.aero-window-title {
-    border-color: var(--old-line);
+/* ── Bingo ── */
+#bingo-widget .fx-sweep { animation: sweep 1000ms var(--ease-enter) 350ms both; }
+/* La bola cae girando y se aplasta al llegar. */
+.bingo-ball-arrival { animation: ball-drop 700ms var(--ease-enter) both; }
+/* Casilla recién cantada: salta y suelta una onda. */
+.bingo-board-row span { position: relative; }
+.bingo-board-row .latest { animation: cell-pop 500ms var(--ease-enter) both; }
+.bingo-board-row .latest::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: 0 0 0 var(--stroke-width) var(--accent-2);
+    opacity: 0;
+    animation: ring-out 800ms var(--ease-enter) 100ms both;
 }
+/* Ganador: el nombre irrumpe, el bombo suelta tres ráfagas de chispas y el cartón se enciende fila a fila. */
+#bingo-widget[data-phase="won"] #bingo-status { animation: status-in 600ms var(--ease-enter) both; }
+.bingo-burst { z-index: 2; }
+.bingo-burst i { --s: 64px; --d: 160px; }
+.bingo-burst i:nth-child(even) { --s: 64px; --d: 128px; }
+#bingo-widget[data-phase="won"] .bingo-burst i { animation: spark 900ms var(--ease-enter) 200ms 3 both; }
+#bingo-winning-card > * { animation: rise-in 400ms var(--ease-enter) both; }
+#bingo-winning-card > :nth-child(n+6):nth-child(-n+10) { animation-delay: 120ms; }
+#bingo-winning-card > :nth-child(n+11):nth-child(-n+15) { animation-delay: 200ms; }
+#bingo-winning-card > :nth-child(n+16):nth-child(-n+20) { animation-delay: 280ms; }
+#bingo-winning-card > :nth-child(n+21):nth-child(-n+25) { animation-delay: 360ms; }
+#bingo-winning-card > :nth-child(n+26) { animation-delay: 440ms; }
+#bingo-winning-card .winning { animation: rise-in 400ms var(--ease-enter) both, win-beat 600ms var(--ease-enter) 900ms 3; }
 
-.topbar-panel,
-#connection-status {
-    background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 42%),
-        var(--old-glass);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.16),
-        inset 0 0 0 1px rgba(255, 255, 255, 0.04),
-        0 8px 24px rgba(7, 12, 28, 0.22);
+/* ── Consejos: cada cambio sube, con la etiqueta en cascada y un barrido ── */
+.tip { position: relative; overflow: hidden; }
+#tips .tip.current { animation: rise-in 500ms var(--ease-enter) both; }
+.tip.current .tip-label { animation: chip-in 400ms var(--ease-enter) 120ms both; }
+.tip.current::after { background: rgb(255 79 216 / 0.14); animation: sweep 900ms var(--ease-enter) 300ms both; }
+
+/* Modo ligero: fuera solo el ambiente; los efectos de evento se quedan. */
+body.lite .fx-scan, body.lite .fx-breathe { animation: none !important; }
+
+@keyframes sweep {
+    0% { opacity: 0; transform: translateX(-160px) skewX(-20deg); }
+    15% { opacity: 1; }
+    100% { opacity: 0; transform: translateX(1100px) skewX(-20deg); }
 }
-
-.topbar-panel .aero-window-title {
-    border-bottom: 1px solid var(--old-line-hi);
-    background: rgba(7, 12, 28, 0.28);
+@keyframes sweep-b {
+    0% { opacity: 0; transform: translateX(-160px) skewX(-20deg); }
+    15% { opacity: 1; }
+    100% { opacity: 0; transform: translateX(1100px) skewX(-20deg); }
 }
-
-.topbar-panel-body label,
-#queue-list li {
-    border-bottom: 1px solid var(--old-line);
+@keyframes scan-down {
+    0% { opacity: 0; transform: translateY(0); }
+    10% { opacity: 1; }
+    40% { opacity: 0; transform: translateY(112px); }
+    100% { opacity: 0; transform: translateY(112px); }
 }
-
-.topbar-panel-body label:last-of-type,
-#queue-list li:last-child {
-    border-bottom: 0;
+@keyframes bracket-in {
+    0% { opacity: 0; transform: scale(1.35); }
+    70% { opacity: 1; transform: scale(.97); }
+    100% { opacity: 1; transform: none; }
 }
-
-.chat-body {
-    gap: 12px;
-    padding-top: 8px;
+@keyframes bracket-breathe { 0%, 100% { opacity: 1; transform: none; } 50% { opacity: .55; transform: scale(1.05); } }
+@keyframes msg-slide { from { opacity: 0; transform: translateX(-32px); } to { opacity: 1; transform: none; } }
+@keyframes chip-in { from { opacity: 0; transform: translateX(-12px) scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes chip-in-b { from { opacity: 0; transform: translateX(-12px) scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes rise-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes disc-pop {
+    0% { opacity: 0; transform: scale(.5) rotate(-12deg); }
+    60% { opacity: 1; transform: scale(1.08) rotate(2deg); }
+    100% { opacity: 1; transform: none; }
 }
-
-.msg {
-    background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 48%),
-        var(--old-glass);
-    border: 1px solid var(--old-line);
-    border-left: 3px solid rgba(127, 216, 255, 0.48);
-    box-shadow: 0 4px 14px rgba(7, 12, 28, 0.16);
+@keyframes ring-out {
+    0% { opacity: .9; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.9); }
 }
-
-.msg:nth-child(even) {
-    background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 48%),
-        rgba(43, 36, 74, 0.48);
-    border-left-color: rgba(220, 213, 244, 0.48);
-    margin-left: 12px;
+@keyframes spark {
+    0% { opacity: 1; transform: rotate(var(--a, 0deg)) translateX(var(--s, 8px)) scale(1); }
+    100% { opacity: 0; transform: rotate(var(--a, 0deg)) translateX(var(--d, 88px)) scale(.2); }
 }
-
-.msg::before {
-    opacity: 0.38;
+@keyframes eq-a {
+    0%, 12%, 24%, 36%, 48%, 60%, 72%, 100% { transform: scaleY(1); }
+    6%, 18%, 30%, 42%, 54%, 66% { transform: scaleY(.3); }
 }
-
-#media-widget {
-    background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.09), transparent 38%),
-        repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px),
-        var(--old-glass);
-    border: 1px solid var(--old-line);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.14),
-        inset 0 -1px 0 var(--old-line),
-        0 8px 24px rgba(7, 12, 28, 0.22);
+@keyframes eq-b {
+    0%, 12%, 24%, 36%, 48%, 60%, 72%, 100% { transform: scaleY(1); }
+    6%, 18%, 30%, 42%, 54%, 66% { transform: scaleY(.3); }
 }
-
-.deck-head,
-.media-info.deck-lcd,
-.deck-keys {
-    border-bottom: 1px solid var(--old-line);
+@keyframes breathe { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+@keyframes ball-drop {
+    0% { opacity: 0; transform: translateY(-72px) rotate(-200deg) scale(.4); }
+    55% { opacity: 1; transform: translateY(6px) rotate(8deg) scale(1.08, .92); }
+    78% { opacity: 1; transform: translateY(-4px) scale(.97, 1.03); }
+    100% { opacity: 1; transform: none; }
 }
-
-.deck-keys {
-    padding-top: 8px;
-    border-bottom: 0;
-    border-top: 1px solid var(--old-line);
+@keyframes cell-pop {
+    0% { transform: scale(.6); }
+    60% { transform: scale(1.3); }
+    100% { transform: scale(1.15); }
 }
-
-#bingo-widget,
-#alert-box {
-    background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 38%),
-        repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 3px),
-        rgba(13, 20, 38, 0.66);
-    border: 1px solid var(--old-line-hi);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.14),
-        0 10px 30px rgba(7, 12, 28, 0.24);
+@keyframes status-in {
+    0% { opacity: 0; transform: scale(.8); }
+    60% { opacity: 1; transform: scale(1.05); }
+    100% { opacity: 1; transform: none; }
 }
+@keyframes win-beat { 50% { transform: scale(1.12); } }
 
-#bingo-widget .aero-window-title,
-#alert-box .alert-header {
-    border-bottom: 1px solid var(--old-line-hi);
+/* Movimiento reducido: también apaga los efectos (repetido aquí para que gane al bloque de efectos). */
+html.motion-reduced *, html.motion-reduced *::before, html.motion-reduced *::after { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
 }
-
-.bingo-draw,
-.bingo-board-row,
-#bingo-history,
-#bingo-winning-card {
-    border-bottom: 1px solid var(--old-line);
-}
-
-#bingo-winning-card {
-    border-bottom: 0;
-    border-top: 1px solid var(--old-line);
-}
-
-#tips .tip,
-.pad-tagline {
-    background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 48%),
-        var(--old-glass);
-    border: 1px solid var(--old-line);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.12),
-        0 6px 18px rgba(7, 12, 28, 0.16);
-}
-
-#tips .tip-label {
-    border-right: 1px solid var(--old-line-hi);
-}
-
-.pad-corner-right {
-    border-left: 1px solid var(--old-line);
-    padding-left: 12px;
-}
-
-/* Usuario baneado con !ban: su mensaje queda apagado y en texto plano. */
-.msg.text-only { opacity: .62; filter: grayscale(1); }

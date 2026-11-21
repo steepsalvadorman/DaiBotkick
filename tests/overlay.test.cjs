@@ -778,3 +778,61 @@ test('meteor shower launches pixel meteors for the level and falls back to norma
     for (const fn of [...app.timers.values()]) fn();
     assert.equal(layer.children.length - before >= 36, true);
 });
+
+test('alerts play one at a time from a queue so a burst is not overwritten', () => {
+    const app = overlay();
+    app.handlers.kickAlert({ type: 'follow', message: 'Primera' });
+    app.handlers.kickAlert({ type: 'sub', message: 'Segunda' });
+    assert.equal(app.get('alert-text').textContent, 'Primera');
+    assert.ok(app.get('alert-box').classList.contains('show'));
+    [...app.timers.values()].at(-1)(); // fin de la primera (6 s)
+    assert.ok(!app.get('alert-box').classList.contains('show'));
+    [...app.timers.values()].at(-1)(); // pausa entre alertas
+    assert.equal(app.get('alert-text').textContent, 'Segunda');
+    assert.equal(app.get('alert-box').getAttribute('data-type'), 'sub');
+});
+test('chat commands stay out of the overlay unless ?commands=1', () => {
+    const app = overlay();
+    app.handlers.chatMessage({ user: 'viewer', content: '!play daft punk' });
+    app.handlers.chatMessage({ user: 'viewer', parts: [{ type: 'text', text: ' !s hola' }] });
+    assert.equal(app.get('chat-messages').children.length, 0);
+    app.handlers.chatMessage({ user: 'viewer', content: 'hola !play' });
+    assert.equal(app.get('chat-messages').children.length, 1);
+    const shown = overlay('#token=private', '?ch=alpha&commands=1');
+    shown.handlers.chatMessage({ user: 'viewer', content: '!play daft punk' });
+    assert.equal(shown.get('chat-messages').children.length, 1);
+});
+test('status notices clear themselves after 8 s except the missing channel guidance', () => {
+    const app = overlay();
+    app.handlers.connect_error();
+    const status = app.context.document.body.children[0];
+    assert.match(status.textContent, /Sin conexión/);
+    [...app.timers.values()].at(-1)();
+    assert.equal(status.textContent, '');
+    const missing = overlay('', '');
+    assert.match(missing.context.document.body.children[0].textContent, /Falta el canal/);
+    assert.equal(missing.timers.size, 0);
+});
+test('V-Saturn neon theme follows the broadcast rules of the design skill', () => {
+    const css = fs.readFileSync(__dirname + '/../overlay/vsaturn.css', 'utf8');
+    const html = fs.readFileSync(__dirname + '/../overlay/vsaturn.html', 'utf8');
+    assert.match(html, /family=Geist:[^"]*family=Geist\+Mono:[^"]*family=Orbitron:[^"]*display=block/);
+    assert.doesNotMatch(html + css, /VT323|Manrope|Inter\b|Roboto|Helvetica|Arial/);
+    assert.match(css, /--safe-x: 96px;/);
+    assert.match(css, /--safe-y: 48px;/);
+    // Sin texto por debajo de 18 px, salvo el icono de la chispa (svg).
+    for (const [, size] of css.matchAll(/font-size: ([^;]+);/g)) assert.ok(['18px', '20px', '24px', '30px', '48px'].includes(size), size);
+    for (const [, radius] of css.matchAll(/border-radius: ([^;]+);/g)) assert.ok(['var(--radius-plate)', 'var(--radius-inner)', 'var(--radius-outer)', '2px', '9999px', 'inherit'].includes(radius), radius);
+    // Placas casi opacas, sin color-mix ni propiedades sueltas de transformación (OBS antiguo).
+    assert.match(css, /--surface-plate: rgb\(18 14 36 \/ 0\.94\);/);
+    assert.doesNotMatch(css, /color-mix\(|^\s*(translate|rotate|scale):|feTurbulence|filter: blur/m);
+    // Solo transform y opacity se animan en las keyframes.
+    for (const match of css.matchAll(/@keyframes [\w-]+ \{/g)) {
+        let depth = 1, end = match.index + match[0].length;
+        while (depth && end < css.length) { if (css[end] === '{') depth++; if (css[end] === '}') depth--; end++; }
+        const body = css.slice(match.index + match[0].length, end - 1);
+        for (const [, prop] of body.matchAll(/([a-z-]+):/g)) assert.ok(['opacity', 'transform'].includes(prop), `${match[0]} ${prop}`);
+    }
+    // Brillos de 8 px como máximo.
+    for (const [, blur] of css.matchAll(/0 0 (\d+)px rgb/g)) assert.ok(Number(blur) <= 8, blur);
+});

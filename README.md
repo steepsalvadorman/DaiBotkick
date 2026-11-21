@@ -49,9 +49,27 @@ Todos los paneles comparten una sola inclinación (`--tilt`, −4°), sin rotaci
 
 El chat usa viñetas oscuras con acentos alternados, las alertas un panel de impacto y el bingo una bola amarilla con ráfagas radiales y las 75 casillas. Al ganar, el cartón verificado sustituye el tablero y el historial para no tapar el chat. Las animaciones y transiciones se desactivan con movimiento reducido; en ese modo se muestra solo el primer consejo, sin superponer los consejos rotativos.
 
-### Tema alternativo «V-Saturn Aero»
+### Tema alternativo «V-Saturn» (neon)
 
-`vsaturn.html` es el mismo overlay con otra piel: catálogo de consola japonesa de 1994 visto con el cristal brillante Aero de los 2000. Usa la misma URL privada cambiando solo la página (`https://tu-servicio/vsaturn.html?ch=tu_canal#token=...`); admite `chat=1`, `avatar=...` y `lite=0`. Comparte `app.js`, así que conserva toda la funcionalidad; sus estilos están en `vsaturn.css`. Paleta del póster (papel gris azulado, tinta marino, pizarra, violeta del logo y azul de encendido), paneles de cristal con reflejo en la mitad superior, botones de reproducción como los orbes del mando de seis botones, avatar dentro de la tapa del lector de CD, reloj en pantalla LCD y un CD iridiscente que gira mientras suena música. Tipografía Manrope con Geist Mono solo para cifras (reloj y bingo) e iconos Phosphor. No usa `backdrop-filter`: en OBS solo desenfocaría el lienzo transparente, no el juego, y gastaría GPU.
+`vsaturn.html` es el mismo overlay con otra piel, la que usan los canales de Twitch. Usa la misma URL privada cambiando solo la página (`https://tu-servicio/vsaturn.html?ch=tu_canal#token=...`). Comparte `app.js`, así que conserva toda la funcionalidad; sus estilos están en `vsaturn.css`.
+
+Sigue el preset «neon» de la skill de diseño, con el cian de la mascota DaiBot: placas violeta noche casi opacas (`#120E24` al 94 %), trazo cian de 2 px con un brillo de 8 px como máximo y magenta para los realces (nombres del chat, suscripciones, última bola del bingo). Usa Orbitron solo en títulos de 24 px o más, Geist para el texto y Geist Mono para el reloj y los números. Las fuentes se cargan con `display=block` y nada entra en escena hasta que están listas (3 s como máximo). Todos los valores salen de un bloque de tokens al principio de `vsaturn.css`, así que un look nuevo solo exige reescribir ese bloque.
+
+Está hecha para leerse en el stream comprimido y en un móvil. Ningún texto baja de 18 px y todo texto va sobre una placa (cuerpo 17:1, texto apagado 7,7:1, también sobre un juego claro). Los elementos fijos respetan una zona segura de 96 px a los lados y 48 px arriba y abajo. Solo se animan `transform` y `opacity`: las piezas entran con un parpadeo de neón de 150 ms y no hay bucles largos, salvo el LED de «En vivo» y el CD, cada 4 s y solo con `lite=0`. No usa `backdrop-filter`: en OBS solo desenfocaría el lienzo transparente, no el juego, y gastaría GPU. Tampoco usa `color-mix()` ni las propiedades sueltas `translate`/`rotate`, que no entienden las versiones antiguas de OBS.
+
+Los efectos van en dos capas. Los de evento duran menos de un segundo y se ven también en el modo ligero:
+
+- **Alertas:** el avatar estalla con dos ondas y chispas (una segunda ráfaga para las suscripciones regaladas), cruza un barrido de luz y la etiqueta y el texto entran en cascada.
+- **Chat:** cada mensaje entra deslizándose con un barrido.
+- **Reproductor:** en cada canción, barrido, título que sube, nombre de quien la pidió y 8 s de ecualizador.
+- **Bingo:** la bola cae girando y se aplasta; la casilla nueva salta con una onda; al ganar, el nombre irrumpe, el bombo suelta tres ráfagas de chispas y el cartón se enciende fila a fila.
+- **Consejos:** cada cambio sube con un barrido.
+
+Con `lite=0` se suma el ambiente: un escáner de dos arcos alrededor del avatar, una línea que recorre la barra cada 6 s y un brillo que respira en el reproductor mientras suena.
+
+Parámetros: `chat=1`, `avatar=...`, `lite=0`, `commands=1`, `motion=reduced` (quita todo el movimiento, porque OBS no informa la preferencia del sistema) y `preview=1` (dibuja un fondo de prueba mitad claro y mitad oscuro para revisar la legibilidad; no lo uses en OBS). Para diseñar sin servidor: `vsaturn.html?demo=1&preview=1&chat=1`.
+
+En las dos pieles, las alertas hacen cola y se muestran de una en una, así que una ráfaga de follows ya no se pisa. Los comandos del chat (`!play`, `!s`, …) no aparecen en el overlay salvo con `commands=1`, y los avisos de conexión o de error se retiran solos a los 8 s para no quedarse en el stream; solo el aviso de canal faltante permanece.
 
 El modo ligero está activo por defecto; para ver las animaciones completas añade `&lite=0` a la URL de OBS. El modo ligero quita todo el movimiento continuo: pulso de «En vivo», vinilo, barras, tambor del bingo y desplazamiento del título. Conserva las entradas de chat, alertas y paneles. Los consejos siguen rotando cada 9 s, pero sin animación, así que la página queda quieta entre eventos y no compite con el juego por la GPU. Para reducir aún más el consumo, en la fuente de navegador activa **Usar velocidad de fotogramas personalizada** a 30 fps y **Apagar la fuente cuando no sea visible**.
 

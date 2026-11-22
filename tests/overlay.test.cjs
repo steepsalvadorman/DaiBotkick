@@ -241,7 +241,7 @@ test('party lights cover the whole overlay and follow the !disco state from the 
     app.handlers.stageLights({ on: true }); assert.ok(body.contains('stage-lights-on'));
     app.handlers.stageLights({ on: 'true' }); assert.ok(!body.contains('stage-lights-on'));
     app.handlers.stageLights({ on: true }); app.handlers.stageLights(null); assert.ok(!body.contains('stage-lights-on'));
-    for (const page of ['pixel.html', 'vsaturn.html']) {
+    for (const page of ['pixel.html', 'vsaturn.html', 'rock.html']) {
         assert.match(fs.readFileSync(__dirname + '/../overlay/' + page, 'utf8'), /<link rel="stylesheet" href="\/lights\.css">/, page);
     }
     const lights = fs.readFileSync(__dirname + '/../overlay/lights.css', 'utf8');
@@ -297,7 +297,7 @@ test('voice volume is controlled separately from music volume', () => {
     assert.equal(app.audios.at(-1).volume, 1);
     app.get('tts-volume').listeners.input({ target: { value: '150' } });
     assert.equal(app.audios.at(-1).volume, 1);
-    for (const page of ['pixel.html', 'vsaturn.html']) {
+    for (const page of ['pixel.html', 'vsaturn.html', 'rock.html']) {
         const html = fs.readFileSync(__dirname + `/../overlay/${page}`, 'utf8');
         assert.match(html, /id="tts-volume" type="range" min="0" max="100" value="100"/, page);
         assert.match(html, /id="tts-volume-value" for="tts-volume">100%</, page);
@@ -560,7 +560,7 @@ test('chat messages with emoji do not render an emoji meter', () => {
     const app = overlay();
     app.handlers.chatMessage({ user: 'viewer', content: '😀😀 [emote:37226:KEKW]' });
     assert.ok(!app.context.intervals.some(i => i.delay === 5000));
-    for (const page of ['pixel.html', 'vsaturn.html']) {
+    for (const page of ['pixel.html', 'vsaturn.html', 'rock.html']) {
         assert.doesNotMatch(fs.readFileSync(__dirname + `/../overlay/${page}`, 'utf8'), /emoji-meter/, page);
     }
 });
@@ -708,7 +708,7 @@ test('every overlay theme page provides the elements app.js drives', () => {
     const app = fs.readFileSync(__dirname + '/../overlay/app.js', 'utf8');
     const ids = new Set([...app.matchAll(/el\('([\w-]+)'\)/g)].map(match => match[1]));
     for (const name of ['queue', 'volume']) { ids.add(`${name}-panel`); ids.add(`${name}-toggle`); }
-    for (const page of ['pixel.html', 'vsaturn.html']) {
+    for (const page of ['pixel.html', 'vsaturn.html', 'rock.html']) {
         const html = fs.readFileSync(__dirname + '/../overlay/' + page, 'utf8');
         for (const id of ids) assert.match(html, new RegExp(`id="${id}"`), `${page} no tiene #${id}`);
         assert.match(html, /name="viewport" content="width=device-width, initial-scale=1"/);
@@ -718,12 +718,14 @@ test('every overlay theme page provides the elements app.js drives', () => {
         // El tema puede añadir ?v=… para que OBS no use una versión vieja en caché.
         assert.match(html, /<script src="\/app\.js(\?v=[\w-]+)?"><\/script>/);
     }
-    const css = fs.readFileSync(__dirname + '/../overlay/vsaturn.css', 'utf8');
-    assert.match(css, /body \{[^}]*position: relative;/);
-    // Un solo consejo visible en todos los modos (ligero incluido): el actual.
-    assert.match(css, /\n\.tip \{[^}]*display: none;/);
-    assert.match(css, /\n\.tip\.current \{ display: flex; \}/);
-    assert.doesNotMatch(css, /^\s*backdrop-filter\s*:/m);
+    for (const sheet of ['vsaturn.css', 'rock.css']) {
+        const css = fs.readFileSync(__dirname + '/../overlay/' + sheet, 'utf8');
+        assert.match(css, /body \{[^}]*position: relative;/, sheet);
+        // Un solo consejo visible en todos los modos (ligero incluido): el actual.
+        assert.match(css, /\n\.tip \{[^}]*display: none;/, sheet);
+        assert.match(css, /\n\.tip\.current \{ display: flex; \}/, sheet);
+        assert.doesNotMatch(css, /^\s*backdrop-filter\s*:/m, sheet);
+    }
 });
 
 test('displaced player stops audio the moment the server says the slot moved', () => {
@@ -836,4 +838,31 @@ test('V-Saturn pocket theme follows the broadcast rules of the design skill', ()
     }
     // Brillos de 8 px como máximo.
     for (const [, blur] of css.matchAll(/0 0 (\d+)px rgb/g)) assert.ok(Number(blur) <= 8, blur);
+});
+test('rock pedalboard theme follows the broadcast rules of the design skill', () => {
+    const css = fs.readFileSync(__dirname + '/../overlay/rock.css', 'utf8');
+    const html = fs.readFileSync(__dirname + '/../overlay/rock.html', 'utf8');
+    assert.match(html, /family=Barlow:[^"]*family=Bebas\+Neue[^"]*family=Geist\+Mono:[^"]*display=block/);
+    assert.match(html, /data-theme="pedalboard"/);
+    assert.match(html, /href="\/rock\.css(\?v=[\w-]+)?"/);
+    assert.doesNotMatch(html + css, /VT323|Manrope|Inter\b|Roboto|Helvetica|Arial/);
+    assert.match(css, /--safe-x: 96px;/);
+    assert.match(css, /--safe-y: 48px;/);
+    // Sin texto por debajo de 18 px.
+    for (const [, size] of css.matchAll(/font-size: ([^;]+);/g)) assert.ok(['18px', '20px', '24px', '30px', '48px'].includes(size), size);
+    assert.doesNotMatch(css, /color-mix\(|^\s*(translate|rotate|scale):|feTurbulence|filter: blur/m);
+    // Solo transform y opacity se animan en las keyframes.
+    for (const match of css.matchAll(/@keyframes [\w-]+ \{/g)) {
+        let depth = 1, end = match.index + match[0].length;
+        while (depth && end < css.length) { if (css[end] === '{') depth++; if (css[end] === '}') depth--; end++; }
+        const body = css.slice(match.index + match[0].length, end - 1);
+        for (const [, prop] of body.matchAll(/([a-z-]+):/g)) assert.ok(['opacity', 'transform'].includes(prop), `${match[0]} ${prop}`);
+    }
+    // Brillos de 8 px como máximo.
+    for (const [, blur] of css.matchAll(/0 0 (\d+)px rgb/g)) assert.ok(Number(blur) <= 8, blur);
+});
+test('Twitch channels can also open the Britpop theme without being redirected', () => {
+    const app = overlay('#token=private', '?tw=sr_dai_twitch', { pathname: '/rock.html' });
+    assert.equal(app.context.redirectedTo, undefined);
+    assert.equal(JSON.stringify(app.context.options.query), '{"tw":"sr_dai_twitch"}');
 });

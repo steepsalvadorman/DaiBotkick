@@ -1,0 +1,1601 @@
+/* Overlay «pedalboard»: estética rockera de escenario con aire britpop de los 90, hermana del
+   tema pocket de V-Saturn. Paleta mod (rojo, azul real, mostaza, verde parka y crema), dianas mod,
+   rejilla de rombos de amplificador británico y rótulos de portada de disco.
+   La barra es un cabezal de amplificador (tolex texturado, ribete crema, remaches cromados),
+   el reproductor es un combo con tela de rejilla, panel de metal cepillado y vúmetro, las alertas
+   son pedales esmaltados de colores, el chat va en cinta de escenario y la bola del bingo es una púa.
+   Evoca la época y el equipo de rock en general sin copiar logos ni diseños de ninguna banda o marca.
+   Lienzo transparente de 1920×1080; app.js lo escala al tamaño de salida.
+   Toda la piel lee los tokens de abajo; la sección «Paleta por pieza» reparte los colores y el
+   bloque «Piel pedalboard», al final, cambia las formas propias de este tema.
+   Reglas de emisión: placas opacas detrás de todo texto, trazos de 3 px, brillos de 8 px como máximo,
+   nada por debajo de 18 px, solo transform y opacity en movimiento, zona segura de 96/48 px.
+   Sin backdrop-filter: en OBS solo desenfocaría el lienzo transparente, nunca el juego. */
+
+/* ── Contrato de tokens (D2), con los valores del tema pedalboard ── */
+:root, [data-theme="pedalboard"] {
+    /* Tipo: Bebas Neue (cartel de concierto) solo a 24 px o más; Barlow para leer. */
+    --font-display: 'Bebas Neue', 'Barlow', system-ui, sans-serif;
+    --font-text: 'Barlow', system-ui, sans-serif;                  /* chat, consejos, etiquetas */
+    --font-mono: 'Geist Mono', ui-monospace, monospace;            /* reloj y números */
+    --font-emoji: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji';
+    --display-weight: 400;      /* Bebas Neue solo tiene un peso */
+    --label-case: uppercase;
+    --label-tracking: 0.08em;
+
+    /* Paleta mod de los 90. Con #141210 encima: naranja 7,1:1, verde parka 6,5:1, rojo 4,5:1,
+       mostaza 10:1, azul real 5,9:1 y morado 6:1; rojo, azul y morado solo llevan texto grande o etiquetas. */
+    --c-orange: #F08A24;  --c-orange-shade: #8A4300;
+    --c-green: #8FA14A;   --c-green-shade: #4A5620;   /* verde parka */
+    --c-red: #E63946;     --c-red-shade: #8A1622;     /* rojo mod */
+    --c-yellow: #E9B949;  --c-yellow-shade: #8A6410;  /* mostaza */
+    --c-blue: #5C8CFF;    --c-blue-shade: #1F3F99;    /* azul real */
+    --c-purple: #A779FF;  --c-purple-shade: #4F35A8;
+    --c-navy: #2343B8;                               /* anillo exterior de la diana mod */
+    --c-cream: #E8DCC0;   --c-cream-shade: #8C7A55;   /* ribete y panel de controles */
+    --c-chrome: #C9C9C9;
+    /* Diana mod: centro rojo, anillo crema y anillo azul, con un borde negro. */
+    --roundel: radial-gradient(circle, #E63946 0 28%, #F4EEDD 29% 58%, #2343B8 59% 88%, #0A0908 89% 100%);
+    --ink: #141210;             /* tinta impresa sobre esmalte, cinta y metal */
+
+    /* Tolex negro: texto 16:1 y apagado 8,9:1 sobre la placa */
+    --surface-plate: rgb(20 18 16 / 0.97);
+    --surface-plate-solid: #141210;
+    --surface-raised: #2A2520;
+    --surface-scene: #0A0908;
+    --text: #F5EFE3;
+    --text-muted: #BDB2A0;
+    --accent: var(--c-cream);   /* cada pieza lo cambia por su color */
+    --accent-2: var(--c-red);
+    --on-accent: #141210;
+    --stroke: var(--c-cream);
+    --stroke-soft: #3D352C;     /* placas secundarias y divisores */
+    --plastic-shade: #000000;
+
+    /* «LCD» en este tema = panel de metal cepillado color crema: tinta 13:1 y tenue 6,3:1 */
+    --lcd-bg: #E8DCC0;
+    --lcd-ink: #1A1410;
+    --lcd-dim: #5A4A35;
+    --lcd-ghost: rgb(0 0 0 / 0.10);
+    --lcd-bezel: #0A0908;
+
+    /* Materiales. Texturas de 2 px o más: el granulado fino se convierte en bloques al comprimir. */
+    --plastic-sheen: linear-gradient(180deg, rgb(255 255 255 / 0.07) 0, transparent 30%, rgb(0 0 0 / 0.28) 100%);
+    /* Tolex: tejido cruzado en relieve. */
+    --plastic-texture:
+        repeating-linear-gradient(45deg, rgb(255 255 255 / 0.04) 0 2px, transparent 2px 5px),
+        repeating-linear-gradient(-45deg, rgb(0 0 0 / 0.30) 0 2px, transparent 2px 5px);
+    /* Tela de rejilla de rombos de amplificador británico: hilo crema sobre granate, y la trama debajo. */
+    --grille:
+        repeating-linear-gradient(60deg, rgb(232 220 192 / 0.30) 0 2px, transparent 2px 16px),
+        repeating-linear-gradient(-60deg, rgb(232 220 192 / 0.30) 0 2px, transparent 2px 16px),
+        repeating-linear-gradient(0deg, rgb(0 0 0 / 0.18) 0 2px, transparent 2px 4px);
+    /* Bisel y ribete crema de 2 px a 5 px del borde, como el piping de un amplificador. */
+    --bevel: inset 0 2px 0 rgb(255 255 255 / 0.12), inset 0 -4px 0 rgb(0 0 0 / 0.40),
+             inset 0 0 0 5px var(--surface-plate-solid), inset 0 0 0 7px var(--c-cream);
+    --drop: 0 8px 12px rgb(0 0 0 / 0.40);
+    /* Remache cromado. */
+    --screw: radial-gradient(circle at 40% 35%, #FFFFFF 0 1px, #DADADA 1.5px 3px, #8A8A8A 3.5px 5px, #2A2A2A 5.5px 6px, transparent 6.5px);
+    --screws:
+        var(--screw) left 6px top 6px / 14px 14px no-repeat,
+        var(--screw) right 6px top 6px / 14px 14px no-repeat,
+        var(--screw) left 6px bottom 6px / 14px 14px no-repeat,
+        var(--screw) right 6px bottom 6px / 14px 14px no-repeat;
+    /* Panel de metal cepillado: vetas horizontales y un brillo arriba. */
+    --lcd-glass: linear-gradient(180deg, rgb(255 255 255 / 0.40) 0, rgb(255 255 255 / 0) 45%);
+    --lcd-grid:
+        repeating-linear-gradient(0deg, rgb(0 0 0 / 0.035) 0 2px, transparent 2px 4px),
+        repeating-linear-gradient(0deg, rgb(255 255 255 / 0.12) 0 2px, transparent 2px 7px);
+    --lcd-depth: linear-gradient(180deg, transparent 60%, rgb(0 0 0 / 0.12));
+    --lcd-recess: inset 0 2px 0 rgb(255 255 255 / 0.55), inset 0 -3px 0 rgb(0 0 0 / 0.25);
+    --bezel-lip: 0 2px 0 5px rgb(255 255 255 / 0.08);
+    /* Esmalte brillante de los pedales. */
+    --enamel: linear-gradient(180deg, rgb(255 255 255 / 0.30) 0, rgb(255 255 255 / 0.06) 30%, transparent 55%, rgb(0 0 0 / 0.20) 100%);
+    /* Botón abombado: brillo de cúpula arriba y sombra en la base. */
+    --dome: radial-gradient(circle at 35% 25%, rgb(255 255 255 / 0.45) 0 12%, rgb(255 255 255 / 0.10) 35%, transparent 55%),
+            linear-gradient(180deg, transparent 45%, rgb(0 0 0 / 0.22) 100%);
+    /* Cromo de los pulsadores. */
+    --chrome: radial-gradient(circle at 40% 30%, #FFFFFF 0 10%, #DADADA 30%, #9A9A9A 70%, #5E5E5E 100%);
+
+    /* Forma: equipo de escenario, esquinas casi rectas */
+    --stroke-width: 3px;
+    --radius-plate: 8px;
+    --radius-inner: 4px;
+    --radius-outer: 12px;
+    --plate-padding: 16px;
+    --glow: 0 0 0 transparent;
+    --glow-2: 0 0 0 transparent;
+    --shadow-plate: 0 4px 0 var(--plastic-shade), var(--drop);
+    --focus-ring: var(--accent-2);
+
+    /* Movimiento: entradas con pisotón (rebote corto) y válvulas que calientan por pasos */
+    --ease-enter: cubic-bezier(0.2, 1.4, 0.4, 1);
+    --ease-exit: cubic-bezier(0.64, 0, 0.78, 0);
+    --dur-enter: 380ms;
+    --dur-exit: 220ms;
+    --dur-flicker: 240ms;
+    --enter-y: 24px;
+
+    /* Zonas del lienzo */
+    --safe-x: 96px;
+    --safe-y: 48px;
+    --rail-h: 112px;
+    --below-rail: calc(var(--safe-y) + var(--rail-h) + 16px);
+    --yt-w: 352px;              /* reproductor compacto, abajo a la derecha */
+    --chat-w: 440px;
+    --chat-max: 400px;
+}
+
+/* ── Paleta por pieza ──
+   (--stroke y --shadow-plate se repiten porque una variable se resuelve donde se declara.) */
+/* Barra: cabezal de amplificador clásico, ribete crema y piloto rojo. */
+#hud {
+    --accent: var(--c-cream); --accent-2: var(--c-red);
+    --stroke: var(--c-cream); --plastic-shade: var(--c-cream-shade);
+    --shadow-plate: 0 4px 0 var(--c-cream-shade), var(--drop); --focus-ring: var(--c-red);
+}
+/* El reloj es un display de LED rojo: 5,9:1 sobre su fondo. */
+.desktop-clock {
+    --lcd-bg: #1A0606; --lcd-ink: #FF4A4A; --lcd-dim: #8F1A1A;
+}
+/* Reproductor: combo de rejilla de rombos con ribete rojo mod y panel crema. */
+#media-widget {
+    --accent: var(--c-red); --accent-2: var(--c-yellow);
+    --stroke: var(--c-red); --plastic-shade: var(--c-red-shade);
+    --shadow-plate: 0 4px 0 var(--c-red-shade), var(--drop); --focus-ring: var(--c-yellow);
+}
+.topbar-panel, #connection-status {
+    --accent: var(--c-blue); --accent-2: var(--c-yellow);
+    --stroke: var(--c-blue); --plastic-shade: var(--c-blue-shade);
+    --shadow-plate: 0 4px 0 var(--c-blue-shade), var(--drop); --focus-ring: var(--c-yellow);
+}
+#bingo-widget {
+    --accent: var(--c-blue); --accent-2: var(--c-yellow);
+    --stroke: var(--c-blue); --plastic-shade: var(--c-blue-shade);
+    --shadow-plate: 0 4px 0 var(--c-blue-shade), var(--drop); --focus-ring: var(--c-yellow);
+}
+/* La bola del bingo es una púa amarilla de celuloide. */
+#bingo-ball {
+    --lcd-bg: #FFC93C; --lcd-ink: #1A1410; --lcd-dim: #5E4A00;
+}
+/* Alertas: cada tipo es un pedal de otro esmalte; el tipo también se lee en la etiqueta. */
+#alert-box {
+    --accent: var(--c-blue); --accent-2: var(--c-yellow);
+    --stroke: var(--c-blue); --plastic-shade: var(--c-blue-shade);
+    --shadow-plate: 0 4px 0 var(--c-blue-shade), var(--drop); --focus-ring: var(--c-yellow);
+    --lcd-bg: #0E0C0A;
+}
+#alert-box[data-type="follow"] {
+    --accent: var(--c-green); --accent-2: var(--c-yellow);
+    --stroke: var(--c-green); --plastic-shade: var(--c-green-shade);
+    --shadow-plate: 0 4px 0 var(--c-green-shade), var(--drop);
+}
+#alert-box[data-type="sub"] {
+    --accent: var(--c-red); --accent-2: var(--c-yellow);
+    --stroke: var(--c-red); --plastic-shade: var(--c-red-shade);
+    --shadow-plate: 0 4px 0 var(--c-red-shade), var(--drop);
+}
+#alert-box[data-type="giftsub"] {
+    --accent: var(--c-yellow); --accent-2: var(--c-red);
+    --stroke: var(--c-yellow); --plastic-shade: var(--c-yellow-shade);
+    --shadow-plate: 0 4px 0 var(--c-yellow-shade), var(--drop);
+}
+/* Chat: entradas de concierto. El talón lleva el color fijo de cada usuario (data-hue lo calcula
+   app.js); el texto va en tinta sobre papel crema (13:1), así que el color del talón no lleva texto. */
+.msg { --stub: var(--c-cream-shade); }
+.msg[data-hue="0"] { --stub: #E63946; }   /* rojo mod */
+.msg[data-hue="1"] { --stub: #2343B8; }   /* azul real */
+.msg[data-hue="2"] { --stub: #F08A24; }   /* naranja */
+.msg[data-hue="3"] { --stub: #E9B949; }   /* mostaza */
+.msg[data-hue="4"] { --stub: #8FA14A; }   /* verde parka */
+.msg.text-only { --stub: #8C877E; }
+/* Consejos: cada uno con su color de etiqueta y de comando. */
+.tip:nth-child(1) {
+    --accent: var(--c-yellow); --accent-2: var(--c-red);
+    --stroke: var(--c-red); --shadow-plate: 0 4px 0 var(--c-red-shade), var(--drop);
+}
+.tip:nth-child(2) {
+    --accent: var(--c-orange); --accent-2: var(--c-green);
+    --stroke: var(--c-green); --shadow-plate: 0 4px 0 var(--c-green-shade), var(--drop);
+}
+.tip:nth-child(3) {
+    --accent: var(--c-cream); --accent-2: var(--c-blue);
+    --stroke: var(--c-blue); --shadow-plate: 0 4px 0 var(--c-blue-shade), var(--drop);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--stroke-soft) transparent; }
+::selection { background: var(--accent-2); color: var(--on-accent); }
+html, body { overflow: hidden; background: transparent; }
+body {
+    position: relative;
+    width: 1920px;
+    height: 1080px;
+    transform-origin: top left;
+    font-family: var(--font-text);
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; cursor: pointer; }
+button:disabled { cursor: default; opacity: .4; }
+[hidden] { display: none !important; }
+button:focus-visible, input:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 4px;
+}
+
+/* Fondo de prueba (?preview=1): mitad clara y mitad oscura para revisar la legibilidad. Nunca en OBS. */
+html.preview body {
+    background:
+        repeating-linear-gradient(135deg, rgb(255 255 255 / 0.45) 0 24px, transparent 24px 96px),
+        linear-gradient(90deg, #E9E4D4 0 50%, #16241B 50% 100%);
+}
+/* No se pinta nada hasta que cargan las fuentes: ningún fotograma con la letra de reserva. */
+html.fonts-loading main { visibility: hidden; }
+html.fonts-loading main * { animation-play-state: paused !important; }
+
+/* ── Placas ── */
+#hud.system-topbar, .topbar-panel, .msg, #media-widget, #bingo-widget, #alert-box, .tip, #connection-status {
+    background: var(--plastic-sheen), var(--plastic-texture), var(--surface-plate);
+    border-radius: var(--radius-plate);
+    box-shadow: var(--bevel), 0 0 0 var(--stroke-width) var(--stroke), var(--glow), var(--shadow-plate);
+}
+/* Los aparatos grandes llevan un tornillo en cada esquina. */
+#media-widget, #bingo-widget {
+    background: var(--screws), var(--plastic-sheen), var(--plastic-texture), var(--surface-plate);
+}
+/* Placas secundarias, que están siempre en pantalla: trazo suave y sin brillo. */
+.msg, .tip {
+    box-shadow: var(--bevel), 0 0 0 var(--stroke-width) var(--stroke), var(--shadow-plate);
+}
+.label {
+    font-size: 18px;
+    line-height: 28px;
+    font-weight: 600;
+    text-transform: var(--label-case);
+    letter-spacing: var(--label-tracking);
+}
+
+/* ── Barra superior: isla dinámica centrada ── */
+#hud.system-topbar {
+    position: absolute;
+    top: var(--safe-y);
+    left: 50%;
+    width: max-content;
+    max-width: calc(100% - 2 * var(--safe-x));
+    height: var(--rail-h);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 24px 16px 16px;
+    z-index: 50;
+    transform: translateX(-50%);
+    transition: transform var(--dur-enter) var(--ease-enter);
+    animation: notch-in var(--dur-enter) var(--ease-enter) backwards, flicker var(--dur-flicker) steps(1, end) backwards;
+}
+/* Recogida tras unos segundos sin cambios: solo asoma un borde de 12 px arriba. */
+#hud.system-topbar.tucked {
+    transform: translate(-50%, calc(-100% - var(--safe-y) + 12px));
+    transition: transform var(--dur-enter) var(--ease-exit);
+}
+.topbar-start {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: 16px;
+    height: 100%;
+}
+#hud.dynamic-island .topbar-start { cursor: pointer; }
+.disc-lid {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 80px;
+    height: 80px;
+    padding: 4px;
+    border-radius: var(--radius-inner);
+    /* Ventana LCD con su bisel oscuro: el avatar vive dentro de la pantalla. */
+    background: var(--lcd-glass), var(--lcd-grid), var(--lcd-depth), var(--lcd-bg);
+    box-shadow: var(--lcd-recess), 0 0 0 4px var(--lcd-bezel), var(--bezel-lip);
+}
+.channel-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 4px;
+    background: var(--lcd-bg);
+    image-rendering: pixelated;
+}
+.brand-copy { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-width: 0; }
+/* Letras en relieve sobre la carcasa; en la pantalla LCD, impresas con un brillo claro debajo. */
+#hud .stream-title, #bingo-status, #bingo-widget .aero-window-title, .alert-body { text-shadow: 0 2px 0 rgb(0 0 0 / 0.45); }
+.media-info #video-title { text-shadow: 0 1px 0 rgb(255 255 255 / 0.35); }
+#hud .stream-title {
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+    font-family: var(--font-display);
+    font-size: 24px;
+    line-height: 32px;
+    font-weight: var(--display-weight);
+}
+.brand-meta { display: flex; align-items: center; gap: 12px; }
+.brand-live {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--accent);
+}
+.brand-live::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 9999px;
+    background: var(--accent);
+    box-shadow: var(--glow);
+    animation: led-breathe 4000ms var(--ease-enter) infinite;
+}
+.topbar-clock { white-space: nowrap; }
+/* Reloj en una tirita LCD, como la hora de un aparato de bolsillo. */
+.desktop-clock {
+    display: inline-block;
+    padding: 0 8px;
+    border-radius: 4px;
+    background: var(--lcd-depth), var(--lcd-bg);
+    color: var(--lcd-ink);
+    box-shadow: inset 0 2px 4px rgb(0 0 0 / 0.3), 0 0 0 2px var(--lcd-bezel), 0 2px 0 3px rgb(255 255 255 / 0.10);
+    font-family: var(--font-mono);
+    font-size: 18px;
+    line-height: 28px;
+    font-weight: 600;
+}
+
+.topbar-center { display: flex; align-items: center; gap: 0; min-width: 0; }
+/* Isla: solo se despliega lo que está pasando (bingo o música); al pasar el ratón, todo. */
+#hud.dynamic-island .island-slot {
+    display: flex;
+    flex-shrink: 0;
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transition: opacity var(--dur-exit) var(--ease-exit), max-width var(--dur-enter) var(--ease-enter) var(--dur-exit);
+}
+#hud.dynamic-island .island-clip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: max-content;
+    padding: 12px 4px 12px 16px;
+}
+#hud.dynamic-island[data-island="bingo"] .island-slot[data-slot="bingo"],
+#hud.dynamic-island[data-island="music"] .island-slot[data-slot="music"],
+#hud.dynamic-island[data-island="open"] .island-slot {
+    max-width: 1100px;
+    opacity: 1;
+    pointer-events: auto;
+    transition: max-width var(--dur-enter) var(--ease-enter), opacity var(--dur-enter) var(--ease-enter) var(--dur-exit);
+}
+/* Divisor entre grupos: una regla de 2 px dentro de la placa. */
+.pad-rule { flex: 0 0 auto; width: 2px; height: 32px; background: var(--stroke-soft); }
+.aero-control-cluster { display: flex; align-items: center; flex: 0 0 auto; gap: 8px; }
+#music-transport, .transport-row { display: flex; align-items: center; gap: 8px; }
+
+/* Teclas de la barra: botones redondos de plástico. Apagados en gris de carcasa, encendidos en naranja. */
+.topbar-button, .music-anchor {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-shrink: 0;
+    height: 56px;
+    border: 0;
+    border-radius: 9999px;
+    background: var(--surface-raised);
+    color: var(--text-muted);
+    box-shadow: 0 0 0 var(--stroke-width) var(--stroke-soft), 0 4px 0 var(--lcd-bezel);
+    transition: transform 300ms var(--ease-enter), opacity 300ms var(--ease-enter);
+}
+.aero-icon-button { width: 56px; }
+.aero-icon-button svg, .aero-app-orb svg { width: 24px; height: 24px; fill: currentColor; }
+.aero-app-orb { display: inline-grid; place-items: center; width: 24px; height: 24px; }
+.music-anchor {
+    padding: 8px 16px 8px 12px;
+    font-size: 18px;
+    line-height: 28px;
+    font-weight: 600;
+    text-transform: var(--label-case);
+    letter-spacing: var(--label-tracking);
+}
+.topbar-button[aria-pressed="true"], .topbar-button[aria-expanded="true"], .music-anchor[aria-pressed="true"] {
+    background: var(--accent);
+    color: var(--on-accent);
+    box-shadow: 0 4px 0 var(--plastic-shade);
+}
+.music-anchor[data-playing="true"] {
+    background: var(--accent-2);
+    color: var(--on-accent);
+    box-shadow: 0 4px 0 #9A6F00;
+}
+.topbar-button:hover:not(:disabled), .music-anchor:hover { transform: translateY(-2px); }
+/* Cúpula de plástico encima de cada botón (también sobre el icono, como un botón real). */
+.topbar-button, .music-anchor { position: relative; }
+.topbar-button::after, .music-anchor::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--dome);
+    box-shadow: inset 0 2px 0 rgb(255 255 255 / 0.30), inset 0 -3px 0 rgb(0 0 0 / 0.20);
+    pointer-events: none;
+}
+/* Al pulsar, el botón se hunde sobre su canto. */
+.topbar-button:active:not(:disabled), .music-anchor:active { transform: translateY(4px); box-shadow: 0 0 0 var(--plastic-shade); }
+
+/* CD: gira despacio (una vuelta cada 4 s) solo mientras suena y fuera del modo ligero. */
+.vinyl-record {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    border-radius: 9999px;
+    background:
+        radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.25) 0 10%, transparent 40%),
+        repeating-radial-gradient(circle, var(--surface-raised) 0 2px, #100E22 2px 4px);
+    box-shadow: inset 0 0 0 var(--stroke-width) var(--accent);
+    animation: disc-spin 4000ms linear infinite paused;
+}
+.vinyl-record::before {
+    content: "";
+    position: absolute;
+    top: 6px;
+    left: 18px;
+    width: 4px;
+    height: 8px;
+    border-radius: 2px;
+    background: var(--accent);
+}
+.vinyl-record::after {
+    content: "";
+    position: absolute;
+    inset: 14px;
+    border-radius: 9999px;
+    background: var(--accent-2);
+}
+.music-transport[data-state="playing"] .vinyl-record { animation-play-state: running; }
+/* Barras de nivel quietas: indican que suena, sin un bucle rápido junto al juego. */
+.music-bars, .equalizer { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; }
+.music-bars i, .equalizer i { width: 4px; height: 16px; border-radius: 2px; background: var(--accent-2); }
+.music-bars i:nth-child(2), .equalizer i:nth-child(2) { height: 8px; }
+.music-bars i:nth-child(1) { background: var(--c-red); }
+.music-bars i:nth-child(2) { background: var(--c-green); }
+.music-bars i:nth-child(3) { background: var(--c-blue); }
+.music-bars i:nth-child(4) { background: var(--c-yellow); }
+.music-bars i:nth-child(4), .equalizer i:nth-child(4) { height: 12px; }
+.music-transport[data-state="idle"] .music-bars, #media-widget[data-state="idle"] .equalizer { opacity: .4; }
+
+/* ── Paneles de cola y volumen (se abren con Interactuar en OBS) ── */
+.topbar-panel {
+    position: absolute;
+    top: var(--below-rail);
+    right: calc(var(--safe-x) + var(--yt-w) + 16px);
+    width: 400px;
+    max-height: 440px;
+    overflow: auto;
+    z-index: 75;
+    animation: plate-in var(--dur-enter) var(--ease-enter) both;
+}
+.aero-window-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    color: var(--accent);
+    box-shadow: inset 0 calc(-1 * var(--stroke-width)) 0 var(--stroke-soft);
+    font-size: 18px;
+    line-height: 28px;
+    font-weight: 600;
+    text-transform: var(--label-case);
+    letter-spacing: var(--label-tracking);
+}
+.topbar-panel-body { padding: 16px; font-size: 20px; line-height: 28px; font-weight: 500; }
+.topbar-panel-body label { display: flex; justify-content: space-between; gap: 12px; font-weight: 600; }
+.topbar-panel-body output { color: var(--accent); font-family: var(--font-mono); font-weight: 600; }
+.topbar-panel-body small { display: block; color: var(--text-muted); font-size: 18px; line-height: 28px; }
+#music-volume, #tts-volume { width: 100%; margin: 12px 0 16px; accent-color: var(--accent); cursor: pointer; }
+#queue-list { padding-left: 48px; overflow-wrap: anywhere; }
+#queue-list li { padding: 8px 0; box-shadow: inset 0 calc(-1 * var(--stroke-width)) 0 var(--stroke-soft); }
+#queue-list li:last-child { box-shadow: none; }
+#queue-list li::marker { color: var(--accent); font-family: var(--font-mono); }
+
+/* ── Chat: abajo a la izquierda, hasta cuatro mensajes de dos líneas ── */
+#chat-widget {
+    position: absolute;
+    left: var(--safe-x);
+    bottom: var(--safe-y);
+    width: var(--chat-w);
+    max-height: var(--chat-max);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    z-index: 20;
+}
+body.no-chat #chat-widget { display: none; }
+.chat-body {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 12px;
+    max-height: var(--chat-max);
+    padding: 4px;
+    overflow: hidden;
+}
+/* Nombre y mensaje en el mismo renglón; dos líneas como máximo. */
+.msg {
+    flex-shrink: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    padding: 12px 16px;
+    font-size: 20px;
+    line-height: 28px;
+    animation: msg-in var(--dur-enter) var(--ease-enter) both, msg-out var(--dur-exit) var(--ease-exit) 25s forwards;
+}
+.msg-user {
+    display: inline;
+    margin-right: 8px;
+    color: var(--accent-2);
+    font-weight: 600;
+}
+.msg-text {
+    display: inline;
+    font-family: var(--font-text), var(--font-emoji);
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+.chat-emote { display: inline-block; width: 28px; height: 28px; object-fit: contain; vertical-align: -6px; }
+/* Usuario baneado con !ban: texto plano y apagado. */
+.msg.text-only .msg-user, .msg.text-only .msg-text { color: var(--text-muted); }
+
+/* ── Reproductor: arriba a la derecha, alineado con la barra ── */
+#media-widget {
+    position: absolute;
+    top: var(--safe-y);
+    right: var(--safe-x);
+    width: var(--yt-w);
+    z-index: 45;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: var(--plate-padding);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(calc(-1 * var(--enter-y)));
+    transition: opacity var(--dur-exit) var(--ease-exit), transform var(--dur-exit) var(--ease-exit), visibility 0ms var(--ease-exit) var(--dur-exit);
+}
+#media-widget[data-shown="true"] {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    transition: opacity var(--dur-enter) var(--ease-enter), transform var(--dur-enter) var(--ease-enter), visibility 0ms var(--ease-enter);
+    animation: flicker var(--dur-flicker) steps(1, end);
+}
+body.bingo-active #media-widget { opacity: 0; visibility: hidden; pointer-events: none; }
+.deck-head { display: flex; align-items: center; gap: 8px; color: var(--accent); }
+/* Sello de la colección: cinco píxeles de colores a la derecha de la cabecera. */
+.deck-head::after {
+    content: "";
+    margin-left: auto;
+    margin-right: 48px;
+    width: 8px;
+    height: 8px;
+    background: var(--c-orange);
+    box-shadow: 12px 0 0 var(--c-yellow), 24px 0 0 var(--c-green), 36px 0 0 var(--c-blue), 48px 0 0 var(--c-red);
+}
+.deck-led { width: 8px; height: 8px; border-radius: 9999px; background: var(--stroke-soft); }
+#media-widget[data-state="playing"] .deck-led { background: var(--accent-2); }
+#video-container {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: var(--radius-inner);
+    background: var(--surface-scene);
+    box-shadow: 0 0 0 4px var(--lcd-bezel), 0 0 0 7px var(--stroke-soft);
+}
+#media-widget[data-state="playing"] #video-container { box-shadow: 0 0 0 4px var(--lcd-bezel), 0 0 0 7px var(--accent); }
+#youtube-player, #direct-video { width: 100%; height: 100%; display: block; }
+#youtube-player iframe { width: 100%; height: 100%; border: 0; }
+#direct-video { display: none; object-fit: contain; }
+/* Pantalla LCD: fondo naranja iluminado, tinta marrón y bisel oscuro alrededor. */
+.media-info.deck-lcd {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 16px;
+    row-gap: 4px;
+    align-items: center;
+    min-width: 0;
+    padding: 12px 16px;
+    border-radius: var(--radius-inner);
+    background: var(--lcd-glass), var(--lcd-grid), var(--lcd-depth), var(--lcd-bg);
+    color: var(--lcd-ink);
+    box-shadow: var(--lcd-recess), 0 0 0 4px var(--lcd-bezel), var(--bezel-lip);
+}
+.deck-lcd > :not(.deck-pet) { grid-column: 2; }
+.media-label { display: inline-flex; align-items: center; gap: 8px; color: var(--lcd-dim); }
+.deck-lcd .equalizer i { border-radius: 0; background: var(--lcd-ink); }
+.deck-lcd .equalizer i:nth-child(2) { background: var(--c-red-shade); }
+.deck-lcd .equalizer i:nth-child(3) { background: var(--c-blue-shade); }
+
+/* Mascota pixelada heredada de V-Saturn. En este tema no se ve: «Piel pedalboard», al final,
+   convierte este hueco en el vúmetro y el <i> en su aguja. */
+.deck-pet {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    position: relative;
+    width: 72px;
+    height: 66px;
+}
+.deck-pet i {
+    --pet-ink: var(--lcd-ink);
+    --pet-body: var(--c-orange);
+    --pet-belly: #FFF1C9;
+    --pet-horn: var(--c-yellow);
+    --pet-cheek: var(--c-red);
+    --pet-eye: #FFFFFF;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 3px;
+    transform: scale(2);
+    transform-origin: 0 0;
+    box-shadow:
+        6px 0px 0 var(--pet-horn), 27px 0px 0 var(--pet-horn),
+        6px 3px 0 var(--pet-horn), 9px 3px 0 var(--pet-ink), 24px 3px 0 var(--pet-ink), 27px 3px 0 var(--pet-horn),
+        6px 6px 0 var(--pet-ink), 9px 6px 0 var(--pet-ink), 12px 6px 0 var(--pet-ink), 15px 6px 0 var(--pet-ink),
+        18px 6px 0 var(--pet-ink), 21px 6px 0 var(--pet-ink), 24px 6px 0 var(--pet-ink), 27px 6px 0 var(--pet-ink),
+        3px 9px 0 var(--pet-ink), 6px 9px 0 var(--pet-body), 9px 9px 0 var(--pet-body), 12px 9px 0 var(--pet-body),
+        15px 9px 0 var(--pet-body), 18px 9px 0 var(--pet-body), 21px 9px 0 var(--pet-body), 24px 9px 0 var(--pet-body),
+        27px 9px 0 var(--pet-body), 30px 9px 0 var(--pet-ink),
+        3px 12px 0 var(--pet-ink), 6px 12px 0 var(--pet-body), 9px 12px 0 var(--pet-eye), 12px 12px 0 var(--pet-ink),
+        15px 12px 0 var(--pet-body), 18px 12px 0 var(--pet-body), 21px 12px 0 var(--pet-eye), 24px 12px 0 var(--pet-ink),
+        27px 12px 0 var(--pet-body), 30px 12px 0 var(--pet-ink),
+        3px 15px 0 var(--pet-ink), 6px 15px 0 var(--pet-body), 9px 15px 0 var(--pet-ink), 12px 15px 0 var(--pet-ink),
+        15px 15px 0 var(--pet-body), 18px 15px 0 var(--pet-body), 21px 15px 0 var(--pet-ink), 24px 15px 0 var(--pet-ink),
+        27px 15px 0 var(--pet-body), 30px 15px 0 var(--pet-ink),
+        0px 18px 0 var(--pet-ink), 3px 18px 0 var(--pet-ink), 6px 18px 0 var(--pet-body), 9px 18px 0 var(--pet-cheek),
+        12px 18px 0 var(--pet-body), 15px 18px 0 var(--pet-body), 18px 18px 0 var(--pet-body), 21px 18px 0 var(--pet-body),
+        24px 18px 0 var(--pet-cheek), 27px 18px 0 var(--pet-body), 30px 18px 0 var(--pet-ink), 33px 18px 0 var(--pet-ink),
+        3px 21px 0 var(--pet-ink), 6px 21px 0 var(--pet-body), 9px 21px 0 var(--pet-body), 12px 21px 0 var(--pet-belly),
+        15px 21px 0 var(--pet-belly), 18px 21px 0 var(--pet-belly), 21px 21px 0 var(--pet-belly), 24px 21px 0 var(--pet-body),
+        27px 21px 0 var(--pet-body), 30px 21px 0 var(--pet-ink),
+        3px 24px 0 var(--pet-ink), 6px 24px 0 var(--pet-body), 9px 24px 0 var(--pet-body), 12px 24px 0 var(--pet-belly),
+        15px 24px 0 var(--pet-belly), 18px 24px 0 var(--pet-belly), 21px 24px 0 var(--pet-belly), 24px 24px 0 var(--pet-body),
+        27px 24px 0 var(--pet-body), 30px 24px 0 var(--pet-ink),
+        6px 27px 0 var(--pet-ink), 9px 27px 0 var(--pet-ink), 12px 27px 0 var(--pet-body), 15px 27px 0 var(--pet-body),
+        18px 27px 0 var(--pet-body), 21px 27px 0 var(--pet-body), 24px 27px 0 var(--pet-ink), 27px 27px 0 var(--pet-ink),
+        6px 30px 0 var(--pet-ink), 9px 30px 0 var(--pet-ink), 24px 30px 0 var(--pet-ink), 27px 30px 0 var(--pet-ink);
+}
+/* Con música la mascota da un saltito cada 4 s; sin música duerme tenue. */
+#media-widget[data-state="playing"] .deck-pet { animation: pet-hop 4000ms steps(1, end) infinite; }
+#media-widget[data-state="idle"] .deck-pet { opacity: .35; }
+body.lite #media-widget .deck-pet { animation: none; }
+#video-title {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 24px;
+    line-height: 32px;
+    font-weight: 600;
+}
+#video-title.scrolling { text-overflow: clip; }
+.title-inner { display: inline-block; }
+/* Desplazamiento lento del título: es información, así que sigue en modo ligero. */
+.title-inner.marquee { animation: title-marquee 24s var(--ease-enter) infinite alternate; }
+.deck-requester { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.deck-requester[hidden] { display: none; }
+.deck-requester .requester-label { flex-shrink: 0; color: var(--lcd-dim); }
+#video-requester {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--lcd-ink);
+    font-size: 20px;
+    line-height: 28px;
+    font-weight: 600;
+}
+#queue-indicator {
+    display: none;
+    align-self: flex-start;
+    margin-top: 4px;
+    padding: 0 8px;
+    border-radius: 2px;
+    background: var(--lcd-ink);
+    color: var(--lcd-bg);
+    font-size: 18px;
+    line-height: 28px;
+    font-weight: 600;
+}
+.deck-keys { display: flex; justify-content: center; gap: 12px; }
+.deck-keys .face-button { width: 56px; height: 56px; background: var(--accent); color: var(--on-accent); box-shadow: 0 4px 0 var(--plastic-shade); }
+.deck-keys .face-button svg { width: 24px; height: 24px; fill: currentColor; }
+.deck-keys .face-button:hover:not(:disabled) { box-shadow: 0 0 0 var(--stroke-width) var(--accent-2), 0 4px 0 var(--plastic-shade); }
+/* Pausa queda encendida mientras la música está en pausa. */
+/* Teclas de juguete, cada una de un color. */
+#music-prev { --accent: var(--c-blue); --plastic-shade: var(--c-blue-shade); }
+#music-restart { --accent: var(--c-purple); --plastic-shade: var(--c-purple-shade); }
+#music-pause { --accent: var(--c-red); --plastic-shade: var(--c-red-shade); }
+#music-stop { --accent: var(--c-orange); --plastic-shade: var(--c-orange-shade); }
+#music-next { --accent: var(--c-yellow); --plastic-shade: var(--c-yellow-shade); }
+/* Pausa se queda hundida mientras la música está en pausa. */
+#media-widget[data-state="paused"] #music-pause:not(:disabled) { transform: translateY(4px); box-shadow: 0 0 0 var(--stroke-width) var(--text); }
+
+/* ── Bingo: tablero centrado mientras dura la partida ── */
+#bingo-widget {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max-content;
+    max-width: calc(100% - 2 * var(--safe-x));
+    overflow: hidden;
+    z-index: 42;
+    transform: translate(-50%, -50%);
+    animation: bingo-in var(--dur-enter) var(--ease-enter) both, flicker var(--dur-flicker) steps(1, end) both;
+}
+#bingo-widget .aero-window-title { padding: 12px 24px; color: var(--text); }
+#bingo-widget .aero-window-title, #bingo-widget .bingo-title { font-family: var(--font-display); font-size: 24px; line-height: 32px; font-weight: var(--display-weight); }
+#bingo-widget .aero-app-orb { color: var(--accent); }
+.bingo-caption {
+    margin-left: auto;
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 20px;
+    line-height: 28px;
+    font-weight: 600;
+    letter-spacing: 0;
+}
+.bingo-content { padding: 24px; }
+.bingo-draw { display: flex; align-items: center; gap: 32px; }
+.bingo-drum { position: relative; display: grid; place-items: center; width: 176px; height: 176px; flex: 0 0 176px; }
+.bingo-drum > i { position: absolute; inset: 0; border-radius: 9999px; }
+.bingo-drum > i:nth-child(1) { background: radial-gradient(circle at 50% 35%, #342D63, var(--surface-raised) 60%, #15122A); box-shadow: inset 0 3px 0 rgb(255 255 255 / 0.14), inset 0 -6px 10px rgb(0 0 0 / 0.45), 0 0 0 var(--stroke-width) var(--accent), var(--drop); }
+.bingo-drum > i:nth-child(2) { inset: 12px; border: var(--stroke-width) dashed var(--accent-2); animation: bingo-cage 1600ms var(--ease-enter) infinite alternate; }
+.bingo-drum > i:nth-child(3) { display: none; }
+#bingo-ball {
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: 120px;
+    height: 120px;
+    border-radius: 9999px;
+    /* Bola de verdad: reflejo arriba y sombra hacia el borde inferior. */
+    background:
+        radial-gradient(circle at 34% 28%, rgb(255 255 255 / 0.75) 0 9%, rgb(255 255 255 / 0.15) 22%, transparent 40%),
+        radial-gradient(circle at 50% 42%, transparent 52%, rgb(0 0 0 / 0.30) 100%),
+        var(--lcd-bg);
+    color: var(--lcd-ink);
+    box-shadow: 0 0 0 4px var(--lcd-bezel), 0 0 0 7px var(--accent-2), 0 8px 12px rgb(0 0 0 / 0.4);
+    font-family: var(--font-display);
+    font-size: 24px;
+    line-height: 32px;
+    font-weight: var(--display-weight);
+}
+.bingo-ball-arrival { animation: bingo-arrival 600ms var(--ease-enter) both; }
+.bingo-info { display: flex; flex-direction: column; gap: 8px; min-width: 0; max-width: 640px; }
+#bingo-status {
+    font-family: var(--font-display);
+    font-size: 48px;
+    line-height: 48px;
+    font-weight: var(--display-weight);
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+}
+#bingo-widget[data-phase="won"] #bingo-status { color: var(--accent); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+#bingo-participants {
+    align-self: flex-start;
+    padding: 0 8px;
+    border-radius: 2px;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: 18px;
+    line-height: 28px;
+    font-weight: 600;
+}
+#bingo-help { color: var(--text-muted); font-size: 20px; line-height: 28px; font-weight: 500; }
+#bingo-history { margin: 16px 0 8px; color: var(--accent); font-family: var(--font-mono); font-size: 20px; line-height: 28px; font-weight: 600; overflow-wrap: anywhere; }
+.bingo-board-row { display: grid; grid-template-columns: repeat(16, 48px); gap: 8px; margin-top: 8px; }
+.bingo-board-row b, .bingo-board-row span {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-inner);
+}
+.bingo-board-row b {
+    background: var(--surface-raised);
+    color: var(--accent);
+    font-family: var(--font-display);
+    font-size: 24px;
+    line-height: 32px;
+    font-weight: var(--display-weight);
+}
+.bingo-board-row span {
+    color: var(--text-muted);
+    box-shadow: inset 0 0 0 var(--stroke-width) var(--stroke-soft);
+    font-family: var(--font-mono);
+    font-size: 18px;
+    line-height: 28px;
+    font-weight: 500;
+    transition: transform 300ms var(--ease-enter), opacity 300ms var(--ease-enter);
+}
+/* Cada letra de B-I-N-G-O es una fila de otro color. */
+.bingo-board-row:nth-child(1) { --row: var(--c-orange); }
+.bingo-board-row:nth-child(2) { --row: var(--c-green); }
+.bingo-board-row:nth-child(3) { --row: var(--c-red); }
+.bingo-board-row:nth-child(4) { --row: var(--c-blue); }
+.bingo-board-row:nth-child(5) { --row: var(--c-yellow); }
+.bingo-board-row b { color: var(--row, var(--accent)); }
+.bingo-board-row .called { background: var(--row, var(--accent)); color: var(--on-accent); box-shadow: none; font-weight: 600; }
+.bingo-board-row .latest { background: var(--text); color: var(--on-accent); box-shadow: 0 0 0 var(--stroke-width) var(--row, var(--accent-2)); transform: scale(1.15); }
+#bingo-widget[data-phase="won"] #bingo-board,
+#bingo-widget[data-phase="won"] #bingo-history { display: none; }
+#bingo-winning-card {
+    display: grid;
+    grid-template-columns: repeat(5, 64px);
+    gap: 8px;
+    justify-content: center;
+    margin-top: 24px;
+    padding: 12px;
+    border-radius: var(--radius-inner);
+    background: var(--surface-raised);
+    text-align: center;
+}
+#bingo-winning-card b { color: var(--accent); font-family: var(--font-display); font-size: 24px; line-height: 32px; font-weight: var(--display-weight); }
+#bingo-winning-card span { padding: 8px 0; border-radius: 2px; background: var(--surface-plate-solid); font-family: var(--font-mono); font-size: 24px; line-height: 32px; font-weight: 600; }
+#bingo-winning-card .winning { background: var(--accent-2); color: var(--on-accent); }
+/* Las letras del cartón ganador llevan el color de su fila del tablero. */
+#bingo-winning-card b:nth-child(1) { color: var(--c-orange); }
+#bingo-winning-card b:nth-child(2) { color: var(--c-green); }
+#bingo-winning-card b:nth-child(3) { color: var(--c-red); }
+#bingo-winning-card b:nth-child(4) { color: var(--c-blue); }
+#bingo-winning-card b:nth-child(5) { color: var(--c-yellow); }
+
+/* ── Alertas: bajo la barra, centradas. El tipo se lee en la etiqueta, no solo en el color ── */
+#alert-box {
+    --alert-key: var(--accent);
+    --alert-glow: var(--glow);
+    position: absolute;
+    top: var(--below-rail);
+    left: 50%;
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    column-gap: 24px;
+    row-gap: 8px;
+    min-width: 560px;
+    max-width: 820px;
+    padding: 24px;
+    pointer-events: none;
+    z-index: 80;
+    /* Opaca: queda encima de la barra y del bingo, que no deben transparentarse. */
+    background: var(--screws), var(--plastic-sheen), var(--plastic-texture), var(--surface-plate-solid);
+    box-shadow: var(--bevel), 0 0 0 var(--stroke-width) var(--alert-key), var(--alert-glow), var(--shadow-plate);
+    opacity: 0;
+    transform: translate(-50%, calc(-1 * var(--enter-y)));
+    transition: opacity var(--dur-exit) var(--ease-exit), transform var(--dur-exit) var(--ease-exit);
+}
+/* Con el bingo en juego la alerta sube sobre la barra para no tapar la cabecera del tablero. */
+body.bingo-active #alert-box { top: var(--safe-y); }
+#alert-box.show {
+    opacity: 1;
+    transform: translate(-50%, 0);
+    transition: opacity var(--dur-enter) var(--ease-enter), transform var(--dur-enter) var(--ease-enter);
+    animation: flicker var(--dur-flicker) steps(1, end);
+}
+.alert-disc {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    align-self: center;
+    width: 96px;
+    height: 96px;
+    padding: 4px;
+    border-radius: var(--radius-inner);
+    background: var(--lcd-glass), var(--lcd-grid), var(--lcd-depth), var(--lcd-bg);
+    box-shadow: var(--lcd-recess), 0 0 0 4px var(--lcd-bezel), 0 0 0 7px var(--alert-key);
+    transform: scale(.9);
+    transition: transform var(--dur-enter) var(--ease-enter);
+}
+#alert-box.show .alert-disc { transform: none; }
+.alert-art { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 4px; background: var(--lcd-bg); image-rendering: pixelated; }
+.alert-header {
+    grid-column: 2;
+    justify-self: start;
+    align-self: end;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 8px;
+    border-radius: 2px;
+    background: var(--alert-key);
+    color: var(--on-accent);
+    font-size: 18px;
+    line-height: 28px;
+    font-weight: 600;
+    text-transform: var(--label-case);
+    letter-spacing: var(--label-tracking);
+}
+.alert-spark { display: inline-grid; place-items: center; width: 18px; height: 18px; }
+.alert-spark svg { width: 18px; height: 18px; fill: currentColor; }
+.alert-body {
+    grid-column: 2;
+    align-self: start;
+    font-family: var(--font-text);
+    font-size: 30px;
+    line-height: 36px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+}
+
+/* ── Consejos: un mensaje cada 9 s, centrado sobre el margen inferior ── */
+#tips {
+    position: absolute;
+    left: 50%;
+    bottom: var(--safe-y);
+    width: max-content;
+    max-width: 800px;
+    z-index: 20;
+    display: grid;
+    justify-items: center;
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+.tip {
+    grid-area: 1 / 1;
+    display: none;
+    align-items: center;
+    gap: 12px;
+    max-width: 800px;
+    padding: 8px 16px 8px 8px;
+    font-size: 24px;
+    line-height: 32px;
+    font-weight: 500;
+}
+.tip.current { display: flex; }
+body:not(.lite) .tip.current { animation: plate-in var(--dur-enter) var(--ease-enter) both; }
+.tip-label {
+    flex: 0 0 auto;
+    padding: 2px 8px;
+    border-radius: 2px;
+    background: var(--accent-2);
+    color: var(--on-accent);
+    font-size: 18px;
+    line-height: 28px;
+    font-weight: 600;
+    text-transform: var(--label-case);
+    letter-spacing: var(--label-tracking);
+}
+.tip b { color: var(--accent); font-weight: 600; }
+
+/* Avisos para el streamer, arriba a la izquierda (fuera de la alerta); app.js los retira a los 8 s. */
+#connection-status {
+    position: absolute;
+    top: var(--safe-y);
+    left: var(--safe-x);
+    max-width: 520px;
+    z-index: 100;
+    padding: 12px 16px;
+    font-size: 20px;
+    line-height: 28px;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+#connection-status:empty { display: none; }
+
+/* ── Movimiento ── */
+/* Encendido de LCD: la pieza sube de brillo en tres pasos, solo al entrar (nunca parpadea). */
+@keyframes flicker {
+    0% { opacity: 0; }
+    33% { opacity: .35; }
+    66% { opacity: .7; }
+    100% { opacity: 1; }
+}
+/* Saltito de la mascota: dos brincos de un píxel ampliado y luego descanso hasta el ciclo siguiente. */
+@keyframes pet-hop {
+    0%, 10%, 20%, 100% { transform: none; }
+    5%, 15% { transform: translateY(-6px); }
+}
+@keyframes notch-in { from { transform: translate(-50%, calc(-1 * var(--enter-y))); } to { transform: translateX(-50%); } }
+@keyframes plate-in { from { opacity: 0; transform: translateY(var(--enter-y)); } to { opacity: 1; transform: none; } }
+@keyframes msg-in { from { opacity: 0; transform: translateY(var(--enter-y)); } to { opacity: 1; transform: none; } }
+@keyframes msg-out { to { opacity: 0; transform: translateY(-8px); } }
+@keyframes bingo-in { from { transform: translate(-50%, -46%); } to { transform: translate(-50%, -50%); } }
+@keyframes bingo-arrival {
+    0% { opacity: 0; transform: translateY(-48px) scale(.4); }
+    60% { opacity: 1; transform: translateY(4px) scale(1.04); }
+    100% { opacity: 1; transform: none; }
+}
+@keyframes bingo-cage { from { transform: rotate(-16deg); } to { transform: rotate(16deg); } }
+@keyframes led-breathe { 50% { opacity: .35; } }
+@keyframes disc-spin { to { transform: rotate(360deg); } }
+@keyframes title-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+/* Modo ligero (por defecto): quietos el LED, el CD y el bombo; las entradas se conservan. */
+body.lite .brand-live::before, body.lite .vinyl-record, body.lite .bingo-drum > i { animation: none !important; }
+/* Movimiento reducido: del sistema o con ?motion=reduced (OBS no informa la preferencia). */
+html.motion-reduced *, html.motion-reduced *::before, html.motion-reduced *::after { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .tip { display: none; }
+    .tip.current { display: flex; opacity: 1; }
+    #video-title.scrolling { text-overflow: ellipsis; }
+}
+
+/* ══ Efectos ══
+   Dos capas. Efectos de evento (alerta, mensaje, canción, bola, ganador, consejo): duran menos de
+   un segundo y se ven también en modo ligero. Ambiente (escáner del avatar, línea de la barra,
+   brillo del reproductor): ciclos de 6 a 8 s y solo con lite=0.
+   Solo transform y opacity; ningún destello supera tres por segundo. */
+
+/* Capa recortada a la forma de la placa para barridos y líneas de escaneo. */
+.fx-clip { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; pointer-events: none; z-index: 2; }
+/* Barrido de luz: una franja inclinada que cruza la placa una vez. */
+.fx-sweep, .msg::after, .tip::after {
+    content: "";
+    position: absolute;
+    top: -8px;
+    bottom: -8px;
+    left: 0;
+    width: 120px;
+    background: rgb(255 138 31 / 0.16);
+    opacity: 0;
+    transform: translateX(-160px) skewX(-20deg);
+    pointer-events: none;
+}
+/* Línea de escaneo que baja por la barra cada 6 s (ambiente). */
+.fx-scan {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 2px;
+    background: rgb(255 138 31 / 0.5);
+    opacity: 0;
+    animation: scan-down 6000ms var(--ease-enter) 1200ms infinite;
+}
+
+/* ── Barra ── */
+/* Al desplegarse (también al cargar) la cruza un barrido. */
+#hud:not(.tucked) .fx-sweep { animation: sweep 900ms var(--ease-enter) 250ms both; }
+/* Escáner del avatar: cuatro esquinas que siguen la forma cuadrada del marco (cian arriba a la
+   izquierda, magenta abajo a la derecha). Se cierran sobre el avatar al desplegarse la barra y,
+   con lite=0, respiran despacio. Radio exterior = 8 del marco + 6 de separación ≈ 12. */
+.disc-lid { position: relative; }
+.disc-lid::before {
+    content: "";
+    position: absolute;
+    inset: -10px;               /* fuera del bisel de 4 px del LCD */
+    border-radius: var(--radius-outer);
+    border: var(--stroke-width) solid var(--accent);
+    border-right-color: var(--accent-2);
+    border-bottom-color: var(--accent-2);
+    -webkit-mask:
+        linear-gradient(#000 0 0) left top / 20px 20px no-repeat,
+        linear-gradient(#000 0 0) right top / 20px 20px no-repeat,
+        linear-gradient(#000 0 0) left bottom / 20px 20px no-repeat,
+        linear-gradient(#000 0 0) right bottom / 20px 20px no-repeat;
+    mask:
+        linear-gradient(#000 0 0) left top / 20px 20px no-repeat,
+        linear-gradient(#000 0 0) right top / 20px 20px no-repeat,
+        linear-gradient(#000 0 0) left bottom / 20px 20px no-repeat,
+        linear-gradient(#000 0 0) right bottom / 20px 20px no-repeat;
+    pointer-events: none;
+}
+#hud:not(.tucked) .disc-lid::before { animation: bracket-in 600ms var(--ease-enter) 200ms both, bracket-breathe 4000ms var(--ease-enter) 800ms infinite; }
+/* En modo ligero solo queda la entrada. */
+body.lite #hud:not(.tucked) .disc-lid::before { animation: bracket-in 600ms var(--ease-enter) 200ms both; }
+.channel-avatar { position: relative; z-index: 1; }
+
+/* ── Chat: cada mensaje entra deslizándose desde la izquierda y lo cruza un barrido ── */
+.msg { position: relative; animation: msg-slide var(--dur-enter) var(--ease-enter) both, msg-out var(--dur-exit) var(--ease-exit) 25s forwards; }
+.msg::after { width: 80px; animation: sweep 700ms var(--ease-enter) 120ms both; }
+.msg-user { display: inline-block; animation: chip-in 400ms var(--ease-enter) 80ms both; }
+
+/* ── Alertas: el avatar estalla con dos ondas y chispas; barrido, etiqueta y texto en cascada ── */
+.alert-disc { position: relative; }
+.alert-disc .alert-art { position: relative; z-index: 1; }
+/* Reflejo del vidrio y hundimiento también por encima de la imagen del avatar. */
+.disc-lid::after, .alert-disc::after {
+    content: "";
+    position: absolute;
+    inset: 4px;
+    z-index: 2;
+    border-radius: 4px;
+    background: var(--lcd-glass);
+    box-shadow: inset 0 4px 8px rgb(0 0 0 / 0.30);
+    pointer-events: none;
+}
+.fx-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-plate);
+    box-shadow: 0 0 0 var(--stroke-width) var(--alert-key, var(--accent));
+    opacity: 0;
+    pointer-events: none;
+}
+.fx-sparks { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+.fx-sparks i {
+    --s: 52px;
+    --d: 116px;
+    position: absolute;
+    left: -4px;
+    top: -4px;
+    width: 8px;
+    height: 8px;
+    background: var(--accent);
+    opacity: 0;
+}
+.fx-sparks i:nth-child(even) { --d: 96px; width: 6px; height: 6px; }
+/* Confeti de juguete: las chispas rotan por toda la paleta. */
+.fx-sparks i:nth-child(5n+1) { background: var(--c-orange); }
+.fx-sparks i:nth-child(5n+2) { background: var(--c-green); }
+.fx-sparks i:nth-child(5n+3) { background: var(--c-red); }
+.fx-sparks i:nth-child(5n+4) { background: var(--c-blue); }
+.fx-sparks i:nth-child(5n) { background: var(--c-yellow); }
+.fx-sparks i:nth-child(1) { --a: 0deg; }
+.fx-sparks i:nth-child(2) { --a: 36deg; }
+.fx-sparks i:nth-child(3) { --a: 72deg; }
+.fx-sparks i:nth-child(4) { --a: 108deg; }
+.fx-sparks i:nth-child(5) { --a: 144deg; }
+.fx-sparks i:nth-child(6) { --a: 180deg; }
+.fx-sparks i:nth-child(7) { --a: 216deg; }
+.fx-sparks i:nth-child(8) { --a: 252deg; }
+.fx-sparks i:nth-child(9) { --a: 288deg; }
+.fx-sparks i:nth-child(10) { --a: 324deg; }
+.fx-sparks i:nth-child(11) { --a: 18deg; }
+.fx-sparks i:nth-child(12) { --a: 198deg; }
+#alert-box.show .alert-disc { animation: disc-pop 600ms var(--ease-enter) 60ms both; }
+#alert-box.show .fx-ring { animation: ring-out 900ms var(--ease-enter) 160ms both; }
+#alert-box.show .fx-ring + .fx-ring { animation-delay: 380ms; }
+#alert-box.show .fx-sparks i { animation: spark 800ms var(--ease-enter) 180ms both; }
+#alert-box.show .fx-sparks i:nth-child(3n) { animation-delay: 240ms; }
+#alert-box.show .fx-sweep { animation: sweep 800ms var(--ease-enter) 300ms both; }
+#alert-box.show .alert-header { animation: chip-in 400ms var(--ease-enter) 160ms both; }
+#alert-box.show .alert-body { animation: rise-in 500ms var(--ease-enter) 260ms both; }
+/* Suscripciones regaladas: chispas más lejos y una segunda ráfaga. */
+#alert-box[data-type="giftsub"] .fx-sparks i { --d: 160px; }
+#alert-box.show[data-type="giftsub"] .fx-sparks i { animation-iteration-count: 2; }
+
+/* ── Reproductor ── */
+/* Al aparecer y en cada canción nueva lo cruza un barrido (dos nombres para poder relanzarlo). */
+#media-widget[data-shown="true"] .fx-sweep { animation: sweep 900ms var(--ease-enter) 200ms both; }
+#media-widget[data-shown="true"][data-track="1"] .fx-sweep { animation-name: sweep-b; }
+/* Título nuevo: sube en la pantalla antes de empezar a desplazarse. */
+.title-inner.marquee { animation: rise-in 500ms var(--ease-enter) backwards, title-marquee 24s var(--ease-enter) 2s infinite alternate; }
+#video-requester { display: inline-block; }
+#media-widget[data-track="0"] #video-requester { animation: chip-in 500ms var(--ease-enter) 200ms both; }
+#media-widget[data-track="1"] #video-requester { animation: chip-in-b 500ms var(--ease-enter) 200ms both; }
+/* Ecualizador: baila 8 s al empezar cada canción y luego descansa (no es un bucle de todo el stream). */
+.equalizer i { transform-origin: bottom; }
+#media-widget[data-track="0"] .equalizer i { animation: eq-a 8000ms var(--ease-enter) both; }
+#media-widget[data-track="1"] .equalizer i { animation: eq-b 8000ms var(--ease-enter) both; }
+#media-widget[data-track] .equalizer i:nth-child(2) { animation-delay: -120ms; }
+#media-widget[data-track] .equalizer i:nth-child(3) { animation-delay: -260ms; }
+#media-widget[data-track] .equalizer i:nth-child(4) { animation-delay: -60ms; }
+/* Brillo que respira alrededor del reproductor mientras suena (ambiente, ciclo de 6 s). */
+.fx-breathe {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: 0 0 0 var(--stroke-width) var(--accent-2), 0 0 0 8px rgb(255 210 63 / 0.25);
+    opacity: 0;
+    pointer-events: none;
+}
+#media-widget[data-state="playing"] .fx-breathe { animation: breathe 6000ms var(--ease-enter) infinite; }
+
+/* ── Bingo ── */
+#bingo-widget .fx-sweep { animation: sweep 1000ms var(--ease-enter) 350ms both; }
+/* La bola cae girando y se aplasta al llegar. */
+.bingo-ball-arrival { animation: ball-drop 700ms var(--ease-enter) both; }
+/* Casilla recién cantada: salta y suelta una onda. */
+.bingo-board-row span { position: relative; }
+.bingo-board-row .latest { animation: cell-pop 500ms var(--ease-enter) both; }
+.bingo-board-row .latest::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: 0 0 0 var(--stroke-width) var(--accent-2);
+    opacity: 0;
+    animation: ring-out 800ms var(--ease-enter) 100ms both;
+}
+/* Ganador: el nombre irrumpe, el bombo suelta tres ráfagas de chispas y el cartón se enciende fila a fila. */
+#bingo-widget[data-phase="won"] #bingo-status { animation: status-in 600ms var(--ease-enter) both; }
+.bingo-burst { z-index: 2; }
+.bingo-burst i { --s: 64px; --d: 160px; }
+.bingo-burst i:nth-child(even) { --s: 64px; --d: 128px; }
+#bingo-widget[data-phase="won"] .bingo-burst i { animation: spark 900ms var(--ease-enter) 200ms 3 both; }
+#bingo-winning-card > * { animation: rise-in 400ms var(--ease-enter) both; }
+#bingo-winning-card > :nth-child(n+6):nth-child(-n+10) { animation-delay: 120ms; }
+#bingo-winning-card > :nth-child(n+11):nth-child(-n+15) { animation-delay: 200ms; }
+#bingo-winning-card > :nth-child(n+16):nth-child(-n+20) { animation-delay: 280ms; }
+#bingo-winning-card > :nth-child(n+21):nth-child(-n+25) { animation-delay: 360ms; }
+#bingo-winning-card > :nth-child(n+26) { animation-delay: 440ms; }
+#bingo-winning-card .winning { animation: rise-in 400ms var(--ease-enter) both, win-beat 600ms var(--ease-enter) 900ms 3; }
+
+/* ── Consejos: cada cambio sube, con la etiqueta en cascada y un barrido ── */
+.tip { position: relative; overflow: hidden; }
+#tips .tip.current { animation: rise-in 500ms var(--ease-enter) both; }
+.tip.current .tip-label { animation: chip-in 400ms var(--ease-enter) 120ms both; }
+.tip.current::after { background: rgb(255 210 63 / 0.14); animation: sweep 900ms var(--ease-enter) 300ms both; }
+
+/* Modo ligero: fuera solo el ambiente; los efectos de evento se quedan. */
+body.lite .fx-scan, body.lite .fx-breathe { animation: none !important; }
+
+@keyframes sweep {
+    0% { opacity: 0; transform: translateX(-160px) skewX(-20deg); }
+    15% { opacity: 1; }
+    100% { opacity: 0; transform: translateX(1100px) skewX(-20deg); }
+}
+@keyframes sweep-b {
+    0% { opacity: 0; transform: translateX(-160px) skewX(-20deg); }
+    15% { opacity: 1; }
+    100% { opacity: 0; transform: translateX(1100px) skewX(-20deg); }
+}
+@keyframes scan-down {
+    0% { opacity: 0; transform: translateY(0); }
+    10% { opacity: 1; }
+    40% { opacity: 0; transform: translateY(112px); }
+    100% { opacity: 0; transform: translateY(112px); }
+}
+@keyframes bracket-in {
+    0% { opacity: 0; transform: scale(1.35); }
+    70% { opacity: 1; transform: scale(.97); }
+    100% { opacity: 1; transform: none; }
+}
+@keyframes bracket-breathe { 0%, 100% { opacity: 1; transform: none; } 50% { opacity: .55; transform: scale(1.05); } }
+@keyframes msg-slide { from { opacity: 0; transform: translateX(-32px); } to { opacity: 1; transform: none; } }
+@keyframes chip-in { from { opacity: 0; transform: translateX(-12px) scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes chip-in-b { from { opacity: 0; transform: translateX(-12px) scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes rise-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes disc-pop {
+    0% { opacity: 0; transform: scale(.5) rotate(-12deg); }
+    60% { opacity: 1; transform: scale(1.08) rotate(2deg); }
+    100% { opacity: 1; transform: none; }
+}
+@keyframes ring-out {
+    0% { opacity: .9; transform: scale(1); }
+    100% { opacity: 0; transform: scale(1.9); }
+}
+@keyframes spark {
+    0% { opacity: 1; transform: rotate(var(--a, 0deg)) translateX(var(--s, 8px)) scale(1); }
+    100% { opacity: 0; transform: rotate(var(--a, 0deg)) translateX(var(--d, 88px)) scale(.2); }
+}
+@keyframes eq-a {
+    0%, 12%, 24%, 36%, 48%, 60%, 72%, 100% { transform: scaleY(1); }
+    6%, 18%, 30%, 42%, 54%, 66% { transform: scaleY(.3); }
+}
+@keyframes eq-b {
+    0%, 12%, 24%, 36%, 48%, 60%, 72%, 100% { transform: scaleY(1); }
+    6%, 18%, 30%, 42%, 54%, 66% { transform: scaleY(.3); }
+}
+@keyframes breathe { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+@keyframes ball-drop {
+    0% { opacity: 0; transform: translateY(-72px) rotate(-200deg) scale(.4); }
+    55% { opacity: 1; transform: translateY(6px) rotate(8deg) scale(1.08, .92); }
+    78% { opacity: 1; transform: translateY(-4px) scale(.97, 1.03); }
+    100% { opacity: 1; transform: none; }
+}
+@keyframes cell-pop {
+    0% { transform: scale(.6); }
+    60% { transform: scale(1.3); }
+    100% { transform: scale(1.15); }
+}
+@keyframes status-in {
+    0% { opacity: 0; transform: scale(.8); }
+    60% { opacity: 1; transform: scale(1.05); }
+    100% { opacity: 1; transform: none; }
+}
+@keyframes win-beat { 50% { transform: scale(1.12); } }
+
+/* ══ Piel pedalboard ══
+   Formas propias de este tema sobre la base compartida con V-Saturn. Solo cambia el aspecto;
+   la posición de cada pieza y su comportamiento son los mismos. */
+
+/* ── Tipos de cartel ── */
+#hud .stream-title { font-size: 30px; line-height: 36px; letter-spacing: 0.04em; }
+#bingo-status, .alert-body { letter-spacing: 0.02em; }
+#bingo-widget .aero-window-title { letter-spacing: 0.06em; }
+
+/* ── Barra: cabezal de amplificador ── */
+/* «En vivo» lleva el mismo piloto de joya que el reproductor, siempre encendido. */
+.brand-live { color: #FF7A7A; }
+.brand-live::before {
+    width: 14px;
+    height: 14px;
+    background:
+        radial-gradient(circle at 38% 32%, rgb(255 255 255 / 0.85) 0 14%, transparent 34%),
+        repeating-conic-gradient(from 15deg, #FF5A5A 0 30deg, #D0202E 30deg 60deg);
+    box-shadow: 0 0 0 2px #CFCFCF, 0 0 0 4px #0A0908, 0 0 8px 4px rgb(255 74 74 / 0.5);
+}
+/* Nombre del canal en una etiqueta crema, como el rótulo de una portada de disco. */
+#hud .stream-title {
+    padding: 0 8px;
+    border-radius: 2px;
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.35), transparent 50%), #F4EEDD;
+    color: var(--ink);
+    text-shadow: none;
+    box-shadow: 0 2px 0 rgb(0 0 0 / 0.5);
+}
+/* Display de LED: dígitos rojos sobre negro, sin metal cepillado. */
+.desktop-clock { background: var(--lcd-bg); text-shadow: 0 0 6px rgb(255 74 74 / 0.6); }
+/* El avatar va en un solo marco cromado: sin relleno crema ni esquinas de escáner alrededor. */
+.disc-lid {
+    padding: 0;
+    background: #0A0908;
+    box-shadow: 0 0 0 3px var(--c-chrome), 0 4px 0 3px #000000;
+}
+.disc-lid .channel-avatar { border-radius: inherit; }
+.disc-lid::before { display: none; }
+.disc-lid::after { inset: 0; border-radius: inherit; box-shadow: inset 0 3px 6px rgb(0 0 0 / 0.35); }
+/* Teclas de la barra: baquelita apagadas y cromo encendidas, con bisel negro y sin aros de color,
+   igual que los pulsadores del reproductor. */
+.topbar-button, .music-anchor {
+    background: radial-gradient(circle at 50% 35%, #3A332B, #1E1A16 70%);
+    box-shadow: 0 0 0 3px #0A0908, 0 4px 0 3px #000000;
+}
+.topbar-button[aria-pressed="true"], .topbar-button[aria-expanded="true"], .music-anchor[aria-pressed="true"],
+.music-anchor[data-playing="true"] {
+    background: linear-gradient(180deg, #FFFFFF 0, #DADADA 35%, #9A9A9A 75%, #6A6A6A 100%);
+    color: var(--ink);
+    box-shadow: inset 0 -3px 0 rgb(0 0 0 / 0.25), 0 0 0 3px #0A0908, 0 4px 0 3px #000000;
+}
+/* El disco de la barra: sin aro crema, solo su borde negro. */
+.vinyl-record { box-shadow: 0 0 0 3px #0A0908; }
+
+/* ── Chat: cada mensaje es una entrada de concierto ──
+   Papel crema con trama de seguridad, talón de color a la izquierda, perforación punteada con
+   muescas arriba y abajo. */
+.msg {
+    padding: 12px 20px 12px 44px;
+    border-radius: 4px;
+    color: var(--ink);
+    background:
+        /* Perforación: puntos de 4 px cada 8 px, justo donde están las muescas. */
+        radial-gradient(circle, rgb(0 0 0 / 0.35) 0 2px, transparent 2.5px) 22px 2px / 8px 8px repeat-y,
+        /* Talón de color. */
+        linear-gradient(90deg, var(--stub) 0 18px, transparent 18px),
+        /* Brillo del papel y trama de seguridad impresa. */
+        linear-gradient(180deg, rgb(255 255 255 / 0.45) 0, transparent 45%, rgb(0 0 0 / 0.08) 100%),
+        repeating-linear-gradient(45deg, rgb(140 122 85 / 0.10) 0 2px, transparent 2px 8px),
+        #F4EEDD;
+    box-shadow: none;
+    clip-path: none;
+    /* Muescas semicirculares arriba y abajo de la perforación (cada máscara cubre una mitad). */
+    -webkit-mask:
+        radial-gradient(circle at 26px 0, transparent 0 7px, #000 7.5px) top / 100% 51% no-repeat,
+        radial-gradient(circle at 26px 100%, transparent 0 7px, #000 7.5px) bottom / 100% 51% no-repeat;
+    mask:
+        radial-gradient(circle at 26px 0, transparent 0 7px, #000 7.5px) top / 100% 51% no-repeat,
+        radial-gradient(circle at 26px 100%, transparent 0 7px, #000 7.5px) bottom / 100% 51% no-repeat;
+}
+/* La sombra va en el contenedor, porque la máscara recortaría la de cada entrada. */
+.chat-body { filter: drop-shadow(0 3px 0 rgb(0 0 0 / 0.35)); }
+.msg-user { color: var(--ink); font-weight: 700; }
+.msg-text { color: var(--ink); font-weight: 600; }
+.msg.text-only .msg-user, .msg.text-only .msg-text { color: #5A4A35; }
+.msg::after { background: rgb(255 255 255 / 0.35); }
+
+/* ── Reproductor: combo con tela de rejilla y panel de metal ── */
+/* Abajo a la derecha, simétrico con el chat: deja libres las esquinas de arriba (minimapa y HUD
+   de muchos juegos) y no choca con la barra cuando se despliega. Entra subiendo desde abajo. */
+#media-widget {
+    top: auto;
+    bottom: var(--safe-y);
+    transform: translateY(var(--enter-y));
+}
+#media-widget {
+    background: var(--screws), var(--plastic-sheen), var(--grille), #2B1D14;
+}
+/* Piloto de joya del amplificador: cristal rojo facetado con aro cromado.
+   Apagado (granate) sin música; encendido, con un brillo de 8 px, mientras suena. */
+.deck-head::after {
+    width: 18px;
+    height: 18px;
+    margin-right: 16px;         /* lejos del remache de la esquina */
+    border-radius: 9999px;
+    background:
+        radial-gradient(circle at 38% 32%, rgb(255 255 255 / 0.55) 0 14%, transparent 34%),
+        repeating-conic-gradient(from 15deg, #7A1A22 0 30deg, #4A0E14 30deg 60deg);
+    box-shadow: 0 0 0 3px #CFCFCF, 0 0 0 5px #0A0908, 0 2px 0 5px rgb(0 0 0 / 0.5);
+}
+#media-widget[data-state="playing"] .deck-head::after {
+    background:
+        radial-gradient(circle at 38% 32%, rgb(255 255 255 / 0.85) 0 14%, transparent 34%),
+        repeating-conic-gradient(from 15deg, #FF5A5A 0 30deg, #D0202E 30deg 60deg);
+    box-shadow: 0 0 0 3px #CFCFCF, 0 0 0 5px #0A0908, 0 0 8px 5px rgb(255 74 74 / 0.55);
+}
+.deck-head { color: var(--c-cream); }
+/* La pantalla del video, con aro cromado. */
+#video-container { box-shadow: 0 0 0 4px #0A0908, 0 0 0 7px #8C8C8C; }
+#media-widget[data-state="playing"] #video-container { box-shadow: 0 0 0 4px #0A0908, 0 0 0 7px var(--accent); }
+/* Barras de LED del panel: verde, verde, amarillo y rojo, como un medidor de nivel. */
+.deck-lcd .equalizer i, .deck-lcd .equalizer i:nth-child(2) { background: var(--c-green-shade); }
+.deck-lcd .equalizer i:nth-child(3) { background: var(--c-yellow-shade); }
+.deck-lcd .equalizer i:nth-child(4) { background: var(--c-red-shade); }
+
+/* Vúmetro analógico en lugar de la mascota.
+   Esfera crema iluminada por detrás, escala con arco, marcas y zona roja, la palabra «VU» impresa,
+   aguja fina con sombra y su eje escondido bajo una franja negra, cristal con reflejo encima.
+   El eje está 8 px por debajo del borde (50% 112%), como en los medidores reales. */
+.deck-pet {
+    --face: #F6E3A8;
+    width: 88px;
+    height: 64px;
+    overflow: hidden;
+    border-radius: 6px;
+    background:
+        /* Tapas que dejan la escala solo en su banda (de −50° a +50° y entre 44 y 56 px del eje). */
+        conic-gradient(from 50deg at 50% 112%, var(--face) 0 260deg, transparent 260deg),
+        radial-gradient(circle at 50% 112%, var(--face) 0 44px, transparent 44.5px),
+        radial-gradient(circle at 50% 112%, transparent 0 56px, var(--face) 56.5px),
+        /* Arco de la escala, marcas cada 10° y zona roja a la derecha. */
+        radial-gradient(circle at 50% 112%, transparent 0 53px, var(--ink) 53px 54.5px, transparent 55px),
+        repeating-conic-gradient(from -50.7deg at 50% 112%, var(--ink) 0 1.4deg, transparent 1.4deg 10deg),
+        conic-gradient(from 24deg at 50% 112%, #D0202E 0 26deg, transparent 26deg),
+        var(--face);
+    /* Bisel negro, aro cromado y sombra sobre el panel. */
+    box-shadow: 0 0 0 3px var(--ink), 0 0 0 5px #9A9A9A, 0 3px 0 5px rgb(0 0 0 / 0.3);
+}
+/* Luz cálida desde detrás de la esfera y la palabra «VU» impresa (la aguja pasa por encima). */
+.deck-pet::before {
+    content: "VU";
+    position: absolute;
+    inset: 0;
+    padding-top: 30px;
+    text-align: center;
+    color: var(--ink);
+    font-family: var(--font-text);
+    font-size: 18px;
+    line-height: 18px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    background: radial-gradient(ellipse at 50% 70%, rgb(255 255 255 / 0.40), transparent 65%);
+    -webkit-mask: none;
+    mask: none;
+}
+/* Aguja: fina, afilada hacia la punta, con sombra proyectada sobre la esfera. */
+.deck-pet i {
+    top: auto;
+    left: 43px;
+    bottom: -8px;
+    width: 3px;
+    height: 62px;
+    background: linear-gradient(180deg, #2A2420, #0A0908);
+    clip-path: polygon(40% 0, 60% 0, 100% 100%, 0 100%);
+    box-shadow: none;
+    filter: drop-shadow(2px 2px 1px rgb(0 0 0 / 0.30));
+    transform-origin: 50% 100%;
+    transform: rotate(-50deg);
+}
+/* Franja negra que tapa el eje y cristal con reflejo, por encima de la aguja. */
+.deck-pet::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background:
+        linear-gradient(160deg, rgb(255 255 255 / 0.50) 0 20%, rgb(255 255 255 / 0.12) 20.5% 38%, transparent 38.5%),
+        linear-gradient(180deg, transparent calc(100% - 10px), #1A1410 calc(100% - 10px));
+    box-shadow: inset 0 3px 6px rgb(0 0 0 / 0.35), inset 0 0 0 2px rgb(0 0 0 / 0.20);
+    pointer-events: none;
+}
+#media-widget[data-state="idle"] .deck-pet { opacity: 1; }
+#media-widget[data-state="playing"] .deck-pet { animation: none; }
+/* Con música la aguja sube rápido y cae amortiguada, con algún pico en rojo (ciclo de 4 s).
+   En modo ligero se queda quieta cerca de 0 VU mientras suena. */
+#media-widget[data-state="playing"] .deck-pet i { animation: vu-swing 4000ms cubic-bezier(0.3, 0.6, 0.35, 1) infinite; }
+body.lite #media-widget .deck-pet i { animation: none; }
+body.lite #media-widget[data-state="playing"] .deck-pet i { transform: rotate(-6deg); }
+
+/* Pulsadores cromados de pedal: cromo con bisel negro, sin aros de color. */
+.deck-keys .face-button {
+    background: var(--chrome);
+    color: var(--ink);
+    box-shadow: inset 0 -3px 0 rgb(0 0 0 / 0.25), 0 0 0 3px #0A0908, 0 4px 0 3px #000000;
+}
+.deck-keys .face-button:hover:not(:disabled) { box-shadow: inset 0 -3px 0 rgb(0 0 0 / 0.25), 0 0 0 3px #3A332B, 0 4px 0 3px #000000; }
+/* Pausa se queda pisada: hundida, sin canto y con el cromo en sombra. */
+#media-widget[data-state="paused"] #music-pause:not(:disabled) {
+    transform: translateY(3px);
+    box-shadow: inset 0 3px 6px rgb(0 0 0 / 0.45), 0 0 0 3px #0A0908, 0 1px 0 3px #000000;
+}
+
+/* ── Bingo: diana mod gigante con una púa en el centro ── */
+.bingo-drum { filter: drop-shadow(0 6px 0 rgb(0 0 0 / 0.45)); }
+.bingo-drum > i:nth-child(1) {
+    background:
+        radial-gradient(circle at 50% 30%, rgb(255 255 255 / 0.18), transparent 60%),
+        radial-gradient(circle, #E63946 0 58%, #F4EEDD 59% 77%, #2343B8 78% 100%);
+    box-shadow: inset 0 4px 0 rgb(255 255 255 / 0.10), inset 0 -8px 12px rgb(0 0 0 / 0.5),
+        0 0 0 var(--stroke-width) var(--accent), 0 0 0 7px #8C8C8C;
+}
+#bingo-ball {
+    width: 96px;
+    height: 104px;
+    padding-bottom: 12px;
+    border-radius: 0;
+    clip-path: polygon(50% 100%, 30% 88%, 14% 70%, 4% 50%, 0 32%, 3% 16%, 14% 5%, 32% 0, 50% 0,
+        68% 0, 86% 5%, 97% 16%, 100% 32%, 96% 50%, 86% 70%, 70% 88%);
+    background:
+        radial-gradient(ellipse at 34% 22%, rgb(255 255 255 / 0.70) 0 10%, rgb(255 255 255 / 0.12) 28%, transparent 45%),
+        linear-gradient(180deg, transparent 55%, rgb(0 0 0 / 0.20)),
+        var(--lcd-bg);
+    box-shadow: none;
+    font-size: 30px;
+    line-height: 36px;
+}
+/* Casillas cantadas: pilotos de color encendidos. */
+.bingo-board-row .called {
+    background: radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.55) 0 12%, transparent 50%), var(--row, var(--accent));
+    box-shadow: inset 0 -3px 0 rgb(0 0 0 / 0.25);
+}
+.bingo-board-row .latest { background: var(--c-cream); }
+
+/* ── Alertas: pedales esmaltados con remaches y un LED rojo ── */
+#alert-box {
+    color: var(--ink);
+    background:
+        var(--screws), var(--enamel), var(--accent);
+    box-shadow: inset 0 2px 0 rgb(255 255 255 / 0.35), inset 0 -5px 0 rgb(0 0 0 / 0.25),
+        0 0 0 var(--stroke-width) var(--plastic-shade), var(--shadow-plate);
+}
+/* Piloto de joya del pedal, encendido mientras la alerta está en pantalla. */
+#alert-box::after {
+    content: "";
+    position: absolute;
+    top: 8px;
+    right: 34px;                /* junto al remache, sin tocarlo */
+    width: 14px;
+    height: 14px;
+    border-radius: 9999px;
+    background:
+        radial-gradient(circle at 38% 32%, rgb(255 255 255 / 0.85) 0 14%, transparent 34%),
+        repeating-conic-gradient(from 15deg, #FF5A5A 0 30deg, #D0202E 30deg 60deg);
+    box-shadow: 0 0 0 2px #CFCFCF, 0 0 0 4px #0A0908, 0 0 8px 4px rgb(255 74 74 / 0.5);
+    pointer-events: none;
+}
+/* Etiqueta serigrafiada: color del pedal sobre negro. */
+.alert-header { background: var(--ink); color: var(--accent); }
+.alert-body { color: var(--ink); font-family: var(--font-display); font-weight: 400; text-shadow: 0 1px 0 rgb(255 255 255 / 0.35); }
+/* El avatar va detrás de un cristal oscuro con aro cromado. */
+.alert-disc { box-shadow: inset 0 4px 8px rgb(0 0 0 / 0.5), 0 0 0 4px #0A0908, 0 0 0 7px #BDBDBD; }
+.alert-disc::after { background: linear-gradient(155deg, rgb(255 255 255 / 0.25) 0 16%, transparent 16.5%); }
+
+@keyframes vu-swing {
+    0%, 100% { transform: rotate(-30deg); }
+    8% { transform: rotate(6deg); }
+    14% { transform: rotate(-4deg); }
+    22% { transform: rotate(18deg); }
+    30% { transform: rotate(8deg); }
+    38% { transform: rotate(26deg); }
+    46% { transform: rotate(12deg); }
+    54% { transform: rotate(30deg); }
+    60% { transform: rotate(20deg); }
+    68% { transform: rotate(36deg); }
+    74% { transform: rotate(16deg); }
+    82% { transform: rotate(24deg); }
+    90% { transform: rotate(4deg); }
+}
+}
+
+/* Movimiento reducido: también apaga los efectos (repetido aquí para que gane al bloque de efectos). */
+html.motion-reduced *, html.motion-reduced *::before, html.motion-reduced *::after { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+}

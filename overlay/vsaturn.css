@@ -1,51 +1,96 @@
-/* Overlay V-Saturn con el preset «neon» de la skill landing-page-design, acento de la mascota DaiBot.
+/* Overlay V-Saturn con el tema «pocket»: una colección de aparatitos de bolsillo de juguete.
+   Cada pieza es un aparato distinto con su propio color de carcasa y de pantalla LCD
+   (naranja, menta, rosa, amarillo, celeste y violeta) sobre plástico índigo oscuro.
+   Evoca el género de las mascotas virtuales sin copiar logos ni arte de ninguna marca.
    Lienzo transparente de 1920×1080; app.js lo escala al tamaño de salida.
-   Toda la piel lee los tokens de abajo: para cambiar de look se reescribe solo ese bloque.
-   Reglas de emisión: placas casi opacas detrás de todo texto, trazos de 2 px, brillos de 8 px como
-   máximo, nada por debajo de 18 px, solo transform y opacity en movimiento, zona segura de 96/48 px.
+   Toda la piel lee los tokens de abajo; la sección «Paleta por aparato» reparte los colores.
+   Reglas de emisión: placas casi opacas detrás de todo texto, trazos de 3 px, sin brillos difusos,
+   nada por debajo de 18 px, solo transform y opacity en movimiento, zona segura de 96/48 px.
    Sin backdrop-filter: en OBS solo desenfocaría el lienzo transparente, nunca el juego. */
 
-/* ── Contrato de tokens (D2), con los valores del tema neon ── */
-:root, [data-theme="neon"] {
-    /* Tipo */
-    --font-display: 'Orbitron', 'Geist', system-ui, sans-serif;   /* solo a 24 px o más */
-    --font-text: 'Geist', system-ui, sans-serif;                   /* chat, consejos, etiquetas */
+/* ── Contrato de tokens (D2), con los valores del tema pocket ── */
+:root, [data-theme="pocket"] {
+    /* Tipo: Press Start 2P solo a 24, 48 o 96 px (su rejilla de 8 px); Pixelify Sans para leer. */
+    --font-display: 'Press Start 2P', 'Pixelify Sans', system-ui, sans-serif;
+    --font-text: 'Pixelify Sans', system-ui, sans-serif;           /* chat, consejos, etiquetas */
     --font-mono: 'Geist Mono', ui-monospace, monospace;            /* reloj y números */
     --font-emoji: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji';
-    --display-weight: 600;
+    --display-weight: 400;      /* la fuente pixel solo tiene un peso */
     --label-case: uppercase;
-    --label-tracking: 0.08em;
+    --label-tracking: 0.06em;
 
-    /* Color: texto 17,2:1 y apagado 7,7:1 sobre la placa; #120E24 sobre cian 12,5:1 y sobre magenta 6,6:1 */
-    --surface-plate: rgb(18 14 36 / 0.94);
-    --surface-plate-solid: #120E24;
-    --surface-raised: #1D1738;
-    --surface-scene: #07060F;
-    --text: #F5F3FF;
-    --text-muted: #A89FD0;
-    --accent: #36E6FF;          /* cian de DaiBot: trazos y estado activo */
-    --accent-2: #FF4FD8;        /* magenta: realces (nombres, sub, última bola) */
-    --on-accent: #120E24;
-    --stroke: var(--accent);
-    --stroke-soft: #3A3166;     /* placas secundarias y divisores */
+    /* Paleta de juguete. Todos pasan 6,5:1 o más sobre la carcasa y con #16132B encima. */
+    --c-orange: #FF8A1F;  --c-orange-shade: #8A3B00;
+    --c-mint: #2EE6A8;    --c-mint-shade: #0F7A56;
+    --c-pink: #FF5FA2;    --c-pink-shade: #8F1F52;
+    --c-yellow: #FFD23F;  --c-yellow-shade: #9A6F00;
+    --c-sky: #4FB8FF;     --c-sky-shade: #1A5F95;
+    --c-violet: #A98BFF;  --c-violet-shade: #4F35A8;
+
+    /* Carcasa índigo: texto 17:1 y apagado 8,8:1 sobre la placa */
+    --surface-plate: rgb(22 19 43 / 0.96);
+    --surface-plate-solid: #16132B;
+    --surface-raised: #26214A;
+    --surface-scene: #0B0A18;
+    --text: #F7F4FF;
+    --text-muted: #B8B0D8;
+    --accent: var(--c-orange);  /* cada aparato lo cambia por su color */
+    --accent-2: var(--c-yellow);
+    --on-accent: #16132B;
+    --stroke: var(--c-orange);
+    --stroke-soft: #3A3366;     /* placas secundarias y divisores */
+    --plastic-shade: var(--c-orange-shade);
+
+    /* Pantalla LCD (naranja por defecto): tinta 8,2:1 y tinta tenue 5,3:1 sobre el fondo.
+       Cada aparato trae su propio LCD; los pares están medidos igual (tinta ≥ 8:1, tenue ≥ 5:1). */
+    --lcd-bg: #FF9A3C;
+    --lcd-ink: #2A1606;
+    --lcd-dim: #5C300C;
+    --lcd-ghost: rgb(0 0 0 / 0.12);     /* segmentos apagados */
+    --lcd-bezel: #0B0A18;
+
+    /* Materiales (skeuomorfismo). Texturas gruesas a propósito: el granulado fino se
+       convierte en bloques al comprimir el stream, así que puntos y rejillas son de 2 px o más. */
+    --plastic-sheen: linear-gradient(180deg, rgb(255 255 255 / 0.09) 0, rgb(255 255 255 / 0.02) 35%, rgb(0 0 0 / 0.22) 100%);
+    --plastic-texture: radial-gradient(circle, rgb(255 255 255 / 0.05) 0 1.5px, transparent 2px) 0 0 / 6px 6px;
+    --bevel: inset 0 2px 0 rgb(255 255 255 / 0.16), inset 0 -4px 0 rgb(0 0 0 / 0.32);
+    --drop: 0 8px 12px rgb(0 0 0 / 0.35);
+    /* Tornillo de cabeza redonda, con reflejo arriba a la izquierda. */
+    --screw: radial-gradient(circle at 42% 38%, #F2EEFF 0 1px, #A9A2CF 1.5px 3px, #5B5486 3.5px 4.5px, #1A1733 5px 6px, transparent 6.5px);
+    --screws:
+        var(--screw) left 6px top 6px / 14px 14px no-repeat,
+        var(--screw) right 6px top 6px / 14px 14px no-repeat,
+        var(--screw) left 6px bottom 6px / 14px 14px no-repeat,
+        var(--screw) right 6px bottom 6px / 14px 14px no-repeat;
+    /* Pantalla LCD: reflejo del vidrio en diagonal, matriz de píxeles apagados y hundimiento. */
+    --lcd-glass: linear-gradient(155deg, rgb(255 255 255 / 0.30) 0 16%, rgb(255 255 255 / 0.08) 16.5% 30%, transparent 30.5%);
+    --lcd-grid:
+        repeating-linear-gradient(0deg, rgb(0 0 0 / 0.06) 0 2px, transparent 2px 6px),
+        repeating-linear-gradient(90deg, rgb(0 0 0 / 0.06) 0 2px, transparent 2px 6px);
+    --lcd-depth: linear-gradient(180deg, rgb(0 0 0 / 0.16) 0, transparent 35%);
+    --lcd-recess: inset 0 4px 8px rgb(0 0 0 / 0.35), inset 0 0 0 2px var(--lcd-ghost);
+    --bezel-lip: 0 2px 0 5px rgb(255 255 255 / 0.10);
+    /* Botón abombado: brillo de cúpula arriba y sombra en la base. */
+    --dome: radial-gradient(circle at 35% 25%, rgb(255 255 255 / 0.45) 0 12%, rgb(255 255 255 / 0.10) 35%, transparent 55%),
+            linear-gradient(180deg, transparent 45%, rgb(0 0 0 / 0.22) 100%);
 
     /* Forma */
-    --stroke-width: 2px;
-    --radius-plate: 8px;
-    --radius-inner: 4px;        /* 8 − 16 de relleno no llega a 2: los hijos usan un radio propio */
-    --radius-outer: 12px;       /* anillos que rodean una pieza de 8 px a 6 px de distancia */
+    --stroke-width: 3px;
+    --radius-plate: 16px;
+    --radius-inner: 8px;
+    --radius-outer: 20px;
     --plate-padding: 16px;
-    --glow: 0 0 8px rgb(54 230 255 / 0.55);
-    --glow-2: 0 0 8px rgb(255 79 216 / 0.55);
-    --shadow-plate: 0 4px 0 rgb(7 6 15 / 0.6);
+    --glow: 0 0 0 transparent;  /* sin brillo: la carcasa es plástico mate */
+    --glow-2: 0 0 0 transparent;
+    --shadow-plate: 0 4px 0 var(--plastic-shade), var(--drop);
     --focus-ring: var(--accent-2);
 
-    /* Movimiento */
-    --ease-enter: cubic-bezier(0.22, 1, 0.36, 1);
+    /* Movimiento: el LCD se enciende por pasos y el resto cae con el canto del plástico */
+    --ease-enter: cubic-bezier(0.34, 1.56, 0.64, 1);
     --ease-exit: cubic-bezier(0.64, 0, 0.78, 0);
-    --dur-enter: 400ms;
+    --dur-enter: 450ms;
     --dur-exit: 250ms;
-    --dur-flicker: 150ms;
+    --dur-flicker: 240ms;
     --enter-y: 16px;
 
     /* Zonas del lienzo */
@@ -56,6 +101,101 @@
     --yt-w: 384px;
     --chat-w: 440px;
     --chat-max: 400px;
+}
+
+/* ── Paleta por aparato ──
+   Cada pieza redefine sus colores aquí; el resto de la hoja solo lee los tokens.
+   (--stroke y --shadow-plate se repiten porque una variable se resuelve donde se declara.) */
+#hud {
+    --accent: var(--c-orange); --accent-2: var(--c-yellow);
+    --stroke: var(--c-orange); --plastic-shade: var(--c-orange-shade);
+    --shadow-plate: 0 4px 0 var(--c-orange-shade), var(--drop); --focus-ring: var(--c-yellow);
+    --lcd-bg: #FF9A3C; --lcd-ink: #2A1606; --lcd-dim: #5C300C;
+}
+/* El reloj es una pantallita amarilla aparte. */
+.desktop-clock {
+    --lcd-bg: #FFE066; --lcd-ink: #2E2200; --lcd-dim: #5E4A00;
+}
+#media-widget {
+    --accent: var(--c-mint); --accent-2: var(--c-pink);
+    --stroke: var(--c-mint); --plastic-shade: var(--c-mint-shade);
+    --shadow-plate: 0 4px 0 var(--c-mint-shade), var(--drop); --focus-ring: var(--c-pink);
+    --lcd-bg: #8FF5C8; --lcd-ink: #0B2A1E; --lcd-dim: #24533F;
+}
+.topbar-panel, #connection-status {
+    --accent: var(--c-sky); --accent-2: var(--c-yellow);
+    --stroke: var(--c-sky); --plastic-shade: var(--c-sky-shade);
+    --shadow-plate: 0 4px 0 var(--c-sky-shade), var(--drop); --focus-ring: var(--c-yellow);
+}
+#bingo-widget {
+    --accent: var(--c-violet); --accent-2: var(--c-yellow);
+    --stroke: var(--c-violet); --plastic-shade: var(--c-violet-shade);
+    --shadow-plate: 0 4px 0 var(--c-violet-shade), var(--drop); --focus-ring: var(--c-yellow);
+    --lcd-bg: #C9B6FF; --lcd-ink: #1E1240; --lcd-dim: #4A3A80;
+}
+/* La bola del bingo sale en una pantalla amarilla. */
+#bingo-ball {
+    --lcd-bg: #FFE066; --lcd-ink: #2E2200; --lcd-dim: #5E4A00;
+}
+/* Alertas: cada tipo es un aparato de otro color; el tipo también se lee en la etiqueta. */
+#alert-box {
+    --accent: var(--c-sky); --accent-2: var(--c-yellow);
+    --stroke: var(--c-sky); --plastic-shade: var(--c-sky-shade);
+    --shadow-plate: 0 4px 0 var(--c-sky-shade), var(--drop); --focus-ring: var(--c-yellow);
+    --lcd-bg: #8FD3FF; --lcd-ink: #062238; --lcd-dim: #1E4D6E;
+}
+#alert-box[data-type="follow"] {
+    --accent: var(--c-mint); --accent-2: var(--c-yellow);
+    --stroke: var(--c-mint); --plastic-shade: var(--c-mint-shade);
+    --shadow-plate: 0 4px 0 var(--c-mint-shade), var(--drop); --focus-ring: var(--c-yellow);
+    --lcd-bg: #8FF5C8; --lcd-ink: #0B2A1E; --lcd-dim: #24533F;
+}
+#alert-box[data-type="sub"] {
+    --accent: var(--c-pink); --accent-2: var(--c-yellow);
+    --stroke: var(--c-pink); --plastic-shade: var(--c-pink-shade);
+    --shadow-plate: 0 4px 0 var(--c-pink-shade), var(--drop); --focus-ring: var(--c-yellow);
+    --lcd-bg: #FF9CC8; --lcd-ink: #3A0A20; --lcd-dim: #6E1F44;
+}
+#alert-box[data-type="giftsub"] {
+    --accent: var(--c-yellow); --accent-2: var(--c-pink);
+    --stroke: var(--c-yellow); --plastic-shade: var(--c-yellow-shade);
+    --shadow-plate: 0 4px 0 var(--c-yellow-shade), var(--drop); --focus-ring: var(--c-pink);
+    --lcd-bg: #FFE066; --lcd-ink: #2E2200; --lcd-dim: #5E4A00;
+}
+/* Chat: cada usuario conserva un color (data-hue lo calcula app.js a partir del nombre). */
+.msg {
+    --stroke: var(--stroke-soft); --shadow-plate: 0 4px 0 var(--lcd-bezel), var(--drop); --accent-2: var(--c-yellow);
+}
+.msg[data-hue="0"] {
+    --stroke: var(--c-orange); --shadow-plate: 0 4px 0 var(--c-orange-shade), var(--drop); --accent-2: var(--c-orange);
+}
+.msg[data-hue="1"] {
+    --stroke: var(--c-mint); --shadow-plate: 0 4px 0 var(--c-mint-shade), var(--drop); --accent-2: var(--c-mint);
+}
+.msg[data-hue="2"] {
+    --stroke: var(--c-pink); --shadow-plate: 0 4px 0 var(--c-pink-shade), var(--drop); --accent-2: var(--c-pink);
+}
+.msg[data-hue="3"] {
+    --stroke: var(--c-sky); --shadow-plate: 0 4px 0 var(--c-sky-shade), var(--drop); --accent-2: var(--c-sky);
+}
+.msg[data-hue="4"] {
+    --stroke: var(--c-violet); --shadow-plate: 0 4px 0 var(--c-violet-shade), var(--drop); --accent-2: var(--c-violet);
+}
+.msg.text-only {
+    --stroke: var(--stroke-soft); --shadow-plate: 0 4px 0 var(--lcd-bezel), var(--drop);
+}
+/* Consejos: cada uno con su color de etiqueta y de comando. */
+.tip:nth-child(1) {
+    --accent: var(--c-yellow); --accent-2: var(--c-mint);
+    --stroke: var(--c-mint); --shadow-plate: 0 4px 0 var(--c-mint-shade), var(--drop);
+}
+.tip:nth-child(2) {
+    --accent: var(--c-sky); --accent-2: var(--c-pink);
+    --stroke: var(--c-pink); --shadow-plate: 0 4px 0 var(--c-pink-shade), var(--drop);
+}
+.tip:nth-child(3) {
+    --accent: var(--c-mint); --accent-2: var(--c-violet);
+    --stroke: var(--c-violet); --shadow-plate: 0 4px 0 var(--c-violet-shade), var(--drop);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--stroke-soft) transparent; }
@@ -92,13 +232,17 @@ html.fonts-loading main * { animation-play-state: paused !important; }
 
 /* ── Placas ── */
 #hud.system-topbar, .topbar-panel, .msg, #media-widget, #bingo-widget, #alert-box, .tip, #connection-status {
-    background: var(--surface-plate);
+    background: var(--plastic-sheen), var(--plastic-texture), var(--surface-plate);
     border-radius: var(--radius-plate);
-    box-shadow: 0 0 0 var(--stroke-width) var(--stroke), var(--glow), var(--shadow-plate);
+    box-shadow: var(--bevel), 0 0 0 var(--stroke-width) var(--stroke), var(--glow), var(--shadow-plate);
+}
+/* Los aparatos grandes llevan un tornillo en cada esquina. */
+#media-widget, #bingo-widget {
+    background: var(--screws), var(--plastic-sheen), var(--plastic-texture), var(--surface-plate);
 }
 /* Placas secundarias, que están siempre en pantalla: trazo suave y sin brillo. */
 .msg, .tip {
-    box-shadow: 0 0 0 var(--stroke-width) var(--stroke-soft), var(--shadow-plate);
+    box-shadow: var(--bevel), 0 0 0 var(--stroke-width) var(--stroke), var(--shadow-plate);
 }
 .label {
     font-size: 18px;
@@ -145,19 +289,23 @@ html.fonts-loading main * { animation-play-state: paused !important; }
     width: 80px;
     height: 80px;
     padding: 4px;
-    border-radius: var(--radius-plate);
-    background: var(--surface-raised);
-    /* Trazo suave: el neón lo ponen las esquinas del escáner, a 6 px. */
-    box-shadow: 0 0 0 var(--stroke-width) var(--stroke-soft);
+    border-radius: var(--radius-inner);
+    /* Ventana LCD con su bisel oscuro: el avatar vive dentro de la pantalla. */
+    background: var(--lcd-glass), var(--lcd-grid), var(--lcd-depth), var(--lcd-bg);
+    box-shadow: var(--lcd-recess), 0 0 0 4px var(--lcd-bezel), var(--bezel-lip);
 }
 .channel-avatar {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    border-radius: var(--radius-inner);
-    background: var(--surface-plate-solid);
+    border-radius: 4px;
+    background: var(--lcd-bg);
+    image-rendering: pixelated;
 }
 .brand-copy { display: flex; flex-direction: column; justify-content: center; gap: 4px; min-width: 0; }
+/* Letras en relieve sobre la carcasa; en la pantalla LCD, impresas con un brillo claro debajo. */
+#hud .stream-title, #bingo-status, #bingo-widget .aero-window-title, .alert-body { text-shadow: 0 2px 0 rgb(0 0 0 / 0.45); }
+.media-info #video-title { text-shadow: 0 1px 0 rgb(255 255 255 / 0.35); }
 #hud .stream-title {
     max-width: 320px;
     overflow: hidden;
@@ -186,8 +334,14 @@ html.fonts-loading main * { animation-play-state: paused !important; }
     animation: led-breathe 4000ms var(--ease-enter) infinite;
 }
 .topbar-clock { white-space: nowrap; }
+/* Reloj en una tirita LCD, como la hora de un aparato de bolsillo. */
 .desktop-clock {
-    color: var(--text-muted);
+    display: inline-block;
+    padding: 0 8px;
+    border-radius: 4px;
+    background: var(--lcd-depth), var(--lcd-bg);
+    color: var(--lcd-ink);
+    box-shadow: inset 0 2px 4px rgb(0 0 0 / 0.3), 0 0 0 2px var(--lcd-bezel), 0 2px 0 3px rgb(255 255 255 / 0.10);
     font-family: var(--font-mono);
     font-size: 18px;
     line-height: 28px;
@@ -225,7 +379,7 @@ html.fonts-loading main * { animation-play-state: paused !important; }
 .aero-control-cluster { display: flex; align-items: center; flex: 0 0 auto; gap: 8px; }
 #music-transport, .transport-row { display: flex; align-items: center; gap: 8px; }
 
-/* Teclas de la barra: apagadas con trazo suave, encendidas con trazo y brillo cian. */
+/* Teclas de la barra: botones redondos de plástico. Apagados en gris de carcasa, encendidos en naranja. */
 .topbar-button, .music-anchor {
     display: inline-flex;
     align-items: center;
@@ -234,10 +388,10 @@ html.fonts-loading main * { animation-play-state: paused !important; }
     flex-shrink: 0;
     height: 56px;
     border: 0;
-    border-radius: var(--radius-inner);
+    border-radius: 9999px;
     background: var(--surface-raised);
     color: var(--text-muted);
-    box-shadow: 0 0 0 var(--stroke-width) var(--stroke-soft);
+    box-shadow: 0 0 0 var(--stroke-width) var(--stroke-soft), 0 4px 0 var(--lcd-bezel);
     transition: transform 300ms var(--ease-enter), opacity 300ms var(--ease-enter);
 }
 .aero-icon-button { width: 56px; }
@@ -252,15 +406,29 @@ html.fonts-loading main * { animation-play-state: paused !important; }
     letter-spacing: var(--label-tracking);
 }
 .topbar-button[aria-pressed="true"], .topbar-button[aria-expanded="true"], .music-anchor[aria-pressed="true"] {
-    color: var(--accent);
-    box-shadow: 0 0 0 var(--stroke-width) var(--accent), var(--glow);
+    background: var(--accent);
+    color: var(--on-accent);
+    box-shadow: 0 4px 0 var(--plastic-shade);
 }
 .music-anchor[data-playing="true"] {
-    color: var(--accent-2);
-    box-shadow: 0 0 0 var(--stroke-width) var(--accent-2), var(--glow-2);
+    background: var(--accent-2);
+    color: var(--on-accent);
+    box-shadow: 0 4px 0 #9A6F00;
 }
 .topbar-button:hover:not(:disabled), .music-anchor:hover { transform: translateY(-2px); }
-.topbar-button:active:not(:disabled), .music-anchor:active { transform: translateY(1px) scale(0.98); }
+/* Cúpula de plástico encima de cada botón (también sobre el icono, como un botón real). */
+.topbar-button, .music-anchor { position: relative; }
+.topbar-button::after, .music-anchor::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--dome);
+    box-shadow: inset 0 2px 0 rgb(255 255 255 / 0.30), inset 0 -3px 0 rgb(0 0 0 / 0.20);
+    pointer-events: none;
+}
+/* Al pulsar, el botón se hunde sobre su canto. */
+.topbar-button:active:not(:disabled), .music-anchor:active { transform: translateY(4px); box-shadow: 0 0 0 var(--plastic-shade); }
 
 /* CD: gira despacio (una vuelta cada 4 s) solo mientras suena y fuera del modo ligero. */
 .vinyl-record {
@@ -268,7 +436,9 @@ html.fonts-loading main * { animation-play-state: paused !important; }
     width: 40px;
     height: 40px;
     border-radius: 9999px;
-    background: var(--surface-raised);
+    background:
+        radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.25) 0 10%, transparent 40%),
+        repeating-radial-gradient(circle, var(--surface-raised) 0 2px, #100E22 2px 4px);
     box-shadow: inset 0 0 0 var(--stroke-width) var(--accent);
     animation: disc-spin 4000ms linear infinite paused;
 }
@@ -294,6 +464,10 @@ html.fonts-loading main * { animation-play-state: paused !important; }
 .music-bars, .equalizer { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; }
 .music-bars i, .equalizer i { width: 4px; height: 16px; border-radius: 2px; background: var(--accent-2); }
 .music-bars i:nth-child(2), .equalizer i:nth-child(2) { height: 8px; }
+.music-bars i:nth-child(1) { background: var(--c-pink); }
+.music-bars i:nth-child(2) { background: var(--c-mint); }
+.music-bars i:nth-child(3) { background: var(--c-sky); }
+.music-bars i:nth-child(4) { background: var(--c-yellow); }
 .music-bars i:nth-child(4), .equalizer i:nth-child(4) { height: 12px; }
 .music-transport[data-state="idle"] .music-bars, #media-widget[data-state="idle"] .equalizer { opacity: .4; }
 
@@ -406,8 +580,18 @@ body.no-chat #chat-widget { display: none; }
 }
 body.bingo-active #media-widget { opacity: 0; visibility: hidden; pointer-events: none; }
 .deck-head { display: flex; align-items: center; gap: 8px; color: var(--accent); }
+/* Sello de la colección: cinco píxeles de colores a la derecha de la cabecera. */
+.deck-head::after {
+    content: "";
+    margin-left: auto;
+    margin-right: 48px;
+    width: 8px;
+    height: 8px;
+    background: var(--c-orange);
+    box-shadow: 12px 0 0 var(--c-yellow), 24px 0 0 var(--c-mint), 36px 0 0 var(--c-sky), 48px 0 0 var(--c-pink);
+}
 .deck-led { width: 8px; height: 8px; border-radius: 9999px; background: var(--stroke-soft); }
-#media-widget[data-state="playing"] .deck-led { background: var(--accent); box-shadow: var(--glow); }
+#media-widget[data-state="playing"] .deck-led { background: var(--accent-2); }
 #video-container {
     position: relative;
     width: 100%;
@@ -415,24 +599,86 @@ body.bingo-active #media-widget { opacity: 0; visibility: hidden; pointer-events
     overflow: hidden;
     border-radius: var(--radius-inner);
     background: var(--surface-scene);
-    box-shadow: 0 0 0 var(--stroke-width) var(--stroke-soft);
+    box-shadow: 0 0 0 4px var(--lcd-bezel), 0 0 0 7px var(--stroke-soft);
 }
-#media-widget[data-state="playing"] #video-container { box-shadow: 0 0 0 var(--stroke-width) var(--accent-2), var(--glow-2); }
+#media-widget[data-state="playing"] #video-container { box-shadow: 0 0 0 4px var(--lcd-bezel), 0 0 0 7px var(--accent); }
 #youtube-player, #direct-video { width: 100%; height: 100%; display: block; }
 #youtube-player iframe { width: 100%; height: 100%; border: 0; }
 #direct-video { display: none; object-fit: contain; }
+/* Pantalla LCD: fondo naranja iluminado, tinta marrón y bisel oscuro alrededor. */
 .media-info.deck-lcd {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 16px;
+    row-gap: 4px;
+    align-items: center;
     min-width: 0;
     padding: 12px 16px;
     border-radius: var(--radius-inner);
-    background: var(--surface-raised);
+    background: var(--lcd-glass), var(--lcd-grid), var(--lcd-depth), var(--lcd-bg);
+    color: var(--lcd-ink);
+    box-shadow: var(--lcd-recess), 0 0 0 4px var(--lcd-bezel), var(--bezel-lip);
 }
-/* La mascota pixelada pertenece a otro preset: queda en el HTML, oculta. */
-.deck-pet { display: none; }
-.media-label { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); }
+.deck-lcd > :not(.deck-pet) { grid-column: 2; }
+.media-label { display: inline-flex; align-items: center; gap: 8px; color: var(--lcd-dim); }
+.deck-lcd .equalizer i { border-radius: 0; background: var(--lcd-ink); }
+.deck-lcd .equalizer i:nth-child(2) { background: var(--c-pink-shade); }
+.deck-lcd .equalizer i:nth-child(3) { background: var(--c-sky-shade); }
+
+/* Mascota virtual original, dibujada con píxeles de 3 px y ampliada al doble (6 px por píxel).
+   A color sobre el LCD menta: cuerpo naranja, barriga crema, cuernos amarillos y mejillas rosas. */
+.deck-pet {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    position: relative;
+    width: 72px;
+    height: 66px;
+}
+.deck-pet i {
+    --pet-ink: var(--lcd-ink);
+    --pet-body: var(--c-orange);
+    --pet-belly: #FFF1C9;
+    --pet-horn: var(--c-yellow);
+    --pet-cheek: var(--c-pink);
+    --pet-eye: #FFFFFF;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 3px;
+    transform: scale(2);
+    transform-origin: 0 0;
+    box-shadow:
+        6px 0px 0 var(--pet-horn), 27px 0px 0 var(--pet-horn),
+        6px 3px 0 var(--pet-horn), 9px 3px 0 var(--pet-ink), 24px 3px 0 var(--pet-ink), 27px 3px 0 var(--pet-horn),
+        6px 6px 0 var(--pet-ink), 9px 6px 0 var(--pet-ink), 12px 6px 0 var(--pet-ink), 15px 6px 0 var(--pet-ink),
+        18px 6px 0 var(--pet-ink), 21px 6px 0 var(--pet-ink), 24px 6px 0 var(--pet-ink), 27px 6px 0 var(--pet-ink),
+        3px 9px 0 var(--pet-ink), 6px 9px 0 var(--pet-body), 9px 9px 0 var(--pet-body), 12px 9px 0 var(--pet-body),
+        15px 9px 0 var(--pet-body), 18px 9px 0 var(--pet-body), 21px 9px 0 var(--pet-body), 24px 9px 0 var(--pet-body),
+        27px 9px 0 var(--pet-body), 30px 9px 0 var(--pet-ink),
+        3px 12px 0 var(--pet-ink), 6px 12px 0 var(--pet-body), 9px 12px 0 var(--pet-eye), 12px 12px 0 var(--pet-ink),
+        15px 12px 0 var(--pet-body), 18px 12px 0 var(--pet-body), 21px 12px 0 var(--pet-eye), 24px 12px 0 var(--pet-ink),
+        27px 12px 0 var(--pet-body), 30px 12px 0 var(--pet-ink),
+        3px 15px 0 var(--pet-ink), 6px 15px 0 var(--pet-body), 9px 15px 0 var(--pet-ink), 12px 15px 0 var(--pet-ink),
+        15px 15px 0 var(--pet-body), 18px 15px 0 var(--pet-body), 21px 15px 0 var(--pet-ink), 24px 15px 0 var(--pet-ink),
+        27px 15px 0 var(--pet-body), 30px 15px 0 var(--pet-ink),
+        0px 18px 0 var(--pet-ink), 3px 18px 0 var(--pet-ink), 6px 18px 0 var(--pet-body), 9px 18px 0 var(--pet-cheek),
+        12px 18px 0 var(--pet-body), 15px 18px 0 var(--pet-body), 18px 18px 0 var(--pet-body), 21px 18px 0 var(--pet-body),
+        24px 18px 0 var(--pet-cheek), 27px 18px 0 var(--pet-body), 30px 18px 0 var(--pet-ink), 33px 18px 0 var(--pet-ink),
+        3px 21px 0 var(--pet-ink), 6px 21px 0 var(--pet-body), 9px 21px 0 var(--pet-body), 12px 21px 0 var(--pet-belly),
+        15px 21px 0 var(--pet-belly), 18px 21px 0 var(--pet-belly), 21px 21px 0 var(--pet-belly), 24px 21px 0 var(--pet-body),
+        27px 21px 0 var(--pet-body), 30px 21px 0 var(--pet-ink),
+        3px 24px 0 var(--pet-ink), 6px 24px 0 var(--pet-body), 9px 24px 0 var(--pet-body), 12px 24px 0 var(--pet-belly),
+        15px 24px 0 var(--pet-belly), 18px 24px 0 var(--pet-belly), 21px 24px 0 var(--pet-belly), 24px 24px 0 var(--pet-body),
+        27px 24px 0 var(--pet-body), 30px 24px 0 var(--pet-ink),
+        6px 27px 0 var(--pet-ink), 9px 27px 0 var(--pet-ink), 12px 27px 0 var(--pet-body), 15px 27px 0 var(--pet-body),
+        18px 27px 0 var(--pet-body), 21px 27px 0 var(--pet-body), 24px 27px 0 var(--pet-ink), 27px 27px 0 var(--pet-ink),
+        6px 30px 0 var(--pet-ink), 9px 30px 0 var(--pet-ink), 24px 30px 0 var(--pet-ink), 27px 30px 0 var(--pet-ink);
+}
+/* Con música la mascota da un saltito cada 4 s; sin música duerme tenue. */
+#media-widget[data-state="playing"] .deck-pet { animation: pet-hop 4000ms steps(1, end) infinite; }
+#media-widget[data-state="idle"] .deck-pet { opacity: .35; }
+body.lite #media-widget .deck-pet { animation: none; }
 #video-title {
     overflow: hidden;
     white-space: nowrap;
@@ -447,13 +693,13 @@ body.bingo-active #media-widget { opacity: 0; visibility: hidden; pointer-events
 .title-inner.marquee { animation: title-marquee 24s var(--ease-enter) infinite alternate; }
 .deck-requester { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .deck-requester[hidden] { display: none; }
-.deck-requester .requester-label { flex-shrink: 0; color: var(--text-muted); }
+.deck-requester .requester-label { flex-shrink: 0; color: var(--lcd-dim); }
 #video-requester {
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    color: var(--accent);
+    color: var(--lcd-ink);
     font-size: 20px;
     line-height: 28px;
     font-weight: 600;
@@ -464,18 +710,25 @@ body.bingo-active #media-widget { opacity: 0; visibility: hidden; pointer-events
     margin-top: 4px;
     padding: 0 8px;
     border-radius: 2px;
-    background: var(--accent-2);
-    color: var(--on-accent);
+    background: var(--lcd-ink);
+    color: var(--lcd-bg);
     font-size: 18px;
     line-height: 28px;
     font-weight: 600;
 }
 .deck-keys { display: flex; justify-content: center; gap: 12px; }
-.deck-keys .face-button { width: 56px; height: 48px; color: var(--text); }
+.deck-keys .face-button { width: 56px; height: 56px; background: var(--accent); color: var(--on-accent); box-shadow: 0 4px 0 var(--plastic-shade); }
 .deck-keys .face-button svg { width: 24px; height: 24px; fill: currentColor; }
-.deck-keys .face-button:hover:not(:disabled) { box-shadow: 0 0 0 var(--stroke-width) var(--accent); }
+.deck-keys .face-button:hover:not(:disabled) { box-shadow: 0 0 0 var(--stroke-width) var(--accent-2), 0 4px 0 var(--plastic-shade); }
 /* Pausa queda encendida mientras la música está en pausa. */
-#media-widget[data-state="paused"] #music-pause:not(:disabled) { background: var(--accent); color: var(--on-accent); box-shadow: var(--glow); }
+/* Teclas de juguete, cada una de un color. */
+#music-prev { --accent: var(--c-sky); --plastic-shade: var(--c-sky-shade); }
+#music-restart { --accent: var(--c-violet); --plastic-shade: var(--c-violet-shade); }
+#music-pause { --accent: var(--c-pink); --plastic-shade: var(--c-pink-shade); }
+#music-stop { --accent: var(--c-orange); --plastic-shade: var(--c-orange-shade); }
+#music-next { --accent: var(--c-yellow); --plastic-shade: var(--c-yellow-shade); }
+/* Pausa se queda hundida mientras la música está en pausa. */
+#media-widget[data-state="paused"] #music-pause:not(:disabled) { transform: translateY(4px); box-shadow: 0 0 0 var(--stroke-width) var(--text); }
 
 /* ── Bingo: tablero centrado mientras dura la partida ── */
 #bingo-widget {
@@ -505,7 +758,7 @@ body.bingo-active #media-widget { opacity: 0; visibility: hidden; pointer-events
 .bingo-draw { display: flex; align-items: center; gap: 32px; }
 .bingo-drum { position: relative; display: grid; place-items: center; width: 176px; height: 176px; flex: 0 0 176px; }
 .bingo-drum > i { position: absolute; inset: 0; border-radius: 9999px; }
-.bingo-drum > i:nth-child(1) { background: var(--surface-raised); box-shadow: 0 0 0 var(--stroke-width) var(--accent), var(--glow); }
+.bingo-drum > i:nth-child(1) { background: radial-gradient(circle at 50% 35%, #342D63, var(--surface-raised) 60%, #15122A); box-shadow: inset 0 3px 0 rgb(255 255 255 / 0.14), inset 0 -6px 10px rgb(0 0 0 / 0.45), 0 0 0 var(--stroke-width) var(--accent), var(--drop); }
 .bingo-drum > i:nth-child(2) { inset: 12px; border: var(--stroke-width) dashed var(--accent-2); animation: bingo-cage 1600ms var(--ease-enter) infinite alternate; }
 .bingo-drum > i:nth-child(3) { display: none; }
 #bingo-ball {
@@ -515,12 +768,17 @@ body.bingo-active #media-widget { opacity: 0; visibility: hidden; pointer-events
     width: 120px;
     height: 120px;
     border-radius: 9999px;
-    background: var(--surface-plate-solid);
-    box-shadow: 0 0 0 var(--stroke-width) var(--accent-2), var(--glow-2);
-    font-family: var(--font-mono);
-    font-size: 30px;
-    line-height: 36px;
-    font-weight: 600;
+    /* Bola de verdad: reflejo arriba y sombra hacia el borde inferior. */
+    background:
+        radial-gradient(circle at 34% 28%, rgb(255 255 255 / 0.75) 0 9%, rgb(255 255 255 / 0.15) 22%, transparent 40%),
+        radial-gradient(circle at 50% 42%, transparent 52%, rgb(0 0 0 / 0.30) 100%),
+        var(--lcd-bg);
+    color: var(--lcd-ink);
+    box-shadow: 0 0 0 4px var(--lcd-bezel), 0 0 0 7px var(--accent-2), 0 8px 12px rgb(0 0 0 / 0.4);
+    font-family: var(--font-display);
+    font-size: 24px;
+    line-height: 32px;
+    font-weight: var(--display-weight);
 }
 .bingo-ball-arrival { animation: bingo-arrival 600ms var(--ease-enter) both; }
 .bingo-info { display: flex; flex-direction: column; gap: 8px; min-width: 0; max-width: 640px; }
@@ -570,8 +828,15 @@ body.bingo-active #media-widget { opacity: 0; visibility: hidden; pointer-events
     font-weight: 500;
     transition: transform 300ms var(--ease-enter), opacity 300ms var(--ease-enter);
 }
-.bingo-board-row .called { background: var(--accent); color: var(--on-accent); box-shadow: none; font-weight: 600; }
-.bingo-board-row .latest { background: var(--accent-2); color: var(--on-accent); box-shadow: var(--glow-2); transform: scale(1.15); }
+/* Cada letra de B-I-N-G-O es una fila de otro color. */
+.bingo-board-row:nth-child(1) { --row: var(--c-orange); }
+.bingo-board-row:nth-child(2) { --row: var(--c-mint); }
+.bingo-board-row:nth-child(3) { --row: var(--c-pink); }
+.bingo-board-row:nth-child(4) { --row: var(--c-sky); }
+.bingo-board-row:nth-child(5) { --row: var(--c-yellow); }
+.bingo-board-row b { color: var(--row, var(--accent)); }
+.bingo-board-row .called { background: var(--row, var(--accent)); color: var(--on-accent); box-shadow: none; font-weight: 600; }
+.bingo-board-row .latest { background: var(--text); color: var(--on-accent); box-shadow: 0 0 0 var(--stroke-width) var(--row, var(--accent-2)); transform: scale(1.15); }
 #bingo-widget[data-phase="won"] #bingo-board,
 #bingo-widget[data-phase="won"] #bingo-history { display: none; }
 #bingo-winning-card {
@@ -588,6 +853,12 @@ body.bingo-active #media-widget { opacity: 0; visibility: hidden; pointer-events
 #bingo-winning-card b { color: var(--accent); font-family: var(--font-display); font-size: 24px; line-height: 32px; font-weight: var(--display-weight); }
 #bingo-winning-card span { padding: 8px 0; border-radius: 2px; background: var(--surface-plate-solid); font-family: var(--font-mono); font-size: 24px; line-height: 32px; font-weight: 600; }
 #bingo-winning-card .winning { background: var(--accent-2); color: var(--on-accent); }
+/* Las letras del cartón ganador llevan el color de su fila del tablero. */
+#bingo-winning-card b:nth-child(1) { color: var(--c-orange); }
+#bingo-winning-card b:nth-child(2) { color: var(--c-mint); }
+#bingo-winning-card b:nth-child(3) { color: var(--c-pink); }
+#bingo-winning-card b:nth-child(4) { color: var(--c-sky); }
+#bingo-winning-card b:nth-child(5) { color: var(--c-yellow); }
 
 /* ── Alertas: bajo la barra, centradas. El tipo se lee en la etiqueta, no solo en el color ── */
 #alert-box {
@@ -607,13 +878,12 @@ body.bingo-active #media-widget { opacity: 0; visibility: hidden; pointer-events
     pointer-events: none;
     z-index: 80;
     /* Opaca: queda encima de la barra y del bingo, que no deben transparentarse. */
-    background: var(--surface-plate-solid);
-    box-shadow: 0 0 0 var(--stroke-width) var(--alert-key), var(--alert-glow), var(--shadow-plate);
+    background: var(--screws), var(--plastic-sheen), var(--plastic-texture), var(--surface-plate-solid);
+    box-shadow: var(--bevel), 0 0 0 var(--stroke-width) var(--alert-key), var(--alert-glow), var(--shadow-plate);
     opacity: 0;
     transform: translate(-50%, calc(-1 * var(--enter-y)));
     transition: opacity var(--dur-exit) var(--ease-exit), transform var(--dur-exit) var(--ease-exit);
 }
-#alert-box[data-type="sub"], #alert-box[data-type="giftsub"] { --alert-key: var(--accent-2); --alert-glow: var(--glow-2); }
 /* Con el bingo en juego la alerta sube sobre la barra para no tapar la cabecera del tablero. */
 body.bingo-active #alert-box { top: var(--safe-y); }
 #alert-box.show {
@@ -629,14 +899,14 @@ body.bingo-active #alert-box { top: var(--safe-y); }
     width: 96px;
     height: 96px;
     padding: 4px;
-    border-radius: var(--radius-plate);
-    background: var(--surface-raised);
-    box-shadow: 0 0 0 var(--stroke-width) var(--alert-key);
+    border-radius: var(--radius-inner);
+    background: var(--lcd-glass), var(--lcd-grid), var(--lcd-depth), var(--lcd-bg);
+    box-shadow: var(--lcd-recess), 0 0 0 4px var(--lcd-bezel), 0 0 0 7px var(--alert-key);
     transform: scale(.9);
     transition: transform var(--dur-enter) var(--ease-enter);
 }
 #alert-box.show .alert-disc { transform: none; }
-.alert-art { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-inner); background: var(--surface-plate-solid); }
+.alert-art { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 4px; background: var(--lcd-bg); image-rendering: pixelated; }
 .alert-header {
     grid-column: 2;
     justify-self: start;
@@ -659,10 +929,10 @@ body.bingo-active #alert-box { top: var(--safe-y); }
 .alert-body {
     grid-column: 2;
     align-self: start;
-    font-family: var(--font-display);
+    font-family: var(--font-text);
     font-size: 30px;
     line-height: 36px;
-    font-weight: var(--display-weight);
+    font-weight: 600;
     overflow-wrap: anywhere;
     text-wrap: balance;
 }
@@ -723,14 +993,17 @@ body:not(.lite) .tip.current { animation: plate-in var(--dur-enter) var(--ease-e
 #connection-status:empty { display: none; }
 
 /* ── Movimiento ── */
-/* Parpadeo de neón: tres destellos en 150 ms, solo al entrar una pieza (nunca en bucle). */
+/* Encendido de LCD: la pieza sube de brillo en tres pasos, solo al entrar (nunca parpadea). */
 @keyframes flicker {
     0% { opacity: 0; }
-    20% { opacity: 1; }
-    40% { opacity: .3; }
-    60% { opacity: 1; }
-    80% { opacity: .5; }
+    33% { opacity: .35; }
+    66% { opacity: .7; }
     100% { opacity: 1; }
+}
+/* Saltito de la mascota: dos brincos de un píxel ampliado y luego descanso hasta el ciclo siguiente. */
+@keyframes pet-hop {
+    0%, 10%, 20%, 100% { transform: none; }
+    5%, 15% { transform: translateY(-6px); }
 }
 @keyframes notch-in { from { transform: translate(-50%, calc(-1 * var(--enter-y))); } to { transform: translateX(-50%); } }
 @keyframes plate-in { from { opacity: 0; transform: translateY(var(--enter-y)); } to { opacity: 1; transform: none; } }
@@ -774,7 +1047,7 @@ html.motion-reduced *, html.motion-reduced *::before, html.motion-reduced *::aft
     bottom: -8px;
     left: 0;
     width: 120px;
-    background: rgb(54 230 255 / 0.16);
+    background: rgb(255 138 31 / 0.16);
     opacity: 0;
     transform: translateX(-160px) skewX(-20deg);
     pointer-events: none;
@@ -786,7 +1059,7 @@ html.motion-reduced *, html.motion-reduced *::before, html.motion-reduced *::aft
     right: 0;
     top: 0;
     height: 2px;
-    background: rgb(54 230 255 / 0.5);
+    background: rgb(255 138 31 / 0.5);
     opacity: 0;
     animation: scan-down 6000ms var(--ease-enter) 1200ms infinite;
 }
@@ -801,7 +1074,7 @@ html.motion-reduced *, html.motion-reduced *::before, html.motion-reduced *::aft
 .disc-lid::before {
     content: "";
     position: absolute;
-    inset: -6px;
+    inset: -10px;               /* fuera del bisel de 4 px del LCD */
     border-radius: var(--radius-outer);
     border: var(--stroke-width) solid var(--accent);
     border-right-color: var(--accent-2);
@@ -831,6 +1104,17 @@ body.lite #hud:not(.tucked) .disc-lid::before { animation: bracket-in 600ms var(
 /* ── Alertas: el avatar estalla con dos ondas y chispas; barrido, etiqueta y texto en cascada ── */
 .alert-disc { position: relative; }
 .alert-disc .alert-art { position: relative; z-index: 1; }
+/* Reflejo del vidrio y hundimiento también por encima de la imagen del avatar. */
+.disc-lid::after, .alert-disc::after {
+    content: "";
+    position: absolute;
+    inset: 4px;
+    z-index: 2;
+    border-radius: 4px;
+    background: var(--lcd-glass);
+    box-shadow: inset 0 4px 8px rgb(0 0 0 / 0.30);
+    pointer-events: none;
+}
 .fx-ring {
     position: absolute;
     inset: 0;
@@ -851,7 +1135,13 @@ body.lite #hud:not(.tucked) .disc-lid::before { animation: bracket-in 600ms var(
     background: var(--accent);
     opacity: 0;
 }
-.fx-sparks i:nth-child(even) { --d: 96px; width: 6px; height: 6px; background: var(--accent-2); }
+.fx-sparks i:nth-child(even) { --d: 96px; width: 6px; height: 6px; }
+/* Confeti de juguete: las chispas rotan por toda la paleta. */
+.fx-sparks i:nth-child(5n+1) { background: var(--c-orange); }
+.fx-sparks i:nth-child(5n+2) { background: var(--c-mint); }
+.fx-sparks i:nth-child(5n+3) { background: var(--c-pink); }
+.fx-sparks i:nth-child(5n+4) { background: var(--c-sky); }
+.fx-sparks i:nth-child(5n) { background: var(--c-yellow); }
 .fx-sparks i:nth-child(1) { --a: 0deg; }
 .fx-sparks i:nth-child(2) { --a: 36deg; }
 .fx-sparks i:nth-child(3) { --a: 72deg; }
@@ -875,7 +1165,6 @@ body.lite #hud:not(.tucked) .disc-lid::before { animation: bracket-in 600ms var(
 /* Suscripciones regaladas: chispas más lejos y una segunda ráfaga. */
 #alert-box[data-type="giftsub"] .fx-sparks i { --d: 160px; }
 #alert-box.show[data-type="giftsub"] .fx-sparks i { animation-iteration-count: 2; }
-#alert-box[data-type="sub"] .fx-sweep, #alert-box[data-type="giftsub"] .fx-sweep { background: rgb(255 79 216 / 0.16); }
 
 /* ── Reproductor ── */
 /* Al aparecer y en cada canción nueva lo cruza un barrido (dos nombres para poder relanzarlo). */
@@ -898,7 +1187,7 @@ body.lite #hud:not(.tucked) .disc-lid::before { animation: bracket-in 600ms var(
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    box-shadow: 0 0 8px rgb(255 79 216 / 0.6), 0 0 0 var(--stroke-width) var(--accent-2);
+    box-shadow: 0 0 0 var(--stroke-width) var(--accent-2), 0 0 0 8px rgb(255 210 63 / 0.25);
     opacity: 0;
     pointer-events: none;
 }
@@ -938,7 +1227,7 @@ body.lite #hud:not(.tucked) .disc-lid::before { animation: bracket-in 600ms var(
 .tip { position: relative; overflow: hidden; }
 #tips .tip.current { animation: rise-in 500ms var(--ease-enter) both; }
 .tip.current .tip-label { animation: chip-in 400ms var(--ease-enter) 120ms both; }
-.tip.current::after { background: rgb(255 79 216 / 0.14); animation: sweep 900ms var(--ease-enter) 300ms both; }
+.tip.current::after { background: rgb(255 210 63 / 0.14); animation: sweep 900ms var(--ease-enter) 300ms both; }
 
 /* Modo ligero: fuera solo el ambiente; los efectos de evento se quedan. */
 body.lite .fx-scan, body.lite .fx-breathe { animation: none !important; }

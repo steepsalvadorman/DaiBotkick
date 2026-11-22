@@ -576,6 +576,8 @@
         const plain = content || (Array.isArray(data?.parts) ? data.parts.map(part => String(part?.text ?? '')).join('') : '');
         if (!showCommands && /^\s*!/.test(plain)) return;
         const item = document.createElement('div'); item.className = 'msg';
+        // Color fijo por usuario (0 a 4): el tema lo usa para el borde y el nombre.
+        item.setAttribute('data-hue', String([...String(data.user || '')].reduce((sum, ch) => (sum * 31 + ch.codePointAt(0)) % 9973, 7) % 5));
         const user = document.createElement('div'); user.className = 'msg-user'; user.textContent = data.user || '';
         const text = document.createElement('div'); text.className = 'msg-text';
         // Un usuario baneado solo comenta texto: sin emotes ni estilo destacado.

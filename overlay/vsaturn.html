@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="neon">
+<html lang="es" data-theme="pocket">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,9 +8,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <!-- display=block: en el stream nunca se ve un fotograma con la letra de reserva. -->
-    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@500;600&family=Geist+Mono:wght@500;600&family=Orbitron:wght@600&display=block" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@500;600&family=Pixelify+Sans:wght@500;600&family=Press+Start+2P&display=block" rel="stylesheet">
     <script src="/sio.js"></script>
-    <link rel="stylesheet" href="/vsaturn.css?v=neon">
+    <link rel="stylesheet" href="/vsaturn.css?v=pocket">
     <link rel="stylesheet" href="/lights.css">
     <link rel="stylesheet" href="/meteors.css">
     <script>
@@ -23,7 +23,7 @@
             if (!document.fonts || !document.fonts.load) return;
             root.classList.add('fonts-loading');
             var ready = function () { root.classList.remove('fonts-loading'); };
-            Promise.all(['600 24px "Orbitron"', '500 20px "Geist"', '600 20px "Geist"', '600 20px "Geist Mono"']
+            Promise.all(['400 24px "Press Start 2P"', '500 20px "Pixelify Sans"', '600 20px "Pixelify Sans"', '600 20px "Geist Mono"']
                 .map(function (font) { return document.fonts.load(font); })).then(ready, ready);
             setTimeout(ready, 3000);
         })();
@@ -121,7 +121,7 @@
             <video id="direct-video" autoplay></video>
         </div>
         <div class="media-info deck-lcd">
-            <!-- Mascota pixelada original: oculta en el tema neon. -->
+            <!-- Mascota pixelada original que vive en la pantalla LCD. -->
             <span class="deck-pet" aria-hidden="true"><i></i></span>
             <div class="media-label label"><span class="equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i></span> Ahora suena</div>
             <div id="video-title">---</div>
@@ -166,6 +166,6 @@
     </div>
     </main>
 
-    <script src="/app.js?v=neon"></script>
+    <script src="/app.js?v=pocket"></script>
 </body>
 </html>

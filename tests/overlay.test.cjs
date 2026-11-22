@@ -813,18 +813,19 @@ test('status notices clear themselves after 8 s except the missing channel guida
     assert.match(missing.context.document.body.children[0].textContent, /Falta el canal/);
     assert.equal(missing.timers.size, 0);
 });
-test('V-Saturn neon theme follows the broadcast rules of the design skill', () => {
+test('V-Saturn pocket theme follows the broadcast rules of the design skill', () => {
     const css = fs.readFileSync(__dirname + '/../overlay/vsaturn.css', 'utf8');
     const html = fs.readFileSync(__dirname + '/../overlay/vsaturn.html', 'utf8');
-    assert.match(html, /family=Geist:[^"]*family=Geist\+Mono:[^"]*family=Orbitron:[^"]*display=block/);
+    assert.match(html, /family=Geist\+Mono:[^"]*family=Pixelify\+Sans:[^"]*family=Press\+Start\+2P[^"]*display=block/);
+    assert.match(html, /data-theme="pocket"/);
     assert.doesNotMatch(html + css, /VT323|Manrope|Inter\b|Roboto|Helvetica|Arial/);
     assert.match(css, /--safe-x: 96px;/);
     assert.match(css, /--safe-y: 48px;/);
     // Sin texto por debajo de 18 px, salvo el icono de la chispa (svg).
     for (const [, size] of css.matchAll(/font-size: ([^;]+);/g)) assert.ok(['18px', '20px', '24px', '30px', '48px'].includes(size), size);
-    for (const [, radius] of css.matchAll(/border-radius: ([^;]+);/g)) assert.ok(['var(--radius-plate)', 'var(--radius-inner)', 'var(--radius-outer)', '2px', '9999px', 'inherit'].includes(radius), radius);
+    for (const [, radius] of css.matchAll(/border-radius: ([^;]+);/g)) assert.ok(['var(--radius-plate)', 'var(--radius-inner)', 'var(--radius-outer)', '0', '2px', '4px', '9999px', 'inherit'].includes(radius), radius);
     // Placas casi opacas, sin color-mix ni propiedades sueltas de transformación (OBS antiguo).
-    assert.match(css, /--surface-plate: rgb\(18 14 36 \/ 0\.94\);/);
+    assert.match(css, /--surface-plate: rgb\(22 19 43 \/ 0\.96\);/);
     assert.doesNotMatch(css, /color-mix\(|^\s*(translate|rotate|scale):|feTurbulence|filter: blur/m);
     // Solo transform y opacity se animan en las keyframes.
     for (const match of css.matchAll(/@keyframes [\w-]+ \{/g)) {

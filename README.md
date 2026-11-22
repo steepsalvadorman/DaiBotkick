@@ -49,13 +49,13 @@ Todos los paneles comparten una sola inclinación (`--tilt`, −4°), sin rotaci
 
 El chat usa viñetas oscuras con acentos alternados, las alertas un panel de impacto y el bingo una bola amarilla con ráfagas radiales y las 75 casillas. Al ganar, el cartón verificado sustituye el tablero y el historial para no tapar el chat. Las animaciones y transiciones se desactivan con movimiento reducido; en ese modo se muestra solo el primer consejo, sin superponer los consejos rotativos.
 
-### Tema alternativo «V-Saturn» (neon)
+### Tema alternativo «V-Saturn Pocket»
 
-`vsaturn.html` es el mismo overlay con otra piel, la que usan los canales de Twitch. Usa la misma URL privada cambiando solo la página (`https://tu-servicio/vsaturn.html?ch=tu_canal#token=...`). Comparte `app.js`, así que conserva toda la funcionalidad; sus estilos están en `vsaturn.css`.
+`vsaturn.html` es el mismo overlay con otra piel. Se elige en la pantalla de conexión, en Kick y en Twitch, o cambiando solo la página de la URL privada (`https://tu-servicio/vsaturn.html?ch=tu_canal#token=...`). Comparte `app.js`, así que conserva toda la funcionalidad; sus estilos están en `vsaturn.css`.
 
-Sigue el preset «neon» de la skill de diseño, con el cian de la mascota DaiBot: placas violeta noche casi opacas (`#120E24` al 94 %), trazo cian de 2 px con un brillo de 8 px como máximo y magenta para los realces (nombres del chat, suscripciones, última bola del bingo). Usa Orbitron solo en títulos de 24 px o más, Geist para el texto y Geist Mono para el reloj y los números. Las fuentes se cargan con `display=block` y nada entra en escena hasta que están listas (3 s como máximo). Todos los valores salen de un bloque de tokens al principio de `vsaturn.css`, así que un look nuevo solo exige reescribir ese bloque.
+Cada pieza es un aparatito de bolsillo de juguete con su propio color de carcasa y de pantalla LCD (naranja, menta, rosa, amarillo, celeste y violeta) sobre plástico índigo: plástico con brillo y textura, tornillos, pantallas hundidas con rejilla de píxeles y reflejo, botones abombados y una mascota pixelada original en el reproductor. Usa Press Start 2P solo a 24 y 48 px, Pixelify Sans para el texto y Geist Mono para los números. Las fuentes se cargan con `display=block` y nada entra en escena hasta que están listas (3 s como máximo). Los colores salen de los tokens del principio de `vsaturn.css` y de su sección «Paleta por aparato».
 
-Está hecha para leerse en el stream comprimido y en un móvil. Ningún texto baja de 18 px y todo texto va sobre una placa (cuerpo 17:1, texto apagado 7,7:1, también sobre un juego claro). Los elementos fijos respetan una zona segura de 96 px a los lados y 48 px arriba y abajo. Solo se animan `transform` y `opacity`: las piezas entran con un parpadeo de neón de 150 ms y no hay bucles largos, salvo el LED de «En vivo» y el CD, cada 4 s y solo con `lite=0`. No usa `backdrop-filter`: en OBS solo desenfocaría el lienzo transparente, no el juego, y gastaría GPU. Tampoco usa `color-mix()` ni las propiedades sueltas `translate`/`rotate`, que no entienden las versiones antiguas de OBS.
+Está hecha para leerse en el stream comprimido y en un móvil. Ningún texto baja de 18 px y todo texto va sobre una placa (cuerpo 17:1, texto apagado 8,8:1, también sobre un juego claro). Los elementos fijos respetan una zona segura de 96 px a los lados y 48 px arriba y abajo. Solo se animan `transform` y `opacity`: las piezas entran encendiéndose por pasos como un LCD y no hay bucles largos, salvo el LED de «En vivo» y el CD, cada 4 s y solo con `lite=0`. No usa `backdrop-filter`: en OBS solo desenfocaría el lienzo transparente, no el juego, y gastaría GPU. Tampoco usa `color-mix()` ni las propiedades sueltas `translate`/`rotate`, que no entienden las versiones antiguas de OBS.
 
 Los efectos van en dos capas. Los de evento duran menos de un segundo y se ven también en el modo ligero:
 
@@ -69,7 +69,11 @@ Con `lite=0` se suma el ambiente: un escáner de dos arcos alrededor del avatar,
 
 Parámetros: `chat=1`, `avatar=...`, `lite=0`, `commands=1`, `motion=reduced` (quita todo el movimiento, porque OBS no informa la preferencia del sistema) y `preview=1` (dibuja un fondo de prueba mitad claro y mitad oscuro para revisar la legibilidad; no lo uses en OBS). Para diseñar sin servidor: `vsaturn.html?demo=1&preview=1&chat=1`.
 
-En las dos pieles, las alertas hacen cola y se muestran de una en una, así que una ráfaga de follows ya no se pisa. Los comandos del chat (`!play`, `!s`, …) no aparecen en el overlay salvo con `commands=1`, y los avisos de conexión o de error se retiran solos a los 8 s para no quedarse en el stream; solo el aviso de canal faltante permanece.
+### Tema alternativo «Britpop Amp»
+
+`rock.html` (estilos en `rock.css`) es la piel rockera, con aire britpop de los 90 y sin logos ni diseños de ninguna banda o marca. La barra es un cabezal de amplificador (tolex texturado, ribete crema, avatar en marco cromado, piloto de joya de «En vivo» y reloj de LED). El reproductor es un combo con rejilla de rombos, panel de metal cepillado, vúmetro analógico y pulsadores cromados; va abajo a la derecha para dejar libres las esquinas de arriba del juego. Las alertas son pedales esmaltados (seguidor verde parka, suscripción rojo, regalos mostaza), el chat son entradas de concierto con el talón del color de cada usuario y la bola del bingo es una púa sobre una diana mod. Usa Bebas Neue para los títulos y Barlow para el texto. Se elige en la pantalla de conexión, en Kick y en Twitch. Para diseñar sin servidor: `rock.html?demo=1&preview=1&chat=1`.
+
+En todas las pieles, las alertas hacen cola y se muestran de una en una, así que una ráfaga de follows ya no se pisa. Los comandos del chat (`!play`, `!s`, …) no aparecen en el overlay salvo con `commands=1`, y los avisos de conexión o de error se retiran solos a los 8 s para no quedarse en el stream; solo el aviso de canal faltante permanece.
 
 El modo ligero está activo por defecto; para ver las animaciones completas añade `&lite=0` a la URL de OBS. El modo ligero quita todo el movimiento continuo: pulso de «En vivo», vinilo, barras, tambor del bingo y desplazamiento del título. Conserva las entradas de chat, alertas y paneles. Los consejos siguen rotando cada 9 s, pero sin animación, así que la página queda quieta entre eventos y no compite con el juego por la GPU. Para reducir aún más el consumo, en la fuente de navegador activa **Usar velocidad de fotogramas personalizada** a 30 fps y **Apagar la fuente cuando no sea visible**.
 
@@ -93,8 +97,8 @@ Ambas usan el `panel_token` del canal, que viaja en el fragmento y se envía com
 ### Conectar un canal de Twitch
 
 1. Abre la raíz del servicio y pulsa **Conectar con Twitch** (`/auth/twitch`). Twitch siempre muestra su pantalla para elegir la cuenta.
-2. La pantalla de éxito muestra tres URLs privadas, igual que en Kick, pero solo con el tema V-Saturn:
-   - `vsaturn.html?tw=tu_login#token=…`: overlay para OBS (1920×1080). Cualquier otra página del overlay abierta con `?tw=` redirige a V-Saturn.
+2. La pantalla de éxito muestra tres URLs privadas, igual que en Kick. El overlay se puede elegir entre V-Saturn Pocket y Britpop Amp (Mecha Bay es solo de Kick):
+   - `vsaturn.html?tw=tu_login#token=…` o `rock.html?tw=tu_login#token=…`: overlay para OBS (1920×1080). Cualquier otra página del overlay abierta con `?tw=` redirige a V-Saturn.
    - `dock-chat.html?tw=tu_login#token=…` y `dock-stream.html?tw=tu_login#token=…`: docks de OBS.
 3. Si pierdes las URLs o cambias tu nombre en Twitch, vuelve a conectar: el canal se renombra solo y conserva tokens, ajustes, cola y baneos. Las URLs cambian porque llevan tu login, pero sus tokens son los mismos.
 
@@ -152,7 +156,7 @@ Solo la identidad del broadcaster, verificada por su ID en el webhook firmado, p
 
 ### Luces de fiesta
 
-`!disco on` enciende y `!disco off` apaga (`!disco` solo alterna) sobre **todo el overlay** un show de luces de fiesta vernácula peruana con paleta chicha fosforescente (fucsia, amarillo, naranja, verde, cian y violeta): seis cabezas móviles que barren desde arriba, manchas de color que recorren el escenario, cuatro láseres desde las esquinas inferiores, guirnaldas de focos arriba y abajo que se encienden en cadena, un pulso suave a 128 BPM (por debajo de tres destellos por segundo, sin estrobo de pantalla completa) y el marco del video brillando con los mismos colores. Es una capa decorativa (`overlay/lights.css`) por encima del chat, el reproductor y la barra, pero por debajo de las alertas; no intercepta clics, no cambia el audio y funciona en `pixel.html` y `vsaturn.html`. Solo anima `transform` y `opacity` para que la GPU la componga barata. Se anima también en modo ligero porque la pidió el streamer; con movimiento reducido se queda quieta. El estado vive en memoria del servidor: los overlays que se conectan lo reciben al instante, y al reiniciar el backend vuelve a apagado.
+`!disco on` enciende y `!disco off` apaga (`!disco` solo alterna) sobre **todo el overlay** un show de luces de fiesta vernácula peruana con paleta chicha fosforescente (fucsia, amarillo, naranja, verde, cian y violeta): seis cabezas móviles que barren desde arriba, manchas de color que recorren el escenario, cuatro láseres desde las esquinas inferiores, guirnaldas de focos arriba y abajo que se encienden en cadena, un pulso suave a 128 BPM (por debajo de tres destellos por segundo, sin estrobo de pantalla completa) y el marco del video brillando con los mismos colores. Es una capa decorativa (`overlay/lights.css`) por encima del chat, el reproductor y la barra, pero por debajo de las alertas; no intercepta clics, no cambia el audio y funciona en `pixel.html`, `vsaturn.html` y `rock.html`. Solo anima `transform` y `opacity` para que la GPU la componga barata. Se anima también en modo ligero porque la pidió el streamer; con movimiento reducido se queda quieta. El estado vive en memoria del servidor: los overlays que se conectan lo reciben al instante, y al reiniciar el backend vuelve a apagado.
 
 ### Baneos del chat
 

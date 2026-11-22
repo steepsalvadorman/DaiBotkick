@@ -6,8 +6,9 @@
     const twitchChannel = new URLSearchParams(location.search).get('tw') || '';
     const channel = twitchChannel || new URLSearchParams(location.search).get('ch') || '';
     const platformHost = twitchChannel ? 'twitch.tv' : 'kick.com';
-    // Twitch solo usa el tema V-Saturn: cualquier otra página lleva allí, con el mismo token.
-    if (twitchChannel && !/\/vsaturn\.html$/.test(location.pathname)) {
+    // Twitch usa los temas V-Saturn y Britpop (rock.html): cualquier otra página lleva a V-Saturn,
+    // con el mismo token.
+    if (twitchChannel && !/\/(vsaturn|rock)\.html$/.test(location.pathname)) {
         location.replace(`/vsaturn.html${location.search}${location.hash}`);
         return;
     }

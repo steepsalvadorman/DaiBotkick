@@ -92,7 +92,8 @@ pub(crate) fn connected_page(
     chat_dock_url: &str,
     stream_dock_url: &str,
 ) -> String {
-    let (name, host, connect, param, themes, accent, accent_ink) = match platform {
+    // `kick_only` oculta los temas propios de Kick (Mecha Bay, con su verde) en Twitch.
+    let (name, host, connect, param, kick_only, accent, accent_ink) = match platform {
         Platform::Kick => (
             "Kick",
             "kick.com",
@@ -102,7 +103,7 @@ pub(crate) fn connected_page(
             "#53fc18",
             "#062200",
         ),
-        // Twitch solo usa V-Saturn: no hay selector de tema.
+        // Twitch elige entre V-Saturn y Britpop; Mecha Bay queda oculto.
         Platform::Twitch => (
             "Twitch",
             "twitch.tv",
@@ -121,7 +122,7 @@ pub(crate) fn connected_page(
         .replace("{{channel_host}}", host)
         .replace("{{connect_path}}", connect)
         .replace("{{channel_param}}", param)
-        .replace("{{themes_hidden}}", themes)
+        .replace("{{kick_only}}", kick_only)
         .replace("{{accent}}", accent)
         .replace("{{accent_ink}}", accent_ink)
         // En Twitch el dock escribe como la cuenta bot: el canal no autoriza escribir como él.

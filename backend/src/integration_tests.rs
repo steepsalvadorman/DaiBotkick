@@ -1604,7 +1604,10 @@ async fn twitch_channels_and_the_bot_account_connect_and_renew_tokens() {
     );
     assert!(page.contains("https://test.example/vsaturn.html?tw=ana#token="));
     assert!(page.contains("/dock-chat.html?tw=ana#token="));
-    assert!(page.contains(r#"<fieldset class="themes" hidden>"#));
+    // Twitch elige entre V-Saturn y Britpop; Mecha Bay (solo Kick) queda oculto.
+    assert!(page.contains(r#"<fieldset class="themes">"#));
+    assert!(page.contains(r#"<label class="theme" hidden>"#));
+    assert!(page.contains(r#"value="rock.html""#));
     assert!(page.contains("twitch.tv/ana"));
     assert!(page.contains("escribir en el chat como DaiBotsito"));
     let form = mock.forms.lock().await.last().unwrap().clone();
